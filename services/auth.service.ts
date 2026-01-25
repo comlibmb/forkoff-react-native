@@ -1,0 +1,438 @@
+import { createClient, SupabaseClient, AuthError, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import * as SecureStore from 'expo-secure-store';
+import * as AuthSession from 'expo-auth-session';
+import { User, LoginCredentials, RegisterCredentials } from '@/types';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const USE_MOCKS = process.env.EXPO_PUBLIC_USE_MOCKS === 'true';
+
+// Check if Supabase is properly configured
+const isSupabaseConfigured = () => {
+  try {
+    const url = new URL(SUPABASE_URL);
+    return url.protocol === 'https:' && SUPABASE_ANON_KEY.length > 20;
+  } catch {
+    return false;
+  }
+};
+
+// Custom storage adapter for Expo SecureStore
+const ExpoSecureStoreAdapter = {
+  getItem: async (key: string): Promise<string | null> => {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (error) {
+      console.error('SecureStore setItem error:', error);
+    }
+  },
+  removeItem: async (key: string): Promise<void> => {
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (error) {
+      console.error('SecureStore removeItem error:', error);
+    }
+  },
+};
+
+// Mock user for development/testing
+const MOCK_USER: User = {
+  id: 'mock-user-id',
+  email: 'demo@forkoff.dev',
+  name: 'Demo User',
+  avatarUrl: undefined,
+  createdAt: new Date().toISOString(),
+  subscription: 'free',
+};
+
+// Store pending registration data
+interface PendingRegistration {
+  email: string;
+  name?: string;
+}
+
+class AuthService {
+  private supabase: SupabaseClient | null = null;
+  private useMocks: boolean;
+  private mockSession: boolean = false;
+  private authListeners: Array<(user: User | null) => void> = [];
+  private pendingRegistration: PendingRegistration | null = null;
+  private mockOtpCode: string = '123456'; // Mock OTP for testing
+
+  constructor() {
+    this.useMocks = USE_MOCKS || !isSupabaseConfigured();
+
+    if (!this.useMocks && isSupabaseConfigured()) {
+      this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          storage: ExpoSecureStoreAdapter,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      });
+    } else {
+      console.log('AuthService: Running in mock mode');
+    }
+  }
+
+  private mapSupabaseUser(supabaseUser: SupabaseUser): User {
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email || '',
+      name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || '',
+      avatarUrl: supabaseUser.user_metadata?.avatar_url,
+      createdAt: supabaseUser.created_at,
+      subscription: supabaseUser.user_metadata?.subscription || 'free',
+    };
+  }
+
+  // ==================== OTP-BASED AUTHENTICATION ====================
+
+  // Start signup with email OTP (6-digit code sent to email)
+  async signUpWithOtp(email: string, name?: string): Promise<{ message: string }> {
+    // Store registration data for verification step
+    this.pendingRegistration = { email, name };
+
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(`Mock OTP for ${email}: ${this.mockOtpCode}`);
+      return { message: 'Verification code sent to your email' };
+    }
+
+    const { error } = await this.supabase!.auth.signInWithOtp({
+      email,
+      options: {
+        data: {
+          name: name || email.split('@')[0],
+        },
+        shouldCreateUser: true,
+      },
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    return { message: 'Verification code sent to your email' };
+  }
+
+  // Start sign in with email OTP
+  async signInWithOtp(email: string): Promise<{ message: string }> {
+    this.pendingRegistration = { email };
+
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(`Mock OTP for ${email}: ${this.mockOtpCode}`);
+      return { message: 'Verification code sent to your email' };
+    }
+
+    // Allow user creation on sign-in for seamless experience
+    const { error } = await this.supabase!.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    return { message: 'Verification code sent to your email' };
+  }
+
+  // Verify OTP code (6-digit)
+  async verifyOtp(email: string, code: string): Promise<User> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      if (code !== this.mockOtpCode) {
+        throw new Error('Invalid verification code');
+      }
+
+      this.mockSession = true;
+      const user = {
+        ...MOCK_USER,
+        email,
+        name: this.pendingRegistration?.name || email.split('@')[0]
+      };
+      this.pendingRegistration = null;
+      this.notifyListeners(user);
+      return user;
+    }
+
+    const { data, error } = await this.supabase!.auth.verifyOtp({
+      email,
+      token: code,
+      type: 'email',
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    if (!data.user) {
+      throw new Error('Verification failed. Please try again.');
+    }
+
+    // Update user metadata with name if this was a signup
+    if (this.pendingRegistration?.name) {
+      await this.supabase!.auth.updateUser({
+        data: { name: this.pendingRegistration.name },
+      });
+    }
+
+    this.pendingRegistration = null;
+    return this.mapSupabaseUser(data.user);
+  }
+
+  // Resend OTP code
+  async resendOtp(email: string): Promise<{ message: string }> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(`Mock OTP resent for ${email}: ${this.mockOtpCode}`);
+      return { message: 'Verification code resent' };
+    }
+
+    const { error } = await this.supabase!.auth.resend({
+      type: 'signup',
+      email,
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    return { message: 'Verification code resent' };
+  }
+
+  // ==================== LEGACY PASSWORD-BASED AUTH (kept for compatibility) ====================
+
+  async signUp(credentials: RegisterCredentials): Promise<User> {
+    // Redirect to OTP-based signup
+    await this.signUpWithOtp(credentials.email, credentials.name);
+    throw new Error('OTP_REQUIRED');
+  }
+
+  async signIn(credentials: LoginCredentials): Promise<User> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.mockSession = true;
+      const user = { ...MOCK_USER, email: credentials.email };
+      this.notifyListeners(user);
+      return user;
+    }
+
+    // Try password-based sign in first (for existing password accounts)
+    const { data, error } = await this.supabase!.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    if (!data.user) {
+      throw new Error('Login failed. Please try again.');
+    }
+
+    return this.mapSupabaseUser(data.user);
+  }
+
+  async signOut(): Promise<void> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      this.mockSession = false;
+      this.notifyListeners(null);
+      return;
+    }
+
+    const { error } = await this.supabase!.auth.signOut();
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    // Clear any additional stored data
+    await SecureStore.deleteItemAsync('accessToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+  }
+
+  async getSession(): Promise<Session | null> {
+    if (this.useMocks) {
+      return this.mockSession ? ({ user: MOCK_USER } as unknown as Session) : null;
+    }
+
+    const { data, error } = await this.supabase!.auth.getSession();
+    if (error) {
+      throw this.formatError(error);
+    }
+    return data.session;
+  }
+
+  async getCurrentUser(): Promise<User | null> {
+    if (this.useMocks) {
+      return this.mockSession ? MOCK_USER : null;
+    }
+
+    const { data, error } = await this.supabase!.auth.getUser();
+    if (error) {
+      return null;
+    }
+    return data.user ? this.mapSupabaseUser(data.user) : null;
+  }
+
+  async getAccessToken(): Promise<string | null> {
+    if (this.useMocks) {
+      return this.mockSession ? 'mock-access-token' : null;
+    }
+
+    const { data } = await this.supabase!.auth.getSession();
+    return data.session?.access_token || null;
+  }
+
+  async resetPassword(email: string): Promise<void> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return;
+    }
+
+    const { error } = await this.supabase!.auth.resetPasswordForEmail(email, {
+      redirectTo: 'forkoff://reset-password',
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+  }
+
+  async updatePassword(newPassword: string): Promise<void> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return;
+    }
+
+    const { error } = await this.supabase!.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+  }
+
+  async updateProfile(updates: { name?: string; avatarUrl?: string }): Promise<User> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const user = { ...MOCK_USER, ...updates };
+      return user;
+    }
+
+    const { data, error } = await this.supabase!.auth.updateUser({
+      data: {
+        name: updates.name,
+        avatar_url: updates.avatarUrl,
+      },
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    if (!data.user) {
+      throw new Error('Failed to update profile.');
+    }
+
+    return this.mapSupabaseUser(data.user);
+  }
+
+  async signInWithGitHub(): Promise<{ url: string }> {
+    if (this.useMocks) {
+      return { url: 'https://github.com/login/oauth/authorize?mock=true' };
+    }
+
+    const redirectUri = AuthSession.makeRedirectUri({
+      scheme: 'forkoff',
+      path: 'auth/callback',
+    });
+
+    const { data, error } = await this.supabase!.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: redirectUri,
+        scopes: 'read:user user:email repo',
+      },
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    if (!data.url) {
+      throw new Error('Failed to get OAuth URL');
+    }
+
+    return { url: data.url };
+  }
+
+  private notifyListeners(user: User | null): void {
+    this.authListeners.forEach((callback) => callback(user));
+  }
+
+  onAuthStateChange(callback: (user: User | null) => void): () => void {
+    if (this.useMocks) {
+      this.authListeners.push(callback);
+      return () => {
+        const index = this.authListeners.indexOf(callback);
+        if (index > -1) {
+          this.authListeners.splice(index, 1);
+        }
+      };
+    }
+
+    const { data } = this.supabase!.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        callback(this.mapSupabaseUser(session.user));
+      } else {
+        callback(null);
+      }
+    });
+
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }
+
+  private formatError(error: AuthError): Error {
+    const errorMessages: Record<string, string> = {
+      'Invalid login credentials': 'Invalid email or password.',
+      'Email not confirmed': 'Please verify your email address.',
+      'User already registered': 'An account with this email already exists.',
+      'Password should be at least 6 characters': 'Password must be at least 6 characters.',
+      'Token has expired or is invalid': 'Invalid or expired verification code.',
+      'OTP has expired': 'Verification code has expired. Please request a new one.',
+    };
+
+    const message = errorMessages[error.message] || error.message;
+    return new Error(message);
+  }
+
+  get client(): SupabaseClient | null {
+    return this.supabase;
+  }
+
+  get isMockMode(): boolean {
+    return this.useMocks;
+  }
+}
+
+export const authService = new AuthService();
+export default authService;
