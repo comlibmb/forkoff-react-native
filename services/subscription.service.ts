@@ -1,0 +1,274 @@
+import { Platform } from 'react-native';
+import { apiClient } from './api.client';
+
+export type SubscriptionTier = 'free' | 'pro' | 'team';
+export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'trial';
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  trialEnd?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  tier: SubscriptionTier;
+  price: number;
+  currency: string;
+  interval: 'month' | 'year';
+  features: string[];
+  productId: {
+    ios: string;
+    android: string;
+  };
+}
+
+export interface UsageStats {
+  devices: {
+    current: number;
+    limit: number;
+  };
+  projects: {
+    current: number;
+    limit: number;
+  };
+  chatMessages: {
+    current: number;
+    limit: number;
+  };
+  apiCalls: {
+    current: number;
+    limit: number;
+  };
+}
+
+const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'free',
+    name: 'Free',
+    tier: 'free',
+    price: 0,
+    currency: 'USD',
+    interval: 'month',
+    features: [
+      '1 connected device',
+      '1 project',
+      'Basic chat (100 messages/day)',
+      'Community support',
+    ],
+    productId: {
+      ios: '',
+      android: '',
+    },
+  },
+  {
+    id: 'pro_monthly',
+    name: 'Pro Monthly',
+    tier: 'pro',
+    price: 9.99,
+    currency: 'USD',
+    interval: 'month',
+    features: [
+      'Unlimited devices',
+      'Unlimited projects',
+      'Unlimited chat history',
+      'Code diff viewer',
+      'Terminal access',
+      'Priority support',
+    ],
+    productId: {
+      ios: 'com.forkoff.pro.monthly',
+      android: 'com.forkoff.pro.monthly',
+    },
+  },
+  {
+    id: 'pro_yearly',
+    name: 'Pro Yearly',
+    tier: 'pro',
+    price: 99.99,
+    currency: 'USD',
+    interval: 'year',
+    features: [
+      'Everything in Pro Monthly',
+      '2 months free',
+    ],
+    productId: {
+      ios: 'com.forkoff.pro.yearly',
+      android: 'com.forkoff.pro.yearly',
+    },
+  },
+  {
+    id: 'team_monthly',
+    name: 'Team Monthly',
+    tier: 'team',
+    price: 29.99,
+    currency: 'USD',
+    interval: 'month',
+    features: [
+      'Everything in Pro',
+      'Team collaboration',
+      'Shared devices',
+      'Admin dashboard',
+      'SSO integration',
+      'Dedicated support',
+    ],
+    productId: {
+      ios: 'com.forkoff.team.monthly',
+      android: 'com.forkoff.team.monthly',
+    },
+  },
+];
+
+class SubscriptionService {
+  private isInitialized = false;
+
+  async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+
+    try {
+      // In a real app, this would initialize RevenueCat or similar
+      // await Purchases.configure({ apiKey: Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY });
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('Failed to initialize purchases:', error);
+    }
+  }
+
+  getPlans(): SubscriptionPlan[] {
+    return SUBSCRIPTION_PLANS;
+  }
+
+  getPlanById(planId: string): SubscriptionPlan | undefined {
+    return SUBSCRIPTION_PLANS.find((plan) => plan.id === planId);
+  }
+
+  getPlansByTier(tier: SubscriptionTier): SubscriptionPlan[] {
+    return SUBSCRIPTION_PLANS.filter((plan) => plan.tier === tier);
+  }
+
+  async getCurrentSubscription(): Promise<Subscription | null> {
+    try {
+      return await apiClient.get<Subscription>('/subscription');
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async getUsageStats(): Promise<UsageStats> {
+    try {
+      return await apiClient.get<UsageStats>('/subscription/usage');
+    } catch (error) {
+      // Return mock data for free tier
+      return {
+        devices: { current: 1, limit: 1 },
+        projects: { current: 1, limit: 1 },
+        chatMessages: { current: 50, limit: 100 },
+        apiCalls: { current: 100, limit: 500 },
+      };
+    }
+  }
+
+  async purchaseSubscription(planId: string): Promise<{ success: boolean; error?: string }> {
+    const plan = this.getPlanById(planId);
+    if (!plan) {
+      return { success: false, error: 'Invalid plan' };
+    }
+
+    try {
+      // In a real app, this would use RevenueCat or native IAP
+      // const productId = Platform.OS === 'ios' ? plan.productId.ios : plan.productId.android;
+      // const result = await Purchases.purchaseProduct(productId);
+
+      // Mock successful purchase
+      await apiClient.post('/subscription/purchase', { planId });
+
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Purchase failed',
+      };
+    }
+  }
+
+  async restorePurchases(): Promise<{ success: boolean; subscription?: Subscription; error?: string }> {
+    try {
+      // In a real app, this would restore via RevenueCat
+      // const customerInfo = await Purchases.restorePurchases();
+
+      const subscription = await apiClient.post<Subscription>(
+        '/subscription/restore',
+        {}
+      );
+
+      return { success: true, subscription };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Restore failed',
+      };
+    }
+  }
+
+  async cancelSubscription(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post('/subscription/cancel', {});
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Cancellation failed',
+      };
+    }
+  }
+
+  async reactivateSubscription(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiClient.post('/subscription/reactivate', {});
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Reactivation failed',
+      };
+    }
+  }
+
+  isFeatureAvailable(feature: string, tier: SubscriptionTier): boolean {
+    const featureAccess: Record<string, SubscriptionTier[]> = {
+      'unlimited-devices': ['pro', 'team'],
+      'unlimited-projects': ['pro', 'team'],
+      'code-diff': ['pro', 'team'],
+      'terminal-access': ['pro', 'team'],
+      'priority-support': ['pro', 'team'],
+      'team-collaboration': ['team'],
+      'sso': ['team'],
+      'admin-dashboard': ['team'],
+    };
+
+    const allowedTiers = featureAccess[feature];
+    if (!allowedTiers) return true; // Feature not restricted
+
+    return allowedTiers.includes(tier);
+  }
+
+  getUpgradeMessage(feature: string): string {
+    const messages: Record<string, string> = {
+      'unlimited-devices': 'Upgrade to Pro to connect unlimited devices',
+      'unlimited-projects': 'Upgrade to Pro for unlimited projects',
+      'code-diff': 'Upgrade to Pro to view code diffs',
+      'terminal-access': 'Upgrade to Pro for terminal access',
+      'team-collaboration': 'Upgrade to Team for collaboration features',
+    };
+
+    return messages[feature] || 'Upgrade your plan to access this feature';
+  }
+}
+
+export const subscriptionService = new SubscriptionService();
