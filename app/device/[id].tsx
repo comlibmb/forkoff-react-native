@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useDeviceStore } from '@/stores/device.store';
 import { useTerminalStore } from '@/stores/terminal.store';
+import { useClaudeStore } from '@/stores/claude.store';
 import { wsService } from '@/services/websocket.service';
 import { ConnectedTool } from '@/types';
 import { colors } from '@/theme/colors';
@@ -40,8 +41,13 @@ export default function DeviceDetailScreen() {
   const { getDevice, renameDevice, removeDevice, refreshDeviceStatus, isLoading } =
     useDeviceStore();
   const { terminals, addTerminal } = useTerminalStore();
+  const { sessions } = useClaudeStore();
 
   const device = getDevice(id);
+
+  // Check if any Claude session is active for this device
+  const deviceSessions = sessions.get(id) || [];
+  const hasActiveClaudeSession = deviceSessions.some(s => s.state?.toLowerCase() === 'active');
   const deviceTerminals = terminals.filter(t => t.deviceId === id);
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(device?.name || '');
@@ -147,7 +153,8 @@ export default function DeviceDetailScreen() {
 
   const ToolCard = ({ tool }: { tool: ConnectedTool }) => {
     const isClaudeTool = ['claude_code', 'claude-code', 'claude_terminal'].includes(tool.type.toLowerCase());
-    const isToolActive = tool.status === 'active';
+    // For Claude tools, check if any session is active; for other tools, use tool.status
+    const isToolActive = isClaudeTool ? hasActiveClaudeSession : tool.status === 'active';
 
     return (
       <TouchableOpacity

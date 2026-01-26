@@ -1,26 +1,46 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useDeviceStore } from '@/stores/device.store';
+import { useShallow } from 'zustand/react/shallow';
 
 export function useDevices() {
+  // Use shallow comparison for state slices to prevent unnecessary re-renders
   const {
     devices,
     selectedDeviceId,
     isLoading,
     error,
-    fetchDevices,
-    getDevice,
-    selectDevice,
-    pairDevice,
-    renameDevice,
-    removeDevice,
-    refreshDeviceStatus,
-    subscribeToDeviceUpdates,
-    clearError,
-  } = useDeviceStore();
+  } = useDeviceStore(
+    useShallow((state) => ({
+      devices: state.devices,
+      selectedDeviceId: state.selectedDeviceId,
+      isLoading: state.isLoading,
+      error: state.error,
+    }))
+  );
+
+  // Get stable action references (these don't change)
+  const fetchDevices = useDeviceStore((state) => state.fetchDevices);
+  const getDevice = useDeviceStore((state) => state.getDevice);
+  const selectDevice = useDeviceStore((state) => state.selectDevice);
+  const pairDevice = useDeviceStore((state) => state.pairDevice);
+  const renameDevice = useDeviceStore((state) => state.renameDevice);
+  const removeDevice = useDeviceStore((state) => state.removeDevice);
+  const refreshDeviceStatus = useDeviceStore((state) => state.refreshDeviceStatus);
+  const subscribeToDeviceUpdates = useDeviceStore((state) => state.subscribeToDeviceUpdates);
+  const clearError = useDeviceStore((state) => state.clearError);
 
   // Fetch devices on mount
   useEffect(() => {
     fetchDevices();
+  }, [fetchDevices]);
+
+  // Set up 45-second polling interval for background refresh
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchDevices();
+    }, 45000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchDevices]);
 
   // Subscribe to real-time updates
@@ -31,10 +51,21 @@ export function useDevices() {
     }
   }, [devices.length, subscribeToDeviceUpdates]);
 
-  const selectedDevice = selectedDeviceId ? getDevice(selectedDeviceId) : undefined;
+  // Memoize derived values
+  const selectedDevice = useMemo(() =>
+    selectedDeviceId ? getDevice(selectedDeviceId) : undefined,
+    [selectedDeviceId, getDevice]
+  );
 
-  const onlineDevices = devices.filter((d) => d.status === 'online');
-  const offlineDevices = devices.filter((d) => d.status === 'offline');
+  const onlineDevices = useMemo(() =>
+    devices.filter((d) => d.status === 'online'),
+    [devices]
+  );
+
+  const offlineDevices = useMemo(() =>
+    devices.filter((d) => d.status === 'offline'),
+    [devices]
+  );
 
   const handlePairDevice = useCallback(
     async (pairingCode: string) => {
@@ -101,9 +132,10 @@ export function useDevices() {
 }
 
 export function useDevice(deviceId: string) {
-  const { getDevice, refreshDeviceStatus } = useDeviceStore();
+  const getDevice = useDeviceStore((state) => state.getDevice);
+  const refreshDeviceStatus = useDeviceStore((state) => state.refreshDeviceStatus);
 
-  const device = getDevice(deviceId);
+  const device = useMemo(() => getDevice(deviceId), [getDevice, deviceId]);
 
   const refresh = useCallback(() => {
     refreshDeviceStatus(deviceId);
