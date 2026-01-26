@@ -295,6 +295,7 @@ export interface ClaudeSession {
   state: ClaudeSessionState;
   lastUsedAt: string;
   transcriptPath?: string;
+  claudeSessionId?: string; // The actual Claude conversation ID (used in JSONL filenames)
   createdAt: string;
   updatedAt: string;
 }
