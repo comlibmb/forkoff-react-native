@@ -24,10 +24,16 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="projects"
         options={{
           title: 'Projects',
           tabBarIcon: ({ color, size }) => <FolderGit2 size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
       <Tabs.Screen

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,10 @@ import {
   Clock,
   ArrowLeft,
   X,
+  ChevronRight,
+  Folder,
+  List,
+  Grid,
 } from 'lucide-react-native';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
@@ -31,6 +35,7 @@ export default function ClaudeToolDetailScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [showDirectoryBrowser, setShowDirectoryBrowser] = useState(false);
+  const [viewMode, setViewMode] = useState<'projects' | 'sessions'>('projects');
 
   const {
     sessions,
@@ -51,6 +56,31 @@ export default function ClaudeToolDetailScreen() {
   const deviceSessions = deviceId ? sessions.get(deviceId) || [] : [];
   const toolStatus = deviceId ? getToolStatus(deviceId) : 'inactive';
   const isActive = toolStatus === 'active';
+
+  // Group sessions by directory (projects)
+  const projects = useMemo(() => {
+    const grouped = new Map<string, typeof deviceSessions>();
+    for (const session of deviceSessions) {
+      const dir = session.directory;
+      if (!grouped.has(dir)) {
+        grouped.set(dir, []);
+      }
+      grouped.get(dir)!.push(session);
+    }
+    // Sort each project's sessions by lastUsedAt
+    for (const sessions of grouped.values()) {
+      sessions.sort((a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime());
+    }
+    // Convert to array and sort by most recent session
+    return Array.from(grouped.entries())
+      .map(([directory, sessions]) => ({
+        directory,
+        sessions,
+        lastUsedAt: sessions[0]?.lastUsedAt || new Date().toISOString(),
+        hasActive: sessions.some(s => s.state.toUpperCase() === 'ACTIVE'),
+      }))
+      .sort((a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime());
+  }, [deviceSessions]);
 
   useEffect(() => {
     if (deviceId) {
@@ -236,11 +266,25 @@ export default function ClaudeToolDetailScreen() {
             <Text className="text-white font-bold text-base">Start New Session</Text>
           </TouchableOpacity>
 
-          {/* Sessions List Header */}
-          <View className="mb-4">
+          {/* View Mode Toggle */}
+          <View className="flex-row items-center justify-between mb-4">
             <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider">
-              Recent Sessions ({deviceSessions.length})
+              {viewMode === 'projects' ? `Projects (${projects.length})` : `Sessions (${deviceSessions.length})`}
             </Text>
+            <View className="flex-row bg-dark-700 border border-dark-500 rounded-lg p-1">
+              <TouchableOpacity
+                onPress={() => setViewMode('projects')}
+                className={`px-3 py-1.5 rounded-md ${viewMode === 'projects' ? 'bg-primary-500' : ''}`}
+              >
+                <Folder size={16} color={viewMode === 'projects' ? '#fff' : colors.dark[300]} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setViewMode('sessions')}
+                className={`px-3 py-1.5 rounded-md ${viewMode === 'sessions' ? 'bg-primary-500' : ''}`}
+              >
+                <List size={16} color={viewMode === 'sessions' ? '#fff' : colors.dark[300]} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {isLoading && deviceSessions.length === 0 ? (
@@ -255,7 +299,64 @@ export default function ClaudeToolDetailScreen() {
                 No Claude sessions yet.{'\n'}Start a new session to begin.
               </Text>
             </View>
+          ) : viewMode === 'projects' ? (
+            /* Projects View - Grouped by Directory */
+            <View className="gap-3">
+              {projects.map((project) => {
+                const directoryName = project.directory.split('/').pop() || project.directory.split('\\').pop() || project.directory;
+                const sessionCount = project.sessions.length;
+                const latestSession = project.sessions[0];
+
+                return (
+                  <TouchableOpacity
+                    key={project.directory}
+                    onPress={() => handleResumeSession(latestSession)}
+                    className="bg-dark-700 border border-dark-500 rounded-xl p-4 overflow-hidden"
+                  >
+                    {project.hasActive && (
+                      <View
+                        className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
+                        style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(30px)' }}
+                      />
+                    )}
+
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1 mr-3">
+                        <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
+                          <Folder size={20} color={project.hasActive ? colors.primary[500] : colors.dark[300]} />
+                        </View>
+                        <View className="flex-1">
+                          <View className="flex-row items-center mb-1">
+                            {project.hasActive && (
+                              <View className="w-2 h-2 rounded-full bg-primary-500 mr-2" />
+                            )}
+                            <Text className="text-dark-50 font-bold" numberOfLines={1}>
+                              {directoryName}
+                            </Text>
+                          </View>
+                          <Text className="text-dark-400 text-xs font-mono" numberOfLines={1}>
+                            {project.directory}
+                          </Text>
+                          <View className="flex-row items-center mt-1">
+                            <Text className="text-dark-300 text-xs">
+                              {sessionCount} session{sessionCount !== 1 ? 's' : ''}
+                            </Text>
+                            <Text className="text-dark-500 mx-2">•</Text>
+                            <Clock size={10} color={colors.dark[400]} />
+                            <Text className="text-dark-400 text-xs ml-1">
+                              {formatTimeAgo(project.lastUsedAt)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <ChevronRight size={20} color={colors.dark[400]} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           ) : (
+            /* Sessions View - All Sessions */
             <View className="gap-3">
               {deviceSessions.map((session) => {
                 const isSessionActive = session.state.toUpperCase() === 'ACTIVE';
@@ -288,8 +389,13 @@ export default function ClaudeToolDetailScreen() {
                         </View>
 
                         {/* Full path */}
-                        <Text className="text-dark-300 text-xs mb-2 font-mono" numberOfLines={1}>
+                        <Text className="text-dark-300 text-xs mb-1 font-mono" numberOfLines={1}>
                           {session.directory}
+                        </Text>
+
+                        {/* Session key */}
+                        <Text className="text-dark-400 text-xs mb-2 font-mono" numberOfLines={1}>
+                          ID: {session.sessionKey}
                         </Text>
 
                         {/* Last used */}

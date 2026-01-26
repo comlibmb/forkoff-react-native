@@ -13,10 +13,11 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send } from 'lucide-react-native';
+import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk } from '@/services/websocket.service';
 import { useClaudeStore } from '@/stores/claude.store';
 import { colors } from '@/theme/colors';
+import PermissionRequest, { PermissionRequestData } from '@/components/claude/PermissionRequest';
 
 const INITIAL_LOAD = 400;
 const LOAD_MORE_COUNT = 200;
@@ -38,9 +39,14 @@ export default function ClaudeSessionScreen() {
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const streamingMessageIdRef = useRef<string | null>(null);
   const [totalEntries, setTotalEntries] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [thinkingOpacity, setThinkingOpacity] = useState(1);
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollPositionRef = useRef(0);
   const contentHeightRef = useRef(0);
@@ -55,32 +61,169 @@ export default function ClaudeSessionScreen() {
   // Track if we've done initial load
   const initialLoadDoneRef = useRef(false);
 
+  // Animate thinking indicator with simple interval
   useEffect(() => {
-    if (!sessionKey || !deviceId || !session?.transcriptPath) {
+    if (!isThinking) {
+      setThinkingOpacity(1);
+      return;
+    }
+
+    let increasing = false;
+    const interval = setInterval(() => {
+      setThinkingOpacity((prev) => {
+        if (prev <= 0.3) increasing = true;
+        if (prev >= 1) increasing = false;
+        return increasing ? prev + 0.1 : prev - 0.1;
+      });
+    }, 80);
+
+    return () => clearInterval(interval);
+  }, [isThinking]);
+
+  useEffect(() => {
+    if (!sessionKey || !deviceId) {
       setIsLoading(false);
       return;
     }
 
-    // Subscribe to transcript updates
-    wsService.emit('transcript_subscribe', {
-      deviceId,
-      sessionKey,
-      transcriptPath: session.transcriptPath,
+    // Listen for direct SDK streaming messages
+    const unsubClaudeMessage = wsService.on('claude_message', (data) => {
+      if (data.sessionKey !== sessionKey) return;
+
+      const msg = data.message;
+      console.log('[Session] claude_message:', msg.type, msg.partial ? '(partial)' : '');
+
+      setEntries((prev) => {
+        // If this is a partial message, update existing entry
+        if (msg.partial && streamingMessageIdRef.current === msg.id) {
+          return prev.map((entry) =>
+            entry.id === msg.id
+              ? { ...entry, content: { ...entry.content, text: msg.content } }
+              : entry
+          );
+        }
+
+        // If this is a new partial message, start tracking it
+        if (msg.partial) {
+          streamingMessageIdRef.current = msg.id;
+          const newEntry: TranscriptEntry = {
+            id: msg.id,
+            type: msg.type,
+            timestamp: new Date().toISOString(),
+            lineNumber: 0,
+            content: {
+              text: msg.content,
+              toolName: msg.toolName,
+              toolInput: msg.toolInput,
+              isError: msg.isError,
+            },
+          };
+          return [...prev, newEntry];
+        }
+
+        // Final message - update if exists, otherwise add
+        streamingMessageIdRef.current = null;
+        const existingIdx = prev.findIndex((e) => e.id === msg.id);
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            content: { ...updated[existingIdx].content, text: msg.content },
+          };
+          return updated;
+        }
+
+        // New complete message
+        const newEntry: TranscriptEntry = {
+          id: msg.id,
+          type: msg.type,
+          timestamp: new Date().toISOString(),
+          lineNumber: 0,
+          content: {
+            text: msg.content,
+            toolName: msg.toolName,
+            toolInput: msg.toolInput,
+            isError: msg.isError,
+          },
+        };
+        return [...prev, newEntry];
+      });
+
+      // Clear waiting state for non-user messages
+      if (msg.type !== 'user') {
+        setIsWaitingForResponse(false);
+      }
+
+      // Auto-scroll on new messages
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     });
 
-    // Fetch initial history - get last 400 entries (reverse=true by default)
-    if (!initialLoadDoneRef.current) {
-      wsService.emit('transcript_fetch', {
-        deviceId,
-        sessionKey,
-        transcriptPath: session.transcriptPath,
-        offset: 0,
-        limit: INITIAL_LOAD,
-        reverse: true,
-      });
+    // Listen for thinking state changes
+    const unsubThinking = wsService.on('thinking_state', (data) => {
+      if (data.sessionKey === sessionKey) {
+        console.log('[Session] thinking_state:', data.thinking);
+        setIsThinking(data.thinking);
+      }
+    });
+
+    // Listen for permission requests
+    const unsubPermission = wsService.on('permission_request', (data) => {
+      if (data.sessionKey === sessionKey) {
+        console.log('[Session] permission_request:', data.type, data.toolName);
+        setPermissionRequest({
+          requestId: data.requestId,
+          type: data.type,
+          toolName: data.toolName,
+          description: data.description,
+          details: data.details,
+        });
+        setShowPermissionModal(true);
+      }
+    });
+
+    // Listen for session events (ready, switch, etc.)
+    const unsubSessionEvent = wsService.on('claude_session_event', (data) => {
+      if (data.sessionKey === sessionKey) {
+        console.log('[Session] claude_session_event:', data.event.type);
+        if (data.event.type === 'ready') {
+          setIsWaitingForResponse(false);
+          setIsSessionReady(true);
+        } else if (data.event.type === 'message') {
+          // Status message from CLI
+          console.log('[Session] Status message:', data.event.message);
+        }
+      }
+    });
+
+    // Listen for session connected event (CLI connected with session scope)
+    const unsubSessionConnected = wsService.on('session_connected', (data) => {
+      if (data.sessionId === sessionKey) {
+        console.log('[Session] Session CLI connected');
+        setIsSessionReady(true);
+        setIsTakingOver(false);
+      }
+    });
+
+    return () => {
+      unsubClaudeMessage();
+      unsubThinking();
+      unsubPermission();
+      unsubSessionEvent();
+      unsubSessionConnected();
+    };
+  }, [sessionKey, deviceId]);
+
+  useEffect(() => {
+    if (!sessionKey || !deviceId) {
+      setIsLoading(false);
+      return;
     }
 
-    // Listen for history response
+    let loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    // Set up event listeners for transcript events (used when transcriptPath exists)
     const unsubHistory = wsService.on('transcript_history', (data) => {
       if (data.sessionKey === sessionKey) {
         setEntries((prev) => {
@@ -102,68 +245,151 @@ export default function ClaudeSessionScreen() {
       }
     });
 
-    // Listen for live updates
+    // Listen for SDK session history (from database)
+    const unsubSdkHistory = wsService.on('sdk_session_history', (data) => {
+      if (data.sessionKey === sessionKey) {
+        console.log('[Session] Received SDK session history:', data.entries?.length, 'entries');
+        initialLoadDoneRef.current = true;
+        setEntries(data.entries || []);
+        setIsLoading(false);
+        setTotalEntries(data.totalEntries || 0);
+        setHasMore(data.hasMore || false);
+        setCurrentOffset(data.entries?.length || 0);
+
+        // Scroll to bottom after loading history
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: false });
+        }, 100);
+      }
+    });
+
+    // Listen for live updates - FIX: properly synchronized state updates
     const unsubUpdate = wsService.on('transcript_update', (data) => {
       if (data.sessionKey === sessionKey) {
-        console.log('[Session] NEW ENTRY:', data.entry?.type, '- text:', data.entry?.content?.text?.substring(0, 30));
+        console.log('[Session] Received transcript_update:', data.entry?.type, data.entry?.id);
+
+        if (!data.entry) {
+          console.log('[Session] No entry in update, skipping');
+          return;
+        }
+
         setEntries((prev) => {
-          if (!data.entry) return prev;
-          // Check for duplicates by ID or lineNumber
-          const entryId = data.entry.id;
-          const lineNum = data.entry.lineNumber;
-          const isDuplicate = prev.some(e => e.id === entryId || (lineNum > 0 && e.lineNumber === lineNum));
+          // Only check ID for duplicates - lineNumber causes false positives
+          const isDuplicate = prev.some(e => e.id === data.entry.id);
           if (isDuplicate) {
-            console.log('[Session] Skipping duplicate entry:', entryId);
+            console.log('[Session] Skipping duplicate:', data.entry.id);
             return prev;
           }
+
+          console.log('[Session] Adding entry:', data.entry.type, data.entry.id);
+
+          // Increment total INSIDE the callback to stay in sync
+          setTotalEntries((t) => t + 1);
+
           return [...prev, data.entry];
         });
-        setTotalEntries((prev) => prev + 1);
 
-        // Clear waiting state when we get any response from Claude (not user)
+        // Clear waiting state for non-user messages
         if (data.entry?.type !== 'user') {
-          console.log('[Session] Clearing waiting state for type:', data.entry?.type);
           setIsWaitingForResponse(false);
         }
 
-        // Auto-scroll to bottom on new messages
+        // Auto-scroll
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
       }
     });
 
+    // Subscribe and fetch based on mode
+    if (session?.transcriptPath && session.transcriptPath.length > 0) {
+      // Legacy transcript watching mode - subscribe and fetch from file
+      console.log('[Session] Subscribing to transcript:', sessionKey, session.transcriptPath);
+      wsService.emit('transcript_subscribe', {
+        deviceId,
+        sessionKey,
+        transcriptPath: session.transcriptPath,
+      });
+
+      // Fetch initial history - get last 400 entries (reverse=true by default)
+      if (!initialLoadDoneRef.current) {
+        wsService.emit('transcript_fetch', {
+          deviceId,
+          sessionKey,
+          transcriptPath: session.transcriptPath,
+          offset: 0,
+          limit: INITIAL_LOAD,
+          reverse: true,
+        });
+      }
+
+      // Fallback: if no response in 3 seconds, stop loading
+      loadingTimeout = setTimeout(() => {
+        if (!initialLoadDoneRef.current) {
+          console.log('[Session] Loading timeout - stopping loader');
+          setIsLoading(false);
+        }
+      }, 3000);
+    } else {
+      // SDK streaming mode - join room and fetch history from database
+      console.log('[Session] SDK streaming mode - joining transcript room for:', sessionKey);
+      wsService.emit('transcript_subscribe_sdk', {
+        deviceId,
+        sessionKey,
+      });
+
+      // Request message history from CLI (via API relay)
+      console.log('[Session] Requesting SDK session history, claudeSessionId:', session?.claudeSessionId);
+      wsService.emit('sdk_session_history', {
+        deviceId,
+        sessionKey,
+        claudeSessionId: session?.claudeSessionId, // Pass claude session ID if we have it
+        limit: INITIAL_LOAD,
+        offset: 0,
+      });
+
+      // Fallback: if no response in 3 seconds, stop loading
+      loadingTimeout = setTimeout(() => {
+        if (!initialLoadDoneRef.current) {
+          console.log('[Session] Loading timeout - stopping loader');
+          setIsLoading(false);
+        }
+      }, 3000);
+    }
+
     return () => {
-      wsService.emit('transcript_unsubscribe', { deviceId, sessionKey });
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+      // Unsubscribe from whichever mode we were in
+      if (session?.transcriptPath && session.transcriptPath.length > 0) {
+        wsService.emit('transcript_unsubscribe', { deviceId, sessionKey });
+      } else {
+        wsService.emit('transcript_unsubscribe_sdk', { deviceId, sessionKey });
+      }
       unsubHistory();
+      unsubSdkHistory();
       unsubUpdate();
     };
   }, [sessionKey, deviceId, session?.transcriptPath]);
 
-  // Listen for terminal output when taken over
+  // Listen for session lifecycle when taken over
   useEffect(() => {
-    if (!hasTakenOver || !terminalSessionId) return;
+    if (!hasTakenOver) return;
 
-    const unsubOutput = wsService.on('terminal_output', (data) => {
-      if (data.terminalSessionId === terminalSessionId) {
-        // Session is ready when we get first output
-        if (!isSessionReady && (data.type === 'stdout' || data.type === 'stderr')) {
-          setIsSessionReady(true);
-          setIsTakingOver(false);
-          inputRef.current?.focus();
-        }
-        // Terminal output is handled - Claude responses come via transcript_update
-        if (data.type === 'exit') {
-          setHasTakenOver(false);
-          setIsSessionReady(false);
-          setTerminalSessionId(null);
-        }
+    // Listen for session disconnected
+    const unsubDisconnected = wsService.on('session_disconnected', (data) => {
+      if (data.sessionId === sessionKey) {
+        console.log('[Session] Session CLI disconnected');
+        setHasTakenOver(false);
+        setIsSessionReady(false);
       }
     });
 
-    // Also listen for cwd updates as a sign session is ready
-    const unsubCwd = wsService.on('terminal_cwd' as any, (data: any) => {
-      if (data.terminalSessionId === terminalSessionId && !isSessionReady) {
+    // Listen for session alive as confirmation CLI is running
+    const unsubAlive = wsService.on('session_alive', (data) => {
+      if (data.sessionId === sessionKey && !isSessionReady) {
+        console.log('[Session] Session alive received - marking as ready');
         setIsSessionReady(true);
         setIsTakingOver(false);
         inputRef.current?.focus();
@@ -171,13 +397,13 @@ export default function ClaudeSessionScreen() {
     });
 
     return () => {
-      unsubOutput();
-      unsubCwd();
+      unsubDisconnected();
+      unsubAlive();
     };
-  }, [hasTakenOver, terminalSessionId, isSessionReady]);
+  }, [hasTakenOver, sessionKey, isSessionReady]);
 
   const loadMore = useCallback(() => {
-    if (isLoadingMore || !hasMore || !session?.transcriptPath) return;
+    if (isLoadingMore || !hasMore || !session?.transcriptPath || session.transcriptPath.length === 0) return;
 
     setIsLoadingMore(true);
     wsService.emit('transcript_fetch', {
@@ -206,37 +432,33 @@ export default function ClaudeSessionScreen() {
     console.log('[Session] handleTakeOver called');
     setIsTakingOver(true);
     setIsSessionReady(false);
-    const newTerminalSessionId = `claude-takeover-${sessionKey}-${Date.now()}`;
-    setTerminalSessionId(newTerminalSessionId);
-    console.log('[Session] terminalSessionId:', newTerminalSessionId);
 
-    // Subscribe to terminal output
-    wsService.subscribeToTerminal(newTerminalSessionId);
-
-    // Request resume
+    // Request resume - CLI will connect with session-scoped connection
+    // and start routing messages to this session
     console.log('[Session] Sending claude_resume_session to device:', deviceId);
     wsService.emit('claude_resume_session', {
       deviceId,
       sessionKey,
       directory: session.directory,
-      terminalSessionId: newTerminalSessionId,
     });
 
     // Mark as taken over - isTakingOver will be set false when session is ready
+    // (via session_connected or claude_session_event ready)
     setHasTakenOver(true);
 
     // Fallback timeout in case we don't get confirmation
     setTimeout(() => {
       if (!isSessionReady) {
+        console.log('[Session] Fallback: marking session as ready');
         setIsSessionReady(true);
         setIsTakingOver(false);
         inputRef.current?.focus();
       }
-    }, 3000);
+    }, 5000);
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim() || !terminalSessionId || !deviceId || isSending || !isSessionReady) return;
+    if (!inputText.trim() || !deviceId || isSending || !isSessionReady) return;
 
     const message = inputText.trim();
     setInputText('');
@@ -259,13 +481,39 @@ export default function ClaudeSessionScreen() {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 50);
 
-    // Send command to terminal
-    wsService.sendTerminalCommand(terminalSessionId, message + '\n', deviceId);
+    // Send message via user_message event (routes to session-scoped CLI)
+    wsService.sendUserMessage(deviceId, message, {
+      sessionKey: sessionKey,
+    });
 
-    // Reset sending state after a short delay (response comes via transcript_update)
+    // Reset sending state after a short delay (response comes via claude_message)
     setTimeout(() => {
       setIsSending(false);
     }, 300);
+  };
+
+  const handlePermissionApprove = (requestId: string, remember: boolean) => {
+    console.log('[Session] Permission approved:', requestId, 'remember:', remember);
+    setShowPermissionModal(false);
+    setPermissionRequest(null);
+
+    // Send approval response via RPC
+    wsService.emit('rpc_response', {
+      requestId,
+      result: { approved: true, remember },
+    });
+  };
+
+  const handlePermissionDeny = (requestId: string, remember: boolean) => {
+    console.log('[Session] Permission denied:', requestId, 'remember:', remember);
+    setShowPermissionModal(false);
+    setPermissionRequest(null);
+
+    // Send denial response via RPC
+    wsService.emit('rpc_response', {
+      requestId,
+      result: { approved: false, remember },
+    });
   };
 
   const toggleToolExpand = (id: string) => {
@@ -437,6 +685,13 @@ export default function ClaudeSessionScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
+      {/* Permission Request Modal */}
+      <PermissionRequest
+        visible={showPermissionModal}
+        request={permissionRequest}
+        onApprove={handlePermissionApprove}
+        onDeny={handlePermissionDeny}
+      />
       <SafeAreaView className="flex-1 bg-black">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -453,10 +708,21 @@ export default function ClaudeSessionScreen() {
             </TouchableOpacity>
 
             <View className="flex-row items-center">
-              <Terminal size={16} color={colors.primary[500]} />
-              <Text className="text-dark-100 font-mono text-sm ml-2">
-                {directoryName}
-              </Text>
+              {isThinking ? (
+                <View style={{ opacity: thinkingOpacity }} className="flex-row items-center">
+                  <Brain size={16} color={colors.primary[400]} />
+                  <Text className="text-primary-400 font-mono text-sm ml-2">
+                    Thinking...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Terminal size={16} color={colors.primary[500]} />
+                  <Text className="text-dark-100 font-mono text-sm ml-2">
+                    {directoryName}
+                  </Text>
+                </>
+              )}
             </View>
 
             {/* Entry count */}
