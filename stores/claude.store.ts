@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
 import { ClaudeSession, DirectoryEntry, TabCompletionResult } from '@/types';
 import { wsService } from '@/services/websocket.service';
 import { apiClient } from '@/services/api.client';
+import { unstable_batchedUpdates } from 'react-native';
 
 interface ClaudeState {
   // Session state per device
@@ -69,7 +71,6 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
       });
     } catch (error) {
       // Sessions might come via WebSocket instead of API, so don't show error
-      console.log('[ClaudeStore] API fetch failed, waiting for WebSocket updates');
       set({ isLoading: false });
     }
   },
@@ -78,51 +79,54 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     // Subscribe to device room
     wsService.subscribeToDevice(deviceId);
 
-    // Request current sessions from CLI (in case we missed initial updates)
-    wsService.emit('claude_sessions_request', { deviceId });
+    // NOTE: Don't emit claude_sessions_request here - it causes excessive requests
+    // Sessions are fetched via API on load and refreshed every 45 seconds in projects.tsx
 
-    // Listen for Claude session updates
+    // Listen for Claude session updates - batch updates for performance
     const unsubSessionUpdate = wsService.on('claude_session_update', (data) => {
       if (data.deviceId !== deviceId) return;
 
-      set((state) => {
-        const newSessions = new Map(state.sessions);
-        const deviceSessions = newSessions.get(deviceId) || [];
+      // Use batched updates to prevent multiple re-renders
+      unstable_batchedUpdates(() => {
+        set((state) => {
+          const newSessions = new Map(state.sessions);
+          const deviceSessions = newSessions.get(deviceId) || [];
 
-        // Find and update existing session or add new one
-        const existingIndex = deviceSessions.findIndex(
-          (s) => s.sessionKey === data.sessionKey
-        );
+          // Find and update existing session or add new one
+          const existingIndex = deviceSessions.findIndex(
+            (s) => s.sessionKey === data.sessionKey
+          );
 
-        if (existingIndex >= 0) {
-          deviceSessions[existingIndex] = {
-            ...deviceSessions[existingIndex],
-            state: data.state,
-            lastUsedAt: data.lastUsedAt,
-            transcriptPath: data.transcriptPath,
-          };
-        } else {
-          deviceSessions.push(data);
-        }
+          if (existingIndex >= 0) {
+            deviceSessions[existingIndex] = {
+              ...deviceSessions[existingIndex],
+              state: data.state,
+              lastUsedAt: data.lastUsedAt,
+              transcriptPath: data.transcriptPath,
+            };
+          } else {
+            deviceSessions.push(data);
+          }
 
-        // Sort by lastUsedAt descending (most recent first)
-        deviceSessions.sort((a, b) =>
-          new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime()
-        );
+          // Sort by lastUsedAt descending (most recent first)
+          deviceSessions.sort((a, b) =>
+            new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime()
+          );
 
-        newSessions.set(deviceId, [...deviceSessions]);
+          newSessions.set(deviceId, [...deviceSessions]);
 
-        // Also update tool status if this session is active
-        const newToolStatus = new Map(state.activeToolStatus);
-        if (data.state === 'active') {
-          newToolStatus.set(deviceId, 'active');
-        } else {
-          // Check if any other session is active
-          const hasActiveSession = deviceSessions.some(s => s.state === 'active');
-          newToolStatus.set(deviceId, hasActiveSession ? 'active' : 'inactive');
-        }
+          // Also update tool status if this session is active
+          const newToolStatus = new Map(state.activeToolStatus);
+          if (data.state === 'active') {
+            newToolStatus.set(deviceId, 'active');
+          } else {
+            // Check if any other session is active
+            const hasActiveSession = deviceSessions.some(s => s.state === 'active');
+            newToolStatus.set(deviceId, hasActiveSession ? 'active' : 'inactive');
+          }
 
-        return { sessions: newSessions, activeToolStatus: newToolStatus };
+          return { sessions: newSessions, activeToolStatus: newToolStatus };
+        });
       });
     });
 
