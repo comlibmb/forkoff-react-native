@@ -123,6 +123,18 @@ interface PermissionRequestEvent {
   details?: any;
 }
 
+// Claude approval request event (yes/no/plan prompts from CLI)
+interface ClaudeApprovalRequestEvent {
+  approvalId: string;
+  terminalSessionId: string;
+  sessionKey?: string;
+  deviceId?: string;
+  context: string[];       // Recent output lines for context
+  options: string[];       // Available options (e.g., ['y:yes', 'n:no', 'p:plan'])
+  promptText: string;      // The actual prompt text
+  timestamp: string;
+}
+
 // RPC request event
 interface RpcRequestEvent {
   deviceId: string;
@@ -182,6 +194,7 @@ interface EventCallbacks {
   claude_message: EventCallback<ClaudeMessageEvent>[];
   thinking_state: EventCallback<ThinkingStateEvent>[];
   permission_request: EventCallback<PermissionRequestEvent>[];
+  claude_approval_request: EventCallback<ClaudeApprovalRequestEvent>[];
   rpc_request: EventCallback<RpcRequestEvent>[];
   rpc_response: EventCallback<RpcResponseEvent>[];
   session_connected: EventCallback<SessionConnectedEvent>[];
@@ -216,6 +229,7 @@ class WebSocketService {
     claude_message: [],
     thinking_state: [],
     permission_request: [],
+    claude_approval_request: [],
     rpc_request: [],
     rpc_response: [],
     session_connected: [],
@@ -344,6 +358,11 @@ class WebSocketService {
     this.socket.on('permission_request', (data) => {
       console.log('[WS] GOT permission_request:', data?.type, data?.toolName);
       this.emitInternal('permission_request', data);
+    });
+
+    this.socket.on('claude_approval_request', (data) => {
+      console.log('[WS] GOT claude_approval_request:', data?.approvalId, data?.promptText?.substring(0, 50));
+      this.emitInternal('claude_approval_request', data);
     });
 
     // RPC events
@@ -505,6 +524,24 @@ class WebSocketService {
   // Respond to approval request
   respondToApproval(requestId: string, approved: boolean): void {
     this.socket?.emit('approval_response', { requestId, approved });
+  }
+
+  // Respond to Claude approval request (yes/no/plan prompts)
+  respondToClaudeApproval(
+    approvalId: string,
+    response: string,
+    options?: {
+      deviceId?: string;
+      sessionKey?: string;
+    }
+  ): void {
+    console.log(`[WS] Sending claude_approval_response: ${approvalId} -> ${response}`);
+    this.socket?.emit('claude_approval_response', {
+      approvalId,
+      response,
+      deviceId: options?.deviceId,
+      sessionKey: options?.sessionKey,
+    });
   }
 
   // Request session history from CLI via server
