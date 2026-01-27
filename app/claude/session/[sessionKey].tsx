@@ -41,6 +41,7 @@ export default function ClaudeSessionScreen() {
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const streamingMessageIdRef = useRef<string | null>(null);
+  const sendingRef = useRef(false); // Guard against rapid duplicate sends
   const [totalEntries, setTotalEntries] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -274,11 +275,27 @@ export default function ClaudeSessionScreen() {
         }
 
         setEntries((prev) => {
-          // Only check ID for duplicates - lineNumber causes false positives
-          const isDuplicate = prev.some(e => e.id === data.entry.id);
-          if (isDuplicate) {
-            console.log('[Session] Skipping duplicate:', data.entry.id);
+          // Check for duplicates by ID
+          const isDuplicateById = prev.some(e => e.id === data.entry.id);
+          if (isDuplicateById) {
+            console.log('[Session] Skipping duplicate by ID:', data.entry.id);
             return prev;
+          }
+
+          // For user messages, check if there's an optimistic entry with same content
+          // This prevents showing duplicate user messages when the transcript update arrives
+          if (data.entry.type === 'user') {
+            const entryText = data.entry.content?.text || '';
+            const optimisticDuplicate = prev.find(e =>
+              e.id.startsWith('local-') &&
+              e.type === 'user' &&
+              e.content?.text === entryText
+            );
+            if (optimisticDuplicate) {
+              console.log('[Session] Replacing optimistic entry with real entry:', optimisticDuplicate.id, '->', data.entry.id);
+              // Replace optimistic entry with real one (don't increment total)
+              return prev.map(e => e.id === optimisticDuplicate.id ? data.entry : e);
+            }
           }
 
           console.log('[Session] Adding entry:', data.entry.type, data.entry.id);
@@ -435,11 +452,13 @@ export default function ClaudeSessionScreen() {
 
     // Request resume - CLI will connect with session-scoped connection
     // and start routing messages to this session
+    // Use sessionKey as terminalSessionId to uniquely identify this process
     console.log('[Session] Sending claude_resume_session to device:', deviceId);
     wsService.emit('claude_resume_session', {
       deviceId,
       sessionKey,
       directory: session.directory,
+      terminalSessionId: sessionKey, // Use sessionKey as the process identifier
     });
 
     // Mark as taken over - isTakingOver will be set false when session is ready
@@ -458,7 +477,15 @@ export default function ClaudeSessionScreen() {
   };
 
   const handleSendMessage = async () => {
+    // Use ref guard to prevent rapid duplicate sends (state may not update fast enough)
+    if (sendingRef.current) {
+      console.log('[Session] Blocked duplicate send - already sending');
+      return;
+    }
     if (!inputText.trim() || !deviceId || isSending || !isSessionReady) return;
+
+    // Set ref guard immediately (synchronous)
+    sendingRef.current = true;
 
     const message = inputText.trim();
     setInputText('');
@@ -482,14 +509,17 @@ export default function ClaudeSessionScreen() {
     }, 50);
 
     // Send message via user_message event (routes to session-scoped CLI)
+    console.log('[Session] Sending user message:', message.substring(0, 50));
     wsService.sendUserMessage(deviceId, message, {
       sessionKey: sessionKey,
     });
 
-    // Reset sending state after a short delay (response comes via claude_message)
+    // Reset sending state after response arrives or timeout
+    // Use longer delay to prevent rapid re-sends
     setTimeout(() => {
+      sendingRef.current = false;
       setIsSending(false);
-    }, 300);
+    }, 1000); // 1 second cooldown
   };
 
   const handlePermissionApprove = (requestId: string, remember: boolean) => {
@@ -571,6 +601,65 @@ export default function ClaudeSessionScreen() {
     );
   };
 
+  // Render new file content as additions (like a diff for new files)
+  const renderNewFileContent = (content: string, filePath?: string) => {
+    const lines = content.split('\n');
+    const fileName = filePath?.split(/[/\\]/).pop() || 'new file';
+    const lineCount = lines.length;
+
+    return (
+      <View className="mt-2 rounded bg-dark-800 overflow-hidden">
+        {/* Header showing it's a new file */}
+        <View className="bg-green-900/30 px-2 py-1 border-b border-dark-700">
+          <Text className="font-mono text-xs text-green-400">
+            +++ {fileName} (new file, {lineCount} lines)
+          </Text>
+        </View>
+        {/* Content as additions */}
+        <View className="px-2 py-1">
+          {lines.slice(0, 50).map((line, index) => (
+            <View key={index} className="bg-green-900/20">
+              <Text className="font-mono text-xs text-green-400">
+                +{line}
+              </Text>
+            </View>
+          ))}
+          {lines.length > 50 && (
+            <View className="bg-dark-700 px-2 py-1">
+              <Text className="font-mono text-xs text-dark-400">
+                ... and {lines.length - 50} more lines
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // Parse tool input to extract file content for Write operations
+  const parseWriteToolInput = (toolInput: any): { filePath?: string; content?: string } => {
+    if (!toolInput) return {};
+
+    // Handle string input (JSON)
+    if (typeof toolInput === 'string') {
+      try {
+        const parsed = JSON.parse(toolInput);
+        return {
+          filePath: parsed.file_path,
+          content: parsed.content,
+        };
+      } catch {
+        return {};
+      }
+    }
+
+    // Handle object input
+    return {
+      filePath: toolInput.file_path,
+      content: toolInput.content,
+    };
+  };
+
   const renderEntry = (item: TranscriptEntry) => {
     const isUser = item.type === 'user';
     const isToolUse = item.type === 'tool_use';
@@ -592,8 +681,20 @@ export default function ClaudeSessionScreen() {
       );
     }
 
-    // Tool use - collapsible
+    // Tool use - collapsible with special handling for Write
     if (isToolUse) {
+      const toolName = item.content?.toolName?.toLowerCase() || '';
+      const isWrite = toolName === 'write';
+      const isEdit = toolName === 'edit';
+
+      // Parse Write tool input for file content
+      const writeData = isWrite ? parseWriteToolInput(item.content?.toolInput || item.content?.text) : null;
+      const hasFileContent = writeData?.content && writeData.content.length > 0;
+
+      // Get file path for display
+      const filePath = writeData?.filePath || item.content?.toolInput?.file_path;
+      const fileName = filePath?.split(/[/\\]/).pop();
+
       return (
         <View className="mb-2">
           <TouchableOpacity
@@ -601,20 +702,30 @@ export default function ClaudeSessionScreen() {
             className="flex-row items-center py-1"
           >
             {isExpanded ? (
-              <ChevronDown size={14} color={colors.dark[300]} />
+              <ChevronDown size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
             ) : (
-              <ChevronRight size={14} color={colors.dark[300]} />
+              <ChevronRight size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
             )}
-            <Text className="text-dark-300 font-mono text-xs ml-1">
+            <Text className={`font-mono text-xs ml-1 ${isWrite ? 'text-primary-400' : 'text-dark-300'}`}>
               {item.content?.toolName}
             </Text>
-          </TouchableOpacity>
-          {isExpanded && item.content?.text && (
-            <View className="ml-4 pl-2 border-l border-dark-600">
-              <Text className="text-dark-400 font-mono text-xs">
-                {item.content.text.substring(0, 500)}
-                {item.content.text.length > 500 ? '...' : ''}
+            {fileName && (
+              <Text className="text-dark-400 font-mono text-xs ml-2">
+                {fileName}
               </Text>
+            )}
+          </TouchableOpacity>
+          {isExpanded && (
+            <View className="ml-4 pl-2 border-l border-dark-600">
+              {/* Show file content as diff for Write operations */}
+              {isWrite && hasFileContent ? (
+                renderNewFileContent(writeData!.content!, filePath)
+              ) : item.content?.text ? (
+                <Text className="text-dark-400 font-mono text-xs">
+                  {item.content.text.substring(0, 500)}
+                  {item.content.text.length > 500 ? '...' : ''}
+                </Text>
+              ) : null}
             </View>
           )}
         </View>
