@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
 import { ClaudeSession } from '@/types';
 import { colors } from '@/theme/colors';
+import { TerminalLoader } from '@/components/claude/TerminalLoader';
 
 // Memoized utility function (outside component to avoid recreation)
 const formatTimeAgo = (dateString: string): string => {
@@ -273,21 +274,110 @@ export default function ProjectsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
 
-  // Fetch devices on mount
+  // Scanning state
+  const [isScanning, setIsScanning] = useState(true);
+  const [scanStep, setScanStep] = useState(0);
+  const [scanDeviceCount, setScanDeviceCount] = useState(0);
+  const [scanProjectCount, setScanProjectCount] = useState(0);
+  const hasInitializedRef = useRef(false);
+
+  // Scan lines for the terminal loader
+  const scanLines = useMemo(() => [
+    {
+      text: 'Looking for devices',
+      color: colors.dark[200],
+      done: scanStep > 0,
+    },
+    {
+      text: scanDeviceCount > 0
+        ? `Found ${scanDeviceCount} device${scanDeviceCount !== 1 ? 's' : ''}`
+        : 'Discovering devices',
+      color: scanDeviceCount > 0 ? colors.success[100] : colors.dark[300],
+      done: scanStep > 1,
+    },
+    {
+      text: scanProjectCount > 0
+        ? `Scanned ${scanProjectCount} project${scanProjectCount !== 1 ? 's' : ''}`
+        : 'Scanning for projects',
+      color: scanProjectCount > 0 ? colors.success[100] : colors.dark[300],
+      done: scanStep > 2,
+    },
+    {
+      text: 'All systems go',
+      color: colors.success[100],
+      done: scanStep > 3,
+    },
+  ], [scanStep, scanDeviceCount, scanProjectCount]);
+
+  // Auto-scan on mount
   useEffect(() => {
-    fetchDevices();
-  }, [fetchDevices]);
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
+    const scan = async () => {
+      // Step 0: Looking for devices
+      setScanStep(0);
+
+      await fetchDevices();
+
+      // Step 1: Found devices
+      const deviceState = useDeviceStore.getState();
+      const foundDevices = deviceState.devices;
+      setScanDeviceCount(foundDevices.length);
+      setScanStep(1);
+
+      if (foundDevices.length === 0) {
+        // No devices - skip to done
+        setTimeout(() => {
+          setScanStep(3);
+          setTimeout(() => setIsScanning(false), 400);
+        }, 500);
+        return;
+      }
+
+      // Step 2: Scanning projects per device
+      await new Promise(r => setTimeout(r, 400));
+      setScanStep(2);
+
+      const sessionPromises = foundDevices.map(d => fetchSessions(d.id));
+      await Promise.allSettled(sessionPromises);
+
+      // Count projects
+      const claudeState = useClaudeStore.getState();
+      let projectCount = 0;
+      const dirs = new Set<string>();
+      for (const device of foundDevices) {
+        const deviceSessions = claudeState.sessions.get(device.id) || [];
+        for (const s of deviceSessions) {
+          dirs.add(s.directory);
+        }
+      }
+      projectCount = dirs.size;
+      setScanProjectCount(projectCount);
+
+      // Step 3: All systems go
+      await new Promise(r => setTimeout(r, 500));
+      setScanStep(3);
+
+      // Done scanning
+      await new Promise(r => setTimeout(r, 600));
+      setIsScanning(false);
+    };
+
+    scan();
+  }, [fetchDevices, fetchSessions]);
 
   // Subscribe to updates and set up polling - use device IDs as dependency
   const deviceIds = useMemo(() => devices.map(d => d.id).join(','), [devices]);
 
   useEffect(() => {
     if (devices.length === 0) return;
+    // Don't start subscriptions during initial scan
+    if (isScanning) return;
 
     const unsubscribers: (() => void)[] = [];
 
     for (const device of devices) {
-      fetchSessions(device.id);
       const unsub = subscribeToUpdates(device.id);
       unsubscribers.push(unsub);
     }
@@ -302,7 +392,7 @@ export default function ProjectsScreen() {
       unsubscribers.forEach((unsub) => unsub());
       clearInterval(pollInterval);
     };
-  }, [deviceIds, fetchSessions, subscribeToUpdates]);
+  }, [deviceIds, fetchSessions, subscribeToUpdates, isScanning]);
 
   // Memoized grouped projects computation
   const deviceProjects = useMemo(() => {
@@ -412,6 +502,15 @@ export default function ProjectsScreen() {
 
   // Render content based on state
   const renderContent = () => {
+    if (isScanning) {
+      return (
+        <TerminalLoader
+          variant="scanning"
+          scanLines={scanLines}
+          scanStep={scanStep}
+        />
+      );
+    }
     if (devices.length === 0) {
       return <NoDevicesState />;
     }

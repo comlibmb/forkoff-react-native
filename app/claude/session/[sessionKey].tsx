@@ -14,13 +14,31 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain } from 'lucide-react-native';
-import { wsService, TranscriptEntry, DiffHunk } from '@/services/websocket.service';
+import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
 import { useClaudeStore } from '@/stores/claude.store';
 import { colors } from '@/theme/colors';
 import PermissionRequest, { PermissionRequestData } from '@/components/claude/PermissionRequest';
+import { ThinkingBlock, ThinkingIndicator } from '@/components/claude/ThinkingBlock';
+import { TaskProgress } from '@/components/claude/TaskProgress';
+import { TokenUsageDisplay, TokenUsageInline } from '@/components/claude/TokenUsageDisplay';
+import { LocalCommandBlock, parseLocalCommandTags, isLocalCommandText } from '@/components/claude/LocalCommandBlock';
+import { SystemReminderBlock, parseSystemReminderTags, stripSystemReminderTags, hasSystemReminderTags } from '@/components/claude/SystemReminderBlock';
+import { StatusBar, ActivityState, getActivityFromTool, getActivityDetail } from '@/components/claude/StatusBar';
+import { TerminalLoader } from '@/components/claude/TerminalLoader';
 
 const INITIAL_LOAD = 400;
 const LOAD_MORE_COUNT = 200;
+
+function AnimatedConnectDots() {
+  const [dots, setDots] = useState('');
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 350);
+    return () => clearInterval(interval);
+  }, []);
+  return <Text style={{ color: colors.primary[400], fontFamily: 'monospace', fontSize: 13, width: 20 }}>{dots}</Text>;
+}
 
 export default function ClaudeSessionScreen() {
   const { sessionKey, deviceId } = useLocalSearchParams<{
@@ -48,6 +66,16 @@ export default function ClaudeSessionScreen() {
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [thinkingOpacity, setThinkingOpacity] = useState(1);
+
+  // New state for thinking, tokens, and tasks
+  const [thinkingContent, setThinkingContent] = useState<{ id: string; content: string; isStreaming: boolean } | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
+  const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const [showTasksPanel, setShowTasksPanel] = useState(false);
+
+  // Activity state for status bar
+  const [activityState, setActivityState] = useState<ActivityState>('idle');
+  const [activityDetail, setActivityDetail] = useState<string | undefined>(undefined);
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollPositionRef = useRef(0);
   const contentHeightRef = useRef(0);
@@ -93,6 +121,23 @@ export default function ClaudeSessionScreen() {
 
       const msg = data.message;
       console.log('[Session] claude_message:', msg.type, msg.partial ? '(partial)' : '');
+
+      // Update activity state based on message type
+      if (msg.type === 'tool_use') {
+        const activity = getActivityFromTool(msg.toolName);
+        const detail = getActivityDetail(msg.toolName, msg.toolInput);
+        setActivityState(activity);
+        setActivityDetail(detail);
+      } else if (msg.type === 'assistant') {
+        if (msg.partial) {
+          setActivityState('responding');
+          setActivityDetail(undefined);
+        } else {
+          // Message complete - back to idle
+          setActivityState('idle');
+          setActivityDetail(undefined);
+        }
+      }
 
       setEntries((prev) => {
         // If this is a partial message, update existing entry
@@ -166,6 +211,11 @@ export default function ClaudeSessionScreen() {
       if (data.sessionKey === sessionKey) {
         console.log('[Session] thinking_state:', data.thinking);
         setIsThinking(data.thinking);
+        // Update activity state
+        if (data.thinking) {
+          setActivityState('thinking');
+          setActivityDetail(undefined);
+        }
       }
     });
 
@@ -191,6 +241,8 @@ export default function ClaudeSessionScreen() {
         if (data.event.type === 'ready') {
           setIsWaitingForResponse(false);
           setIsSessionReady(true);
+          setActivityState('idle');
+          setActivityDetail(undefined);
         } else if (data.event.type === 'message') {
           // Status message from CLI
           console.log('[Session] Status message:', data.event.message);
@@ -207,12 +259,77 @@ export default function ClaudeSessionScreen() {
       }
     });
 
+    // Listen for thinking content (extended thinking text)
+    const unsubThinkingContent = wsService.on('thinking_content', (data: ThinkingContentEvent) => {
+      if (data.sessionKey !== sessionKey) return;
+      console.log('[Session] thinking_content:', data.thinkingId, data.partial ? '(streaming)' : '(complete)');
+
+      if (data.partial) {
+        // Streaming thinking - accumulate content
+        setThinkingContent((prev) => {
+          if (prev?.id === data.thinkingId) {
+            return { ...prev, content: prev.content + data.content };
+          }
+          return { id: data.thinkingId, content: data.content, isStreaming: true };
+        });
+        // Set activity to formulating when receiving thinking content
+        setActivityState('formulating');
+        setActivityDetail(undefined);
+      } else {
+        // Thinking complete - add as transcript entry if there's content
+        setThinkingContent((prev) => {
+          if (prev?.id === data.thinkingId && prev.content) {
+            // Add thinking block to entries
+            const thinkingEntry: TranscriptEntry = {
+              id: `thinking-${data.thinkingId}`,
+              type: 'assistant' as const,
+              timestamp: new Date().toISOString(),
+              lineNumber: 0,
+              content: {
+                text: prev.content,
+                thinkingText: prev.content, // Special marker for thinking blocks
+              } as any,
+            };
+            setEntries((entries) => [...entries, thinkingEntry]);
+          }
+          return null;
+        });
+      }
+    });
+
+    // Listen for token usage
+    const unsubTokenUsage = wsService.on('token_usage', (data: TokenUsageEvent) => {
+      if (data.sessionKey !== sessionKey) return;
+      console.log('[Session] token_usage:', data.usage.inputTokens, '/', data.usage.outputTokens);
+      setTokenUsage(data.usage);
+    });
+
+    // Listen for task progress
+    const unsubTaskProgress = wsService.on('task_progress', (data: TaskProgressEvent) => {
+      if (data.sessionKey !== sessionKey) return;
+      console.log('[Session] task_progress:', data.type, data.task?.subject || data.tasks?.length);
+
+      if (data.type === 'list' && data.tasks) {
+        setTasks(data.tasks);
+      } else if (data.type === 'created' && data.task) {
+        setTasks((prev) => [...prev, data.task!]);
+        setShowTasksPanel(true);
+      } else if ((data.type === 'updated' || data.type === 'completed') && data.task) {
+        setTasks((prev) =>
+          prev.map((t) => (t.id === data.task!.id ? { ...t, ...data.task } : t))
+        );
+      }
+    });
+
     return () => {
       unsubClaudeMessage();
       unsubThinking();
       unsubPermission();
       unsubSessionEvent();
       unsubSessionConnected();
+      unsubThinkingContent();
+      unsubTokenUsage();
+      unsubTaskProgress();
     };
   }, [sessionKey, deviceId]);
 
@@ -309,6 +426,22 @@ export default function ClaudeSessionScreen() {
         // Clear waiting state for non-user messages
         if (data.entry?.type !== 'user') {
           setIsWaitingForResponse(false);
+        }
+
+        // Update activity state based on transcript updates
+        if (data.entry?.type === 'tool_use') {
+          const activity = getActivityFromTool(data.entry.content?.toolName);
+          const detail = getActivityDetail(data.entry.content?.toolName, data.entry.content?.toolInput);
+          setActivityState(activity);
+          setActivityDetail(detail);
+        } else if (data.entry?.type === 'assistant') {
+          // Final assistant message means Claude is done
+          setActivityState('idle');
+          setActivityDetail(undefined);
+        } else if (data.entry?.type === 'tool_result') {
+          // Tool finished, Claude will respond next
+          setActivityState('formulating');
+          setActivityDetail(undefined);
         }
 
         // Auto-scroll
@@ -502,6 +635,8 @@ export default function ClaudeSessionScreen() {
     setEntries((prev) => [...prev, optimisticEntry]);
     setTotalEntries((prev) => prev + 1);
     setIsWaitingForResponse(true);
+    setActivityState('waiting');
+    setActivityDetail(undefined);
 
     // Auto-scroll to show the new message
     setTimeout(() => {
@@ -667,6 +802,34 @@ export default function ClaudeSessionScreen() {
     const isExpanded = expandedTools.has(item.id);
     const hasDiff = item.content?.diff && item.content.diff.length > 0;
 
+    // Check if this is a thinking block (has thinkingText in content)
+    const isThinkingBlock = (item.content as any)?.thinkingText;
+    if (isThinkingBlock) {
+      return (
+        <ThinkingBlock
+          content={(item.content as any).thinkingText}
+          thinkingId={item.id}
+        />
+      );
+    }
+
+    // Check if this contains local command tags (CLI slash commands)
+    const text = item.content?.text || '';
+    if (isLocalCommandText(text)) {
+      const parsed = parseLocalCommandTags(text);
+      if (parsed) {
+        return (
+          <LocalCommandBlock
+            commandName={parsed.commandName}
+            commandMessage={parsed.commandMessage}
+            commandArgs={parsed.commandArgs}
+            stdout={parsed.stdout}
+            caveat={parsed.caveat}
+          />
+        );
+      }
+    }
+
     // User input - shown as prompt
     if (isUser) {
       return (
@@ -779,11 +942,23 @@ export default function ClaudeSessionScreen() {
     }
 
     // Assistant message - main content
+    // Check for and handle system reminders within the text
+    const rawText = item.content?.text || '';
+    const systemReminders = hasSystemReminderTags(rawText) ? parseSystemReminderTags(rawText) : [];
+    const cleanText = hasSystemReminderTags(rawText) ? stripSystemReminderTags(rawText) : rawText;
+
     return (
       <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: '#E5E7EB', fontFamily: 'monospace', fontSize: 14, lineHeight: 20 }}>
-          {item.content?.text}
-        </Text>
+        {/* Show system reminders if present */}
+        {systemReminders.map((reminder, idx) => (
+          <SystemReminderBlock key={`reminder-${idx}`} content={reminder} />
+        ))}
+        {/* Main assistant text */}
+        {cleanText && (
+          <Text style={{ color: '#E5E7EB', fontFamily: 'monospace', fontSize: 14, lineHeight: 20 }}>
+            {cleanText}
+          </Text>
+        )}
       </View>
     );
   };
@@ -818,28 +993,33 @@ export default function ClaudeSessionScreen() {
               <Text className="text-dark-200 ml-2 text-sm">Back</Text>
             </TouchableOpacity>
 
-            <View className="flex-row items-center">
+            {/* Center: Directory name or thinking indicator */}
+            <View className="flex-row items-center flex-1 justify-center mx-4">
               {isThinking ? (
-                <View style={{ opacity: thinkingOpacity }} className="flex-row items-center">
-                  <Brain size={16} color={colors.primary[400]} />
-                  <Text className="text-primary-400 font-mono text-sm ml-2">
-                    Thinking...
-                  </Text>
-                </View>
+                <ThinkingIndicator isThinking={true} />
               ) : (
-                <>
-                  <Terminal size={16} color={colors.primary[500]} />
-                  <Text className="text-dark-100 font-mono text-sm ml-2">
+                <View className="flex-row items-center">
+                  <Terminal size={14} color={colors.primary[500]} />
+                  <Text className="text-dark-100 font-mono text-sm ml-2" numberOfLines={1}>
                     {directoryName}
                   </Text>
-                </>
+                </View>
               )}
             </View>
 
-            {/* Entry count */}
-            <Text className="text-dark-500 font-mono text-xs">
-              {entries.length}/{totalEntries}
-            </Text>
+            {/* Right: Token usage and entry count */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {tokenUsage && (
+                <TokenUsageDisplay
+                  inputTokens={tokenUsage.inputTokens}
+                  outputTokens={tokenUsage.outputTokens}
+                  style="header"
+                />
+              )}
+              <Text className="text-dark-500 font-mono text-xs">
+                {entries.length}/{totalEntries}
+              </Text>
+            </View>
           </View>
 
           {/* Session path */}
@@ -848,6 +1028,28 @@ export default function ClaudeSessionScreen() {
               {session?.directory}
             </Text>
           </View>
+
+          {/* Task Progress Panel */}
+          {tasks.length > 0 && (
+            <View className="px-4 py-2">
+              <TaskProgress
+                tasks={tasks}
+                isCollapsed={!showTasksPanel}
+                onToggleCollapse={() => setShowTasksPanel(!showTasksPanel)}
+              />
+            </View>
+          )}
+
+          {/* Streaming thinking indicator */}
+          {thinkingContent?.isStreaming && (
+            <View className="px-4 py-2">
+              <ThinkingBlock
+                content={thinkingContent.content}
+                isStreaming={true}
+                thinkingId={thinkingContent.id}
+              />
+            </View>
+          )}
 
           {/* Load more indicator */}
           {hasMore && (
@@ -869,20 +1071,9 @@ export default function ClaudeSessionScreen() {
 
           {/* Terminal-style output */}
           {isLoading ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color={colors.primary[500]} />
-              <Text className="text-dark-400 mt-4 font-mono">Loading transcript...</Text>
-            </View>
+            <TerminalLoader variant="boot" directory={directoryName} />
           ) : entries.length === 0 ? (
-            <View className="flex-1 items-center justify-center px-8">
-              <Terminal size={40} color={colors.dark[500]} />
-              <Text className="text-dark-400 mt-4 text-center font-mono">
-                No conversation history
-              </Text>
-              <Text className="text-dark-500 mt-2 text-center font-mono text-xs">
-                Transcript will appear as Claude works
-              </Text>
-            </View>
+            <TerminalLoader variant="empty" />
           ) : (
             <ScrollView
               ref={scrollViewRef}
@@ -906,6 +1097,16 @@ export default function ClaudeSessionScreen() {
                 </React.Fragment>
               ))}
             </ScrollView>
+          )}
+
+          {/* Status Bar - shows activity state like Claude Code CLI */}
+          {hasTakenOver && isSessionReady && (
+            <StatusBar
+              activity={activityState}
+              detail={activityDetail}
+              tokenUsage={tokenUsage || undefined}
+              isVisible={true}
+            />
           )}
 
           {/* Bottom: Take Over button OR Input field */}
@@ -933,9 +1134,12 @@ export default function ClaudeSessionScreen() {
                 </TouchableOpacity>
               </View>
             ) : isTakingOver ? (
-              <View className="px-4 py-4 flex-row items-center justify-center">
-                <ActivityIndicator size="small" color={colors.primary[500]} />
-                <Text className="text-dark-300 ml-3 font-mono text-sm">Connecting to Claude...</Text>
+              <View className="px-4 py-3 flex-row items-center justify-center">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: colors.success[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '700' }}>$</Text>
+                  <Text style={{ color: colors.dark[200], fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
+                  <AnimatedConnectDots />
+                </View>
               </View>
             ) : (
               <View className="flex-row items-center px-3 py-2">

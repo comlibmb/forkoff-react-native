@@ -74,16 +74,22 @@ class NotificationService {
       return null;
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-    });
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
+      });
 
-    this.expoPushToken = tokenData.data;
+      this.expoPushToken = tokenData.data;
 
-    // Register token with backend
-    await this.registerTokenWithBackend(this.expoPushToken);
+      // Register token with backend
+      await this.registerTokenWithBackend(this.expoPushToken);
 
-    return this.expoPushToken;
+      return this.expoPushToken;
+    } catch (error) {
+      // Expo Go doesn't support push tokens - silently fail
+      console.log('[Notifications] Push token unavailable (expected in Expo Go)');
+      return null;
+    }
   }
 
   private async registerTokenWithBackend(token: string): Promise<void> {
