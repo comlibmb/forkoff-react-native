@@ -82,7 +82,11 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nperf: Optimize mobile app performance with memoization and FlatList\n\n- Replace ScrollView with FlatList for virtualized rendering\n- Add React.memo to components \\(SessionItem, ProjectCard, DeviceCard\\)\n- Use useCallback for stable event handler references\n- Add useMemo for expensive computations \\(deviceProjects, filtering\\)\n- Use Zustand shallow selectors to reduce re-renders\n- Add unstable_batchedUpdates for WebSocket updates\n- Implement 45-second polling interval for sessions and devices\n- Fix Claude tool status to reflect active sessions\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "WebSearch",
+      "WebFetch(domain:claudelog.com)",
+      "WebFetch(domain:www.ytyng.com)",
+      "WebFetch(domain:hexdocs.pm)"
     ]
   }
 }
