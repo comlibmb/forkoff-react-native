@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
-import { router } from 'expo-router';
+import { router, Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -21,6 +21,9 @@ import { colors } from '@/theme/colors';
 type FilterType = 'all' | 'active' | 'favorites' | 'errors';
 
 export default function HomeScreen() {
+  // Redirect to projects tab - it's the main landing page
+  return <Redirect href="/(tabs)/projects" />;
+
   const { user } = useAuthStore();
   const { devices, fetchDevices, isLoading: devicesLoading } = useDeviceStore();
   const { projects, fetchProjects, isLoading: projectsLoading } = useProjectStore();

@@ -178,6 +178,39 @@ interface ClaudeSessionEventData {
   };
 }
 
+// Thinking content event (extended thinking text)
+export interface ThinkingContentEvent {
+  sessionKey?: string;
+  thinkingId: string;
+  content: string;
+  partial: boolean;
+}
+
+// Token usage event
+export interface TokenUsageEvent {
+  sessionKey?: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+}
+
+// Task info structure
+export interface TaskInfo {
+  id: string;
+  subject: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  activeForm?: string;
+}
+
+// Task progress event
+export interface TaskProgressEvent {
+  sessionKey?: string;
+  type: 'created' | 'updated' | 'completed' | 'list';
+  task?: TaskInfo;
+  tasks?: TaskInfo[];
+}
+
 interface EventCallbacks {
   device_status: EventCallback<{ deviceId: string; status: DeviceStatus; lastSeenAt?: string }>[];
   terminal_output: EventCallback<TerminalOutputEvent>[];
@@ -202,6 +235,9 @@ interface EventCallbacks {
   session_alive: EventCallback<SessionAliveEvent>[];
   claude_session_event: EventCallback<ClaudeSessionEventData>[];
   sdk_session_history: EventCallback<{ sessionKey: string; entries: TranscriptEntry[]; totalEntries: number; hasMore: boolean }>[];
+  thinking_content: EventCallback<ThinkingContentEvent>[];
+  token_usage: EventCallback<TokenUsageEvent>[];
+  task_progress: EventCallback<TaskProgressEvent>[];
   connected: EventCallback<void>[];
   disconnected: EventCallback<void>[];
   error: EventCallback<Error>[];
@@ -237,6 +273,9 @@ class WebSocketService {
     session_alive: [],
     claude_session_event: [],
     sdk_session_history: [],
+    thinking_content: [],
+    token_usage: [],
+    task_progress: [],
     connected: [],
     disconnected: [],
     error: [],
@@ -400,6 +439,26 @@ class WebSocketService {
     this.socket.on('sdk_session_history', (data) => {
       console.log('[WS] GOT sdk_session_history:', data?.sessionKey);
       this.emitInternal('sdk_session_history', data);
+    });
+
+    // Extended thinking content events
+    this.socket.on('thinking_content', (data) => {
+      if (data?.content || !data?.partial) {
+        console.log('[WS] GOT thinking_content:', data?.thinkingId, data?.partial ? '(partial)' : '(complete)');
+      }
+      this.emitInternal('thinking_content', data);
+    });
+
+    // Token usage events
+    this.socket.on('token_usage', (data) => {
+      console.log('[WS] GOT token_usage:', data?.usage?.inputTokens, '/', data?.usage?.outputTokens);
+      this.emitInternal('token_usage', data);
+    });
+
+    // Task progress events
+    this.socket.on('task_progress', (data) => {
+      console.log('[WS] GOT task_progress:', data?.type, data?.task?.subject || `${data?.tasks?.length} tasks`);
+      this.emitInternal('task_progress', data);
     });
   }
 
