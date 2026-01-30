@@ -118,6 +118,9 @@ export interface GitHubUser {
   name: string;
   avatarUrl: string;
   email?: string;
+  bio?: string;
+  publicRepos?: number;
+  followers?: number;
 }
 
 // Chat Types

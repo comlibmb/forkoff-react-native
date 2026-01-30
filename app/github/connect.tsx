@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Github, Check, LogOut, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Github, Check, LogOut, RefreshCw, ExternalLink } from 'lucide-react-native';
 import { Button, Card } from '@/components/ui';
 import { githubService } from '@/services/github.service';
 import { authService } from '@/services/auth.service';
 import { GitHubUser } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import { colors } from '@/theme/colors';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function GitHubConnectScreen() {
   const [isConnected, setIsConnected] = useState(false);
@@ -44,15 +48,24 @@ export default function GitHubConnectScreen() {
     try {
       const { url } = await authService.signInWithGitHub();
 
-      const result = await WebBrowser.openAuthSessionAsync(
-        url,
-        'forkoff://auth/callback'
-      );
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'forkoff',
+        preferLocalhost: false,
+      });
+
+      console.log('[GitHub Connect] Opening OAuth with redirect:', redirectUri);
+
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+
+      console.log('[GitHub Connect] OAuth result:', result.type);
 
       if (result.type === 'success') {
+        // Wait a moment for the session to be established
+        await new Promise(resolve => setTimeout(resolve, 1000));
         await checkConnection();
       }
     } catch (error) {
+      console.error('[GitHub Connect] Error:', error);
       alert.error('Error', 'Failed to connect GitHub. Please try again.');
     } finally {
       setIsConnecting(false);
@@ -107,18 +120,28 @@ export default function GitHubConnectScreen() {
             {/* Connected Account */}
             <Card padding="lg" variant="elevated" className="mb-6">
               <View className="items-center">
-                <View className="w-20 h-20 bg-dark-700 rounded-full items-center justify-center mb-4 overflow-hidden">
+                <View className="w-24 h-24 bg-dark-700 rounded-full items-center justify-center mb-4 overflow-hidden border-2 border-dark-600">
                   {githubUser.avatarUrl ? (
-                    <View className="w-20 h-20 bg-dark-600 rounded-full" />
+                    <Image
+                      source={{ uri: githubUser.avatarUrl }}
+                      style={{ width: 96, height: 96, borderRadius: 48 }}
+                      resizeMode="cover"
+                    />
                   ) : (
                     <Github size={40} color={colors.dark[300]} />
                   )}
                 </View>
 
                 <Text className="text-white text-xl font-bold">
-                  {githubUser.name}
+                  {githubUser.name || githubUser.login}
                 </Text>
                 <Text className="text-dark-400">@{githubUser.login}</Text>
+
+                {githubUser.bio && (
+                  <Text className="text-dark-300 text-center mt-2 px-4">
+                    {githubUser.bio}
+                  </Text>
+                )}
 
                 <View className="flex-row items-center mt-4 bg-success-500/20 px-4 py-2 rounded-full">
                   <Check size={16} color={colors.success[500]} />
@@ -126,6 +149,14 @@ export default function GitHubConnectScreen() {
                     Connected
                   </Text>
                 </View>
+
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`https://github.com/${githubUser.login}`)}
+                  className="flex-row items-center mt-3"
+                >
+                  <ExternalLink size={14} color={colors.dark[400]} />
+                  <Text className="text-dark-400 ml-1 text-sm">View on GitHub</Text>
+                </TouchableOpacity>
               </View>
             </Card>
 
