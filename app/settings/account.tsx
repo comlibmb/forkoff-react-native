@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Camera, Mail, User, Sparkles, ChevronRight, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Mail, User, Sparkles, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
 
@@ -27,16 +27,6 @@ export default function AccountScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to update profile');
     }
-  };
-
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
   };
 
   return (
@@ -67,30 +57,16 @@ export default function AccountScreen() {
       <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
         <Text className="text-dark-50 text-2xl font-bold mb-6">Account</Text>
 
-        {/* Avatar */}
+        {/* Initials Avatar */}
         <View className="items-center mb-8">
-          <TouchableOpacity className="relative">
-            <View
-              className="w-24 h-24 rounded-full items-center justify-center"
-              style={{
-                borderWidth: 2,
-                borderColor: 'transparent',
-                backgroundImage: 'linear-gradient(135deg, #8b5cf6 0%, #238636 100%)',
-              }}
-            >
-              <View className="w-[88px] h-[88px] rounded-full bg-dark-800 items-center justify-center">
-                <Text className="text-dark-50 text-2xl font-bold">
-                  {getInitials(user?.name || 'User')}
-                </Text>
-              </View>
-            </View>
-            <View className="absolute bottom-0 right-0 w-8 h-8 bg-dark-700 border border-dark-500 rounded-full items-center justify-center">
-              <Camera size={14} color={colors.dark[200]} />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity className="mt-3">
-            <Text className="text-primary-500 font-medium">Change Photo</Text>
-          </TouchableOpacity>
+          <View
+            className="w-24 h-24 rounded-full items-center justify-center"
+            style={{ backgroundColor: colors.primary[600] }}
+          >
+            <Text className="text-white text-3xl font-bold">
+              {(user?.name || 'U').charAt(0).toUpperCase()}
+            </Text>
+          </View>
         </View>
 
         {/* Profile Info */}

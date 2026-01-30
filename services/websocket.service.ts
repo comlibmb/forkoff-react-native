@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { authService } from './auth.service';
+import { sentryService } from './sentry.service';
+import { analyticsService } from './analytics.service';
 import { DeviceStatus, ServerStatus, ApprovalRequest, CodeChange, ClaudeSession, DirectoryEntry } from '@/types';
 
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
@@ -306,6 +308,7 @@ class WebSocketService {
       this.setupListeners();
     } catch (error) {
       this.isConnecting = false;
+      sentryService.captureException(error, { context: 'websocket_connect' });
       throw error;
     }
   }
@@ -318,15 +321,39 @@ class WebSocketService {
       this.reconnectAttempts = 0;
       console.log('[WS] Mobile app connected to WebSocket');
       console.log('[WS] Socket ID:', this.socket?.id);
+
+      // Add breadcrumb for connection
+      sentryService.addBreadcrumb('WebSocket connected', 'websocket', {
+        socketId: this.socket?.id,
+      });
+
+      // Track session connected
+      analyticsService.track('websocket_connected');
+
       this.emitInternal('connected');
     });
 
-    this.socket.on('disconnect', () => {
+    this.socket.on('disconnect', (reason) => {
+      // Add breadcrumb for disconnection
+      sentryService.addBreadcrumb('WebSocket disconnected', 'websocket', {
+        reason,
+      });
+
+      // Track session disconnected
+      analyticsService.track('websocket_disconnected', { reason });
+
       this.emitInternal('disconnected');
     });
 
     this.socket.on('connect_error', (error) => {
       this.isConnecting = false;
+
+      // Capture connection errors to Sentry
+      sentryService.captureException(error, {
+        context: 'websocket_connect_error',
+        reconnectAttempts: this.reconnectAttempts,
+      });
+
       this.emitInternal('error', error);
     });
 

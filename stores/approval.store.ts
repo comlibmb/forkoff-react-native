@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { wsService } from '@/services/websocket.service';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 
 /**
  * Represents a Claude CLI approval request received from the backend.
@@ -174,6 +176,10 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     // Check if WebSocket is connected before sending
     if (!wsService.isConnected) {
       console.error('[ApprovalStore] WebSocket not connected, cannot send approval response for', approvalId);
+      sentryService.captureMessage('Approval response failed - WebSocket not connected', 'warning', {
+        approvalId,
+        response,
+      });
       // Still remove from pending list to avoid stale UI state
       get().removeApproval(approvalId);
       return;
@@ -186,8 +192,17 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
         sessionKey: approval.sessionKey,
       });
       console.log('[ApprovalStore] Sent approval response:', approvalId, '->', response);
+
+      // Track approval responded event
+      analyticsService.track('approval_responded', {
+        approvalId,
+        response,
+        deviceId: approval.deviceId,
+        sessionKey: approval.sessionKey,
+      });
     } catch (error) {
       console.error('[ApprovalStore] Error sending approval response:', error);
+      sentryService.captureException(error, { context: 'approval_response', approvalId });
     }
 
     // Remove from pending list
@@ -232,6 +247,20 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
         promptText: data.promptText || 'Approval needed',
         timestamp: data.timestamp || new Date().toISOString(),
       };
+
+      // Track approval requested event
+      analyticsService.track('approval_requested', {
+        approvalId: approval.approvalId,
+        deviceId: approval.deviceId,
+        sessionKey: approval.sessionKey,
+        optionsCount: approval.options.length,
+      });
+
+      // Add breadcrumb for debugging
+      sentryService.addBreadcrumb('Approval request received', 'approval', {
+        approvalId: approval.approvalId,
+        promptText: approval.promptText.substring(0, 100),
+      });
 
       // Add to pending list
       get().addApproval(approval);

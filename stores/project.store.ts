@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { Project, ToolConfig, FileNode } from '@/types';
 import { projectService } from '@/services/project.service';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 
 interface ProjectState {
   projects: Project[];
@@ -40,11 +42,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       const projects = await projectService.getProjects();
 
+      analyticsService.track('projects_fetched', {
+        projectCount: projects.length,
+      });
+
       set({
         projects,
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'fetch_projects' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to fetch projects',
@@ -66,6 +73,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       const project = await projectService.createProject(data);
 
+      analyticsService.track('project_created', {
+        projectId: project.id,
+        projectName: project.name,
+        deviceId: data.deviceId,
+        language: data.language,
+        framework: data.framework,
+      });
+
+      sentryService.addBreadcrumb('Project created', 'project', {
+        projectId: project.id,
+        projectName: project.name,
+      });
+
       set((state) => ({
         projects: [...state.projects, project],
         isLoading: false,
@@ -73,6 +93,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       return project;
     } catch (error) {
+      sentryService.captureException(error, { context: 'create_project', ...data });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to create project',
@@ -106,12 +127,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       await projectService.deleteProject(id);
 
+      analyticsService.track('project_deleted', {
+        projectId: id,
+      });
+
       set((state) => ({
         projects: state.projects.filter((p) => p.id !== id),
         selectedProjectId: state.selectedProjectId === id ? null : state.selectedProjectId,
         isLoading: false,
       }));
     } catch (error) {
+      sentryService.captureException(error, { context: 'delete_project', projectId: id });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to delete project',

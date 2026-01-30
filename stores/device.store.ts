@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { Device, DeviceStatus } from '@/types';
 import { deviceService } from '@/services/device.service';
 import { wsService } from '@/services/websocket.service';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 
 interface DeviceState {
   devices: Device[];
@@ -61,6 +63,13 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
       const device = await deviceService.pairDevice(pairingCode);
 
+      // Track device paired event
+      analyticsService.track('device_paired', {
+        deviceId: device.id,
+        deviceName: device.name,
+        platform: device.platform,
+      });
+
       set((state) => ({
         devices: [...state.devices, device],
         isLoading: false,
@@ -68,6 +77,7 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
       return device;
     } catch (error) {
+      sentryService.captureException(error, { context: 'pair_device' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to pair device',
@@ -99,7 +109,15 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
+      const device = get().devices.find((d) => d.id === id);
+
       await deviceService.removeDevice(id);
+
+      analyticsService.track('device_removed', {
+        deviceId: id,
+        deviceName: device?.name,
+        platform: device?.platform,
+      });
 
       set((state) => ({
         devices: state.devices.filter((d) => d.id !== id),
@@ -107,6 +125,7 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
         isLoading: false,
       }));
     } catch (error) {
+      sentryService.captureException(error, { context: 'remove_device', deviceId: id });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to remove device',

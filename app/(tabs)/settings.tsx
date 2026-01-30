@@ -111,16 +111,6 @@ export default function SettingsScreen() {
     ]);
   };
 
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   return (
     <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
       {/* Header */}
@@ -144,20 +134,14 @@ export default function SettingsScreen() {
           />
 
           <View className="flex-row items-center">
-            {/* Avatar with gradient border */}
+            {/* Initials avatar */}
             <View
-              className="w-16 h-16 rounded-full items-center justify-center mr-4"
-              style={{
-                borderWidth: 2,
-                borderColor: 'transparent',
-                backgroundImage: 'linear-gradient(135deg, #8b5cf6 0%, #238636 100%)',
-              }}
+              className="w-14 h-14 rounded-full items-center justify-center mr-4"
+              style={{ backgroundColor: colors.primary[600] }}
             >
-              <View className="w-[58px] h-[58px] rounded-full bg-dark-800 items-center justify-center">
-                <Text className="text-dark-50 text-xl font-bold">
-                  {getInitials(user?.name || 'User')}
-                </Text>
-              </View>
+              <Text className="text-white text-lg font-bold">
+                {(user?.name || 'U').charAt(0).toUpperCase()}
+              </Text>
             </View>
 
             <View className="flex-1">
