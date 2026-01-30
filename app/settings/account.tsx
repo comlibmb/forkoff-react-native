@@ -1,11 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Mail, User, AtSign, Sparkles, ChevronRight, Trash2, Check, X } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
+
+function Section({ title, children }: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      {title && <Text style={styles.sectionTitle}>{title}</Text>}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionContent}>{children}</View>
+      </View>
+    </View>
+  );
+}
 
 export default function AccountScreen() {
   const { user, updateProfile, deleteAccount, validateUsername, checkUsernameAvailability, isLoading } = useAuthStore();
@@ -105,54 +119,52 @@ export default function AccountScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2 flex-row items-center justify-between">
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={styles.backButton}
         >
           <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
         {hasChanges && (
           <TouchableOpacity
             onPress={handleSave}
             disabled={isLoading}
-            className="bg-primary-500 px-4 py-2 rounded-full"
+            style={styles.saveButton}
           >
-            <Text className="text-white font-medium text-sm">
+            <Text style={styles.saveButtonText}>
               {isLoading ? 'Saving...' : 'Save'}
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
-        <Text className="text-dark-50 text-2xl font-bold mb-6">Account</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.pageTitle}>Account</Text>
 
-        {/* Initials Avatar */}
-        <View className="items-center mb-8">
-          <View
-            className="w-24 h-24 rounded-full items-center justify-center"
-            style={{ backgroundColor: colors.primary[600] }}
-          >
-            <Text className="text-white text-3xl font-bold">
-              {(user?.name || 'U').charAt(0).toUpperCase()}
-            </Text>
+        {/* Avatar Section */}
+        <Section title="Avatar">
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(user?.name || 'U').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.avatarHint}>Tap to change avatar</Text>
           </View>
-        </View>
+        </Section>
 
-        {/* Profile Info */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-6">
+        {/* Profile Info Section */}
+        <Section title="Profile">
           {/* Username Input */}
-          <View className="mb-4">
-            <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-2">
-              Username
-            </Text>
-            <View className="relative">
-              <View className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Username</Text>
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputIcon}>
                 <AtSign size={18} color={colors.dark[300]} />
               </View>
               <TextInput
@@ -162,11 +174,12 @@ export default function AccountScreen() {
                 onChangeText={handleUsernameChange}
                 autoCapitalize="none"
                 autoCorrect={false}
-                className={`bg-dark-800 border rounded-xl pl-12 pr-12 py-4 text-dark-50 ${
-                  usernameError ? 'border-error-300' : isUsernameAvailable ? 'border-success-500' : 'border-dark-500'
-                }`}
+                style={[
+                  styles.textInput,
+                  usernameError ? styles.inputError : isUsernameAvailable ? styles.inputSuccess : null
+                ]}
               />
-              <View className="absolute right-4 top-1/2 -translate-y-1/2">
+              <View style={styles.inputStatus}>
                 {isCheckingUsername ? (
                   <ActivityIndicator size="small" color={colors.dark[300]} />
                 ) : isUsernameAvailable === true ? (
@@ -177,21 +190,19 @@ export default function AccountScreen() {
               </View>
             </View>
             {usernameError ? (
-              <Text className="text-error-300 text-xs mt-2">{usernameError}</Text>
+              <Text style={styles.errorText}>{usernameError}</Text>
             ) : (
-              <Text className="text-dark-400 text-xs mt-2">
+              <Text style={styles.hintText}>
                 3-20 characters, letters, numbers, and underscores only
               </Text>
             )}
           </View>
 
           {/* Name Input */}
-          <View className="mb-4">
-            <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-2">
-              Display Name
-            </Text>
-            <View className="relative">
-              <View className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Display Name</Text>
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputIcon}>
                 <User size={18} color={colors.dark[300]} />
               </View>
               <TextInput
@@ -199,51 +210,47 @@ export default function AccountScreen() {
                 placeholderTextColor={colors.dark[400]}
                 value={name}
                 onChangeText={handleNameChange}
-                className="bg-dark-800 border border-dark-500 rounded-xl pl-12 pr-4 py-4 text-dark-50"
+                style={styles.textInput}
               />
             </View>
           </View>
 
           {/* Email (Read-only) */}
-          <View>
-            <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-2">
-              Email
-            </Text>
-            <View className="flex-row items-center bg-dark-800 border border-dark-500 rounded-xl px-4 py-4">
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <View style={styles.readOnlyField}>
               <Mail size={18} color={colors.dark[300]} />
-              <Text className="text-dark-300 ml-3">{user?.email}</Text>
+              <Text style={styles.readOnlyText}>{user?.email}</Text>
             </View>
-            <Text className="text-dark-400 text-xs mt-2">
-              Email cannot be changed
-            </Text>
+            <Text style={styles.hintText}>Email cannot be changed</Text>
           </View>
-        </View>
+        </Section>
 
-        {/* Subscription */}
-        <TouchableOpacity
-          onPress={() => router.push('/settings/subscription')}
-          className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-6"
-        >
-          <View className="flex-row items-center justify-between">
+        {/* Subscription Section */}
+        <Section title="Subscription">
+          <TouchableOpacity
+            onPress={() => router.push('/settings/subscription')}
+            style={styles.subscriptionRow}
+          >
             <View>
-              <Text className="text-dark-50 font-medium">Subscription</Text>
-              <Text className="text-dark-300 text-sm capitalize">
+              <Text style={styles.subscriptionTitle}>Current Plan</Text>
+              <Text style={styles.subscriptionPlan}>
                 {user?.subscription || 'Free'} Plan
               </Text>
             </View>
-            <View className="flex-row items-center gap-2">
-              <View className="bg-primary-500/10 border border-primary-500/20 px-3 py-1 rounded-full flex-row items-center gap-1.5">
+            <View style={styles.upgradeRow}>
+              <View style={styles.upgradeBadge}>
                 <Sparkles size={12} color={colors.primary[500]} />
-                <Text className="text-primary-500 text-xs font-bold">Upgrade</Text>
+                <Text style={styles.upgradeText}>Upgrade</Text>
               </View>
               <ChevronRight size={18} color={colors.dark[400]} />
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </Section>
 
-        {/* Account Created */}
-        <View className="mb-8">
-          <Text className="text-dark-400 text-xs text-center">
+        {/* Account Info */}
+        <View style={styles.accountInfo}>
+          <Text style={styles.accountInfoText}>
             Account created{' '}
             {user?.createdAt
               ? new Date(user.createdAt).toLocaleDateString()
@@ -252,10 +259,7 @@ export default function AccountScreen() {
         </View>
 
         {/* Danger Zone */}
-        <View className="pt-6 border-t border-dark-500">
-          <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-3">
-            Danger Zone
-          </Text>
+        <Section title="Danger Zone">
           <TouchableOpacity
             onPress={async () => {
               const confirmed = await alert.confirm(
@@ -291,19 +295,247 @@ export default function AccountScreen() {
               }
             }}
             disabled={isDeleting}
-            className="bg-error-300/10 border border-error-300/20 rounded-xl p-4 flex-row items-center justify-center gap-2"
+            style={styles.deleteButton}
           >
             {isDeleting ? (
               <ActivityIndicator size="small" color={colors.error[300]} />
             ) : (
               <Trash2 size={18} color={colors.error[300]} />
             )}
-            <Text className="text-error-300 font-bold">
+            <Text style={styles.deleteButtonText}>
               {isDeleting ? 'Deleting...' : 'Delete Account'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </Section>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backText: {
+    color: colors.dark[200],
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  saveButton: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+    marginBottom: 20,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: colors.dark[300],
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+  },
+  sectionContent: {
+    padding: 16,
+  },
+  // Avatar
+  avatarContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '700',
+  },
+  avatarHint: {
+    color: colors.dark[400],
+    fontSize: 12,
+  },
+  // Inputs
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    color: colors.dark[300],
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    position: 'relative',
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: 14,
+    top: '50%',
+    transform: [{ translateY: -9 }],
+    zIndex: 1,
+  },
+  textInput: {
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 10,
+    paddingLeft: 44,
+    paddingRight: 44,
+    paddingVertical: 14,
+    color: colors.dark[50],
+    fontSize: 15,
+  },
+  inputError: {
+    borderColor: colors.error[300],
+  },
+  inputSuccess: {
+    borderColor: colors.success[500],
+  },
+  inputStatus: {
+    position: 'absolute',
+    right: 14,
+    top: '50%',
+    transform: [{ translateY: -9 }],
+  },
+  errorText: {
+    color: colors.error[300],
+    fontSize: 12,
+    marginTop: 6,
+  },
+  hintText: {
+    color: colors.dark[400],
+    fontSize: 12,
+    marginTop: 6,
+  },
+  readOnlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  readOnlyText: {
+    color: colors.dark[300],
+    marginLeft: 12,
+    fontSize: 15,
+  },
+  // Subscription
+  subscriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  subscriptionTitle: {
+    color: colors.dark[50],
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  subscriptionPlan: {
+    color: colors.dark[300],
+    fontSize: 14,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  upgradeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  upgradeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[500] + '15',
+    borderWidth: 1,
+    borderColor: colors.primary[500] + '30',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  upgradeText: {
+    color: colors.primary[500],
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  // Account Info
+  accountInfo: {
+    marginVertical: 8,
+  },
+  accountInfoText: {
+    color: colors.dark[400],
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  // Delete
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error[300] + '15',
+    borderWidth: 1,
+    borderColor: colors.error[300] + '30',
+    borderRadius: 10,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  deleteButtonText: {
+    color: colors.error[300],
+    fontWeight: '700',
+    fontSize: 15,
+  },
+});

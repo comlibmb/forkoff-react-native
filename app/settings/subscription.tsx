@@ -1,11 +1,23 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Check, Zap, Star, Users, ArrowRight } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
+
+function PlanCard({ children, popular = false, color = colors.dark[600] }: {
+  children: React.ReactNode;
+  popular?: boolean;
+  color?: string;
+}) {
+  return (
+    <View style={[styles.section, popular && { borderColor: color, borderWidth: 2 }]}>
+      <View style={styles.sectionContent}>{children}</View>
+    </View>
+  );
+}
 
 const plans = [
   {
@@ -91,25 +103,21 @@ export default function SubscriptionScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2 flex-row items-center">
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={styles.backButton}
         >
           <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
-        <Text className="text-dark-50 text-2xl font-bold mb-2">
-          Choose Your Plan
-        </Text>
-        <Text className="text-dark-200 mb-6">
-          Unlock more features with a premium subscription
-        </Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.pageTitle}>Choose Your Plan</Text>
+        <Text style={styles.pageSubtitle}>Unlock more features with a premium subscription</Text>
 
         {/* Plans */}
         {plans.map((plan) => {
@@ -122,80 +130,55 @@ export default function SubscriptionScreen() {
               key={plan.id}
               onPress={() => setSelectedPlan(plan.id as PlanId)}
               activeOpacity={0.7}
-              className={`bg-dark-700 rounded-xl p-4 mb-4 overflow-hidden ${
-                isSelected ? 'border-2' : 'border border-dark-500'
-              }`}
-              style={{
-                borderColor: isSelected ? plan.color : colors.dark[500],
-              }}
             >
-              {plan.popular && (
-                <View
-                  className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg"
-                  style={{ backgroundColor: plan.color }}
-                >
-                  <Text className="text-white text-xs font-bold">
-                    POPULAR
-                  </Text>
-                </View>
-              )}
-
-              <View className="flex-row items-center mb-4">
-                <View
-                  className="w-12 h-12 rounded-xl items-center justify-center mr-4"
-                  style={{ backgroundColor: plan.color + '20' }}
-                >
-                  <Icon size={24} color={plan.color} />
-                </View>
-                <View className="flex-1">
-                  <View className="flex-row items-center">
-                    <Text className="text-dark-50 text-xl font-bold">
-                      {plan.name}
-                    </Text>
-                    {isCurrentPlan && (
-                      <View className="ml-2 bg-success-500/10 border border-success-500/20 px-2 py-0.5 rounded">
-                        <Text className="text-success-500 text-xs font-bold">
-                          Current
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text className="text-dark-300">
-                    <Text className="text-dark-50 text-lg font-bold">
-                      {plan.price}
-                    </Text>{' '}
-                    {plan.period}
-                  </Text>
-                </View>
-
-                {isSelected && (
-                  <View
-                    className="w-6 h-6 rounded-full items-center justify-center"
-                    style={{ backgroundColor: plan.color }}
-                  >
-                    <Check size={14} color="#fff" />
+              <PlanCard popular={plan.popular} color={plan.color}>
+                {plan.popular && (
+                  <View style={[styles.popularBadge, { backgroundColor: plan.color }]}>
+                    <Text style={styles.popularBadgeText}>POPULAR</Text>
                   </View>
                 )}
-              </View>
-
-              {/* Features */}
-              <View className="gap-2">
-                {plan.features.map((feature, index) => (
-                  <View key={index} className="flex-row items-center">
-                    <Check size={16} color={colors.success[500]} />
-                    <Text className="text-dark-200 ml-2 text-sm">{feature}</Text>
+                <View style={styles.planHeader}>
+                  <View style={[styles.planIcon, { backgroundColor: plan.color + '20' }]}>
+                    <Icon size={24} color={plan.color} />
                   </View>
-                ))}
-
-                {plan.limitations.map((limitation, index) => (
-                  <View key={index} className="flex-row items-center">
-                    <View className="w-4 h-4 items-center justify-center">
-                      <View className="w-1 h-1 bg-dark-400 rounded-full" />
+                  <View style={styles.planInfo}>
+                    <View style={styles.planNameRow}>
+                      <Text style={styles.planName}>{plan.name}</Text>
+                      {isCurrentPlan && (
+                        <View style={styles.currentBadge}>
+                          <Text style={styles.currentBadgeText}>Current</Text>
+                        </View>
+                      )}
                     </View>
-                    <Text className="text-dark-400 ml-2 text-sm">{limitation}</Text>
+                    <Text style={styles.planPricing}>
+                      <Text style={styles.planPrice}>{plan.price}</Text> {plan.period}
+                    </Text>
                   </View>
-                ))}
-              </View>
+
+                  {isSelected && (
+                    <View style={[styles.selectedCheck, { backgroundColor: plan.color }]}>
+                      <Check size={14} color="#fff" />
+                    </View>
+                  )}
+                </View>
+
+                {/* Features */}
+                <View style={styles.featuresList}>
+                  {plan.features.map((feature, index) => (
+                    <View key={index} style={styles.featureRow}>
+                      <Check size={16} color={colors.success[500]} />
+                      <Text style={styles.featureText}>{feature}</Text>
+                    </View>
+                  ))}
+
+                  {plan.limitations.map((limitation, index) => (
+                    <View key={index} style={styles.featureRow}>
+                      <View style={styles.limitationDot} />
+                      <Text style={styles.limitationText}>{limitation}</Text>
+                    </View>
+                  ))}
+                </View>
+              </PlanCard>
             </TouchableOpacity>
           );
         })}
@@ -204,17 +187,12 @@ export default function SubscriptionScreen() {
         <TouchableOpacity
           onPress={() => handleSubscribe(selectedPlan)}
           disabled={selectedPlan === currentPlan || isLoading}
-          className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-2"
-          style={{
-            shadowColor: colors.primary[500],
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.2,
-            shadowRadius: 12,
-            elevation: 5,
-            opacity: selectedPlan === currentPlan || isLoading ? 0.5 : 1,
-          }}
+          style={[
+            styles.subscribeButton,
+            (selectedPlan === currentPlan || isLoading) && styles.subscribeButtonDisabled,
+          ]}
         >
-          <Text className="text-white font-bold text-base">
+          <Text style={styles.subscribeButtonText}>
             {isLoading
               ? 'Processing...'
               : selectedPlan === currentPlan
@@ -224,10 +202,183 @@ export default function SubscriptionScreen() {
           {!isLoading && selectedPlan !== currentPlan && <ArrowRight size={18} color="#fff" />}
         </TouchableOpacity>
 
-        <Text className="text-dark-400 text-center text-xs mt-4">
-          Cancel anytime. No hidden fees.
-        </Text>
+        <Text style={styles.disclaimer}>Cancel anytime. No hidden fees.</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backText: {
+    color: colors.dark[200],
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginBottom: 20,
+  },
+  section: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  popularBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  popularBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sectionContent: {
+    padding: 16,
+  },
+  // Plan
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  planIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  planInfo: {
+    flex: 1,
+  },
+  planNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planName: {
+    color: colors.dark[50],
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  currentBadge: {
+    backgroundColor: colors.success[500] + '20',
+    borderWidth: 1,
+    borderColor: colors.success[500] + '30',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  currentBadgeText: {
+    color: colors.success[500],
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  planPricing: {
+    color: colors.dark[300],
+    fontSize: 14,
+    marginTop: 2,
+  },
+  planPrice: {
+    color: colors.dark[50],
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  selectedCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Features
+  featuresList: {
+    gap: 8,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  featureText: {
+    color: colors.dark[200],
+    fontSize: 14,
+  },
+  limitationDot: {
+    width: 4,
+    height: 4,
+    backgroundColor: colors.dark[400],
+    borderRadius: 2,
+    marginLeft: 6,
+  },
+  limitationText: {
+    color: colors.dark[400],
+    fontSize: 14,
+  },
+  // Subscribe button
+  subscribeButton: {
+    backgroundColor: colors.primary[500],
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  subscribeButtonDisabled: {
+    opacity: 0.5,
+  },
+  subscribeButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  disclaimer: {
+    color: colors.dark[400],
+    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 16,
+  },
+});

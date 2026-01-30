@@ -86,7 +86,10 @@
       "WebSearch",
       "WebFetch(domain:claudelog.com)",
       "WebFetch(domain:www.ytyng.com)",
-      "WebFetch(domain:hexdocs.pm)"
+      "WebFetch(domain:hexdocs.pm)",
+      "Bash(npx prisma:*)",
+      "Bash(git status:*)",
+      "Bash(git -C \"C:/Users/User/Desktop/test/forkoff-api\" status -u)"
     ]
   }
 }

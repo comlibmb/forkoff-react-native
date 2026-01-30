@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,20 @@ import {
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
+
+function Section({ title, children }: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      {title && <Text style={styles.sectionTitle}>{title}</Text>}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionContent}>{children}</View>
+      </View>
+    </View>
+  );
+}
 
 export default function SecurityScreen() {
   const { user, changePassword, resetPassword, isLoading } = useAuthStore();
@@ -40,7 +54,6 @@ export default function SecurityScreen() {
   };
 
   const handleSubmitPasswordChange = async () => {
-    // Validate
     if (!currentPassword) {
       setPasswordError('Current password is required');
       return;
@@ -125,156 +138,130 @@ export default function SecurityScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2 flex-row items-center">
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={styles.backButton}
         >
           <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
-        <Text className="text-dark-50 text-2xl font-bold mb-2">Security</Text>
-        <Text className="text-dark-200 mb-6">
-          Manage your account security settings
-        </Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.pageTitle}>Security</Text>
+        <Text style={styles.pageSubtitle}>Manage your account security settings</Text>
 
         {/* Password Section */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-4">
+        <Section title="Password">
           <TouchableOpacity
             onPress={handleChangePassword}
-            className="flex-row items-center mb-3 pb-3 border-b border-dark-600"
+            style={styles.settingRow}
           >
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
+            <View style={styles.settingIcon}>
               <Key size={20} color={colors.dark[200]} />
             </View>
-            <View className="flex-1">
-              <Text className="text-dark-50 font-medium">Change Password</Text>
-              <Text className="text-dark-300 text-sm">
-                Update your password
-              </Text>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Change Password</Text>
+              <Text style={styles.settingSubtitle}>Update your password</Text>
             </View>
             <ChevronRight size={20} color={colors.dark[400]} />
           </TouchableOpacity>
+
+          <View style={styles.divider} />
 
           <TouchableOpacity
             onPress={handleSendResetLink}
-            className="flex-row items-center"
+            style={styles.settingRow}
           >
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
+            <View style={[styles.settingIcon, { backgroundColor: colors.primary[500] + '20' }]}>
               <Key size={20} color={colors.primary[400]} />
             </View>
-            <View className="flex-1">
-              <Text className="text-dark-50 font-medium">Reset via Email</Text>
-              <Text className="text-dark-300 text-sm">
-                Send reset link to {user?.email}
-              </Text>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Reset via Email</Text>
+              <Text style={styles.settingSubtitle}>Send reset link to {user?.email}</Text>
             </View>
             <ChevronRight size={20} color={colors.dark[400]} />
           </TouchableOpacity>
-        </View>
+        </Section>
 
         {/* Two-Factor Authentication */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-4">
-          <View className="flex-row items-center">
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
+        <Section title="Two-Factor Auth">
+          <View style={styles.settingRow}>
+            <View style={styles.settingIcon}>
               <Smartphone size={20} color={colors.dark[200]} />
             </View>
-            <View className="flex-1">
-              <Text className="text-dark-50 font-medium">
-                Two-Factor Authentication
-              </Text>
-              <Text className="text-dark-300 text-sm">
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Two-Factor Authentication</Text>
+              <Text style={styles.settingSubtitle}>
                 {twoFactorEnabled ? 'Enabled' : 'Add extra security layer'}
               </Text>
             </View>
             <Switch
               value={twoFactorEnabled}
               onValueChange={handleToggle2FA}
-              trackColor={{
-                false: colors.dark[500],
-                true: colors.primary[500],
-              }}
+              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
               thumbColor={twoFactorEnabled ? '#fff' : colors.dark[200]}
             />
           </View>
-        </View>
+        </Section>
 
         {/* Biometric Authentication */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-4">
-          <View className="flex-row items-center">
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
+        <Section title="Biometrics">
+          <View style={styles.settingRow}>
+            <View style={styles.settingIcon}>
               <Fingerprint size={20} color={colors.dark[200]} />
             </View>
-            <View className="flex-1">
-              <Text className="text-dark-50 font-medium">
-                Biometric Authentication
-              </Text>
-              <Text className="text-dark-300 text-sm">
-                {biometricEnabled
-                  ? 'Face ID / Fingerprint enabled'
-                  : 'Use biometrics to unlock'}
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Biometric Authentication</Text>
+              <Text style={styles.settingSubtitle}>
+                {biometricEnabled ? 'Face ID / Fingerprint enabled' : 'Use biometrics to unlock'}
               </Text>
             </View>
             <Switch
               value={biometricEnabled}
               onValueChange={handleToggleBiometric}
-              trackColor={{
-                false: colors.dark[500],
-                true: colors.primary[500],
-              }}
+              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
               thumbColor={biometricEnabled ? '#fff' : colors.dark[200]}
             />
           </View>
-        </View>
+        </Section>
 
         {/* Active Sessions */}
-        <View className="mt-6">
-          <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-3">
-            Active Sessions
-          </Text>
-
-          <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-3">
-            <View className="flex-row items-center">
-              <View className="w-10 h-10 bg-success-500/10 border border-success-500/20 rounded-lg items-center justify-center mr-4">
-                <Shield size={20} color={colors.success[500]} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-dark-50 font-medium">Current Device</Text>
-                <Text className="text-dark-300 text-sm">
-                  iPhone 15 Pro • Active now
-                </Text>
-              </View>
-              <View className="bg-success-500/10 border border-success-500/20 px-2 py-1 rounded">
-                <Text className="text-success-500 text-xs font-bold">Current</Text>
-              </View>
+        <Section title="Active Sessions">
+          <View style={styles.sessionRow}>
+            <View style={[styles.settingIcon, { backgroundColor: colors.success[500] + '20', borderColor: colors.success[500] + '30' }]}>
+              <Shield size={20} color={colors.success[500]} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Current Device</Text>
+              <Text style={styles.settingSubtitle}>iPhone 15 Pro • Active now</Text>
+            </View>
+            <View style={styles.currentBadge}>
+              <Text style={styles.currentBadgeText}>Current</Text>
             </View>
           </View>
 
-          <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-3">
-            <View className="flex-row items-center">
-              <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
-                <Smartphone size={20} color={colors.dark[300]} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-dark-50 font-medium">MacBook Pro</Text>
-                <Text className="text-dark-300 text-sm">
-                  Last active 2 hours ago
-                </Text>
-              </View>
-              <TouchableOpacity>
-                <Text className="text-error-300 text-sm font-medium">Revoke</Text>
-              </TouchableOpacity>
+          <View style={styles.divider} />
+
+          <View style={styles.sessionRow}>
+            <View style={styles.settingIcon}>
+              <Smartphone size={20} color={colors.dark[300]} />
             </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>MacBook Pro</Text>
+              <Text style={styles.settingSubtitle}>Last active 2 hours ago</Text>
+            </View>
+            <TouchableOpacity>
+              <Text style={styles.revokeText}>Revoke</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        </Section>
 
         {/* Sign Out All Devices */}
-        <View className="mt-6">
+        <Section title="Sign Out">
           <TouchableOpacity
             onPress={async () => {
               const confirmed = await alert.confirm(
@@ -286,22 +273,19 @@ export default function SecurityScreen() {
                 // TODO: Implement sign out all devices
               }
             }}
-            className="bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+            style={styles.signOutButton}
           >
-            <Text className="text-dark-50 font-medium">Sign Out All Other Devices</Text>
+            <Text style={styles.signOutButtonText}>Sign Out All Other Devices</Text>
           </TouchableOpacity>
-        </View>
+        </Section>
 
         {/* Security Tips */}
-        <View className="mt-6 bg-warning-300/10 border border-warning-300/20 rounded-xl p-4 flex-row">
+        <View style={styles.tipCard}>
           <AlertTriangle size={20} color={colors.warning[300]} />
-          <View className="flex-1 ml-3">
-            <Text className="text-warning-300 font-bold mb-1">
-              Security Tip
-            </Text>
-            <Text className="text-dark-200 text-sm">
-              Enable two-factor authentication and use a strong, unique password
-              to keep your account secure.
+          <View style={styles.tipContent}>
+            <Text style={styles.tipTitle}>Security Tip</Text>
+            <Text style={styles.tipText}>
+              Enable two-factor authentication and use a strong, unique password to keep your account secure.
             </Text>
           </View>
         </View>
@@ -314,32 +298,30 @@ export default function SecurityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowChangePasswordModal(false)}
       >
-        <SafeAreaView className="flex-1 bg-dark-800">
-          {/* Modal Header */}
-          <View className="flex-row items-center justify-between px-4 py-4 border-b border-dark-600">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowChangePasswordModal(false)}>
               <X size={24} color={colors.dark[300]} />
             </TouchableOpacity>
-            <Text className="text-dark-50 text-lg font-bold">Change Password</Text>
+            <Text style={styles.modalTitle}>Change Password</Text>
             <View style={{ width: 24 }} />
           </View>
 
-          <ScrollView className="flex-1 px-4 py-6">
-            {/* Current Password */}
-            <View className="mb-4">
-              <Text className="text-dark-300 text-sm font-medium mb-2">Current Password</Text>
-              <View className="relative">
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Current Password</Text>
+              <View style={styles.passwordInputWrapper}>
                 <TextInput
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                   secureTextEntry={!showCurrentPassword}
                   placeholder="Enter current password"
                   placeholderTextColor={colors.dark[400]}
-                  className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 pr-12 text-dark-50"
+                  style={styles.passwordInput}
                 />
                 <TouchableOpacity
                   onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  style={styles.eyeButton}
                 >
                   {showCurrentPassword ? (
                     <EyeOff size={20} color={colors.dark[400]} />
@@ -350,21 +332,20 @@ export default function SecurityScreen() {
               </View>
             </View>
 
-            {/* New Password */}
-            <View className="mb-4">
-              <Text className="text-dark-300 text-sm font-medium mb-2">New Password</Text>
-              <View className="relative">
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>New Password</Text>
+              <View style={styles.passwordInputWrapper}>
                 <TextInput
                   value={newPassword}
                   onChangeText={setNewPassword}
                   secureTextEntry={!showNewPassword}
                   placeholder="Enter new password (min 6 characters)"
                   placeholderTextColor={colors.dark[400]}
-                  className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 pr-12 text-dark-50"
+                  style={styles.passwordInput}
                 />
                 <TouchableOpacity
                   onPress={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  style={styles.eyeButton}
                 >
                   {showNewPassword ? (
                     <EyeOff size={20} color={colors.dark[400]} />
@@ -375,38 +356,33 @@ export default function SecurityScreen() {
               </View>
             </View>
 
-            {/* Confirm Password */}
-            <View className="mb-6">
-              <Text className="text-dark-300 text-sm font-medium mb-2">Confirm New Password</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Confirm New Password</Text>
               <TextInput
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showNewPassword}
                 placeholder="Confirm new password"
                 placeholderTextColor={colors.dark[400]}
-                className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 text-dark-50"
+                style={styles.confirmInput}
               />
             </View>
 
-            {/* Error Message */}
             {passwordError ? (
-              <View className="bg-error-300/10 border border-error-300/20 rounded-xl p-3 mb-4">
-                <Text className="text-error-300 text-sm">{passwordError}</Text>
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{passwordError}</Text>
               </View>
             ) : null}
 
-            {/* Submit Button */}
             <TouchableOpacity
               onPress={handleSubmitPasswordChange}
               disabled={isChangingPassword}
-              className={`py-4 rounded-xl items-center ${
-                isChangingPassword ? 'bg-primary-600/50' : 'bg-primary-600'
-              }`}
+              style={[styles.submitButton, isChangingPassword && styles.submitButtonDisabled]}
             >
               {isChangingPassword ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text className="text-white font-bold text-base">Change Password</Text>
+                <Text style={styles.submitButtonText}>Change Password</Text>
               )}
             </TouchableOpacity>
           </ScrollView>
@@ -415,3 +391,245 @@ export default function SecurityScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backText: {
+    color: colors.dark[200],
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginBottom: 20,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: colors.dark[300],
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+  },
+  sectionContent: {
+    padding: 16,
+  },
+  // Settings
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingContent: {
+    flex: 1,
+  },
+  settingTitle: {
+    color: colors.dark[50],
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  settingSubtitle: {
+    color: colors.dark[300],
+    fontSize: 13,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.dark[600],
+    marginVertical: 12,
+    marginLeft: 52,
+  },
+  currentBadge: {
+    backgroundColor: colors.success[500] + '20',
+    borderWidth: 1,
+    borderColor: colors.success[500] + '30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  currentBadgeText: {
+    color: colors.success[500],
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  revokeText: {
+    color: colors.error[300],
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signOutButton: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  signOutButtonText: {
+    color: colors.dark[50],
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  // Tip card
+  tipCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.warning[300] + '15',
+    borderWidth: 1,
+    borderColor: colors.warning[300] + '30',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+  },
+  tipContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  tipTitle: {
+    color: colors.warning[300],
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tipText: {
+    color: colors.dark[200],
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  modalTitle: {
+    color: colors.dark[50],
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    color: colors.dark[300],
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  passwordInputWrapper: {
+    position: 'relative',
+  },
+  passwordInput: {
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingRight: 48,
+    color: colors.dark[50],
+    fontSize: 15,
+  },
+  confirmInput: {
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: colors.dark[50],
+    fontSize: 15,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: '50%',
+    transform: [{ translateY: -10 }],
+  },
+  errorBox: {
+    backgroundColor: colors.error[300] + '15',
+    borderWidth: 1,
+    borderColor: colors.error[300] + '30',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: colors.error[300],
+    fontSize: 14,
+  },
+  submitButton: {
+    backgroundColor: colors.primary[600],
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+});
