@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, QrCode, Keyboard, CheckCircle, ArrowRight } from 'lucide-react-native';
@@ -16,7 +17,7 @@ export default function AddDeviceScreen() {
 
   const handlePairWithCode = async () => {
     if (!pairingCode.trim()) {
-      Alert.alert('Error', 'Please enter a pairing code');
+      alert.error('Error', 'Please enter a pairing code');
       return;
     }
 
@@ -24,7 +25,7 @@ export default function AddDeviceScreen() {
       await pairDevice(pairingCode);
       setIsPaired(true);
     } catch (error) {
-      Alert.alert('Error', 'Failed to pair device. Please try again.');
+      alert.error('Error', 'Failed to pair device. Please try again.');
     }
   };
 

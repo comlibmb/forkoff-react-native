@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -53,7 +54,7 @@ export default function GitHubRepoDetailScreen() {
       setSelectedBranch(repoData.defaultBranch);
     } catch (error) {
       console.error('Failed to load repo:', error);
-      Alert.alert('Error', 'Failed to load repository details');
+      alert.error('Error', 'Failed to load repository details');
     } finally {
       setIsLoading(false);
     }
@@ -71,15 +72,16 @@ export default function GitHubRepoDetailScreen() {
         selectedBranch
       );
 
-      Alert.alert('Success', 'Repository cloned successfully!', [
-        {
-          text: 'Open Project',
-          onPress: () => router.push(`/project/${result.projectId}`),
-        },
-        { text: 'OK' },
-      ]);
+      const openProject = await alert.confirm(
+        'Success',
+        'Repository cloned successfully!',
+        { confirmText: 'Open Project', cancelText: 'OK' }
+      );
+      if (openProject) {
+        router.push(`/project/${result.projectId}`);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to clone repository');
+      alert.error('Error', 'Failed to clone repository');
     } finally {
       setIsCloning(false);
     }

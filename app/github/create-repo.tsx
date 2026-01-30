@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock, Globe, Check } from 'lucide-react-native';
@@ -16,7 +17,7 @@ export default function CreateRepoScreen() {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Repository name is required');
+      alert.error('Error', 'Repository name is required');
       return;
     }
 
@@ -29,11 +30,10 @@ export default function CreateRepoScreen() {
         autoInit,
       });
 
-      Alert.alert('Success', `Repository "${repo.name}" created successfully!`, [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      await alert.success('Success', `Repository "${repo.name}" created successfully!`);
+      router.back();
     } catch (error) {
-      Alert.alert('Error', 'Failed to create repository. Please try again.');
+      alert.error('Error', 'Failed to create repository. Please try again.');
     } finally {
       setIsLoading(false);
     }

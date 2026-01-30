@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Laptop, Check } from 'lucide-react-native';
@@ -32,12 +33,12 @@ export default function NewProjectScreen() {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a project name');
+      alert.error('Error', 'Please enter a project name');
       return;
     }
 
     if (!selectedDevice) {
-      Alert.alert('Error', 'Please select a device');
+      alert.error('Error', 'Please select a device');
       return;
     }
 
@@ -52,7 +53,7 @@ export default function NewProjectScreen() {
 
       router.replace(`/project/${project.id}`);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create project');
+      alert.error('Error', 'Failed to create project');
     }
   };
 

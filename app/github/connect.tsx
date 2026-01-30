@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Github, Check, LogOut, RefreshCw } from 'lucide-react-native';
@@ -52,33 +53,27 @@ export default function GitHubConnectScreen() {
         await checkConnection();
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect GitHub. Please try again.');
+      alert.error('Error', 'Failed to connect GitHub. Please try again.');
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handleDisconnect = async () => {
-    Alert.alert(
+    const confirmed = await alert.confirm(
       'Disconnect GitHub',
       'Are you sure you want to disconnect your GitHub account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await githubService.disconnect();
-              setIsConnected(false);
-              setGithubUser(null);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to disconnect GitHub');
-            }
-          },
-        },
-      ]
+      { confirmText: 'Disconnect', destructive: true }
     );
+    if (confirmed) {
+      try {
+        await githubService.disconnect();
+        setIsConnected(false);
+        setGithubUser(null);
+      } catch (error) {
+        alert.error('Error', 'Failed to disconnect GitHub');
+      }
+    }
   };
 
   return (

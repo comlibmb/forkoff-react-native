@@ -221,45 +221,100 @@ export default function PermissionRequest({
       animationType="fade"
       onRequestClose={handleDeny}
     >
-      <View className="flex-1 justify-center items-center bg-black/80 px-6">
-        <View className="bg-dark-800 rounded-2xl w-full max-w-md overflow-hidden">
-          {/* Header */}
-          <View className="bg-dark-700 px-6 py-4 flex-row items-center">
-            {getIcon(request.type, request.toolName)}
-            <View className="ml-4 flex-1">
-              <Text className="text-dark-100 font-bold text-lg">
-                Permission Required
-              </Text>
-              <Text className="text-dark-400 text-sm">
-                {getTypeLabel(request.type)}
-              </Text>
+      <View className="flex-1 justify-center items-center bg-black/60 px-4">
+        <View
+          className="w-full max-w-sm overflow-hidden"
+          style={{
+            backgroundColor: colors.dark[800],
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.dark[600],
+          }}
+        >
+          {/* macOS-style title bar */}
+          <View
+            className="flex-row items-center px-3 py-2.5"
+            style={{
+              backgroundColor: colors.dark[700],
+              borderBottomWidth: 1,
+              borderBottomColor: colors.dark[600],
+              gap: 6,
+            }}
+          >
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error[400] }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning[300] }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.success[300] }} />
+            <Text style={{ fontSize: 12, color: colors.dark[300], fontFamily: 'monospace', marginLeft: 8 }}>
+              permission-request
+            </Text>
+          </View>
+
+          {/* Header with icon */}
+          <View className="px-5 pt-5 items-center">
+            <View
+              className="w-14 h-14 rounded-full items-center justify-center mb-4"
+              style={{
+                backgroundColor: colors.dark[700],
+                borderWidth: 2,
+                borderColor: colors.warning[500],
+              }}
+            >
+              {getIcon(request.type, request.toolName)}
             </View>
+            <Text className="text-dark-50 text-lg font-bold text-center mb-1">
+              Permission Required
+            </Text>
+            <Text className="text-dark-400 text-sm mb-3">
+              {getTypeLabel(request.type)}
+            </Text>
           </View>
 
           {/* Content */}
-          <View className="px-6 py-4">
+          <View className="px-5">
             {request.toolName && (
               <View className="mb-3">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1">
+                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
                   Tool
                 </Text>
-                <Text className="text-dark-100 font-mono text-sm">
-                  {request.toolName}
-                </Text>
+                <View
+                  className="p-2.5"
+                  style={{
+                    backgroundColor: colors.dark[700],
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text className="text-dark-100 font-mono text-sm text-center">
+                    {request.toolName}
+                  </Text>
+                </View>
               </View>
             )}
 
             <View className="mb-4">
-              <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1">
+              <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
                 Description
               </Text>
-              <Text className="text-dark-200 text-sm leading-5">
-                {request.description}
-              </Text>
+              <View
+                className="p-3"
+                style={{
+                  backgroundColor: colors.dark[700],
+                  borderRadius: 6,
+                }}
+              >
+                <Text className="text-dark-200 text-sm leading-5 text-center">
+                  {request.description}
+                </Text>
+              </View>
             </View>
 
             {request.details && (
-              <View className="bg-dark-900 rounded-lg p-3 mb-4">
+              <View
+                className="p-3 mb-4"
+                style={{
+                  backgroundColor: colors.dark[900],
+                  borderRadius: 6,
+                }}
+              >
                 <Text className="text-dark-400 text-xs uppercase tracking-wide mb-2">
                   Details
                 </Text>
@@ -272,7 +327,7 @@ export default function PermissionRequest({
             )}
 
             {/* Remember choice */}
-            <View className="flex-row items-center justify-between py-2">
+            <View className="flex-row items-center justify-between py-3 mb-2">
               <Text className="text-dark-300 text-sm">
                 Remember this choice
               </Text>
@@ -285,23 +340,32 @@ export default function PermissionRequest({
             </View>
           </View>
 
-          {/* Actions */}
-          <View className="flex-row border-t border-dark-600">
+          {/* Action Buttons */}
+          <View className="px-5 pb-5 flex-row gap-2.5">
             <TouchableOpacity
               onPress={handleDeny}
-              className="flex-1 py-4 flex-row items-center justify-center border-r border-dark-600"
+              className="flex-1 py-3 rounded-lg flex-row items-center justify-center"
+              style={{
+                backgroundColor: colors.dark[600],
+                borderWidth: 1,
+                borderColor: colors.dark[500],
+              }}
             >
-              <X size={20} color={colors.error[400]} />
-              <Text className="text-error-400 font-semibold ml-2">Deny</Text>
+              <X size={18} color={colors.dark[200]} />
+              <Text className="text-dark-200 font-semibold ml-2">Deny</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleApprove}
-              className="flex-1 py-4 flex-row items-center justify-center bg-primary-600/20"
+              className="flex-1 py-3 rounded-lg flex-row items-center justify-center"
+              style={{ backgroundColor: colors.primary[600] }}
             >
-              <Check size={20} color={colors.primary[400]} />
-              <Text className="text-primary-400 font-semibold ml-2">Allow</Text>
+              <Check size={18} color="#fff" />
+              <Text className="text-white font-semibold ml-2">Allow</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Bottom accent bar */}
+          <View style={{ height: 3, backgroundColor: colors.warning[500] }} />
         </View>
       </View>
     </Modal>
@@ -361,10 +425,10 @@ function getApprovalIcon(iconType: FormattedApproval['icon']) {
 }
 
 /**
- * ClaudeApproval - Claude approval request UI
+ * ClaudeApproval - Claude approval request UI with macOS styling
  *
  * Shows a modal when Claude needs user input (yes/no/plan).
- * Formats the request nicely to show relevant tool information.
+ * Uses macOS-style title bar with traffic light buttons.
  */
 export function ClaudeApproval({
   visible,
@@ -381,49 +445,107 @@ export function ClaudeApproval({
     onRespond(request.approvalId, key);
   };
 
+  // Determine accent color based on tool type
+  const getAccentColor = () => {
+    switch (formatted.icon) {
+      case 'terminal':
+        return colors.warning[500];
+      case 'file':
+      case 'edit':
+        return colors.primary[500];
+      case 'search':
+        return colors.dark[400];
+      default:
+        return colors.warning[500];
+    }
+  };
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onDismiss}
     >
-      <View className="flex-1 justify-end bg-black/80">
-        <View className="bg-dark-800 rounded-t-3xl max-h-[80%]">
-          {/* Header */}
-          <View className="bg-dark-700 px-6 py-4 rounded-t-3xl flex-row items-center">
-            {getApprovalIcon(formatted.icon)}
-            <View className="ml-4 flex-1">
-              <Text className="text-dark-100 font-bold text-lg">
-                {formatted.title}
-              </Text>
-              {formatted.toolName && (
-                <Text className="text-dark-400 text-sm">
-                  Tool: {formatted.toolName}
-                </Text>
-              )}
+      <View className="flex-1 justify-center items-center bg-black/60 px-4">
+        <View
+          className="w-full max-w-sm overflow-hidden"
+          style={{
+            backgroundColor: colors.dark[800],
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.dark[600],
+          }}
+        >
+          {/* macOS-style title bar */}
+          <View
+            className="flex-row items-center px-3 py-2.5"
+            style={{
+              backgroundColor: colors.dark[700],
+              borderBottomWidth: 1,
+              borderBottomColor: colors.dark[600],
+              gap: 6,
+            }}
+          >
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error[400] }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning[300] }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.success[300] }} />
+            <Text style={{ fontSize: 12, color: colors.dark[300], fontFamily: 'monospace', marginLeft: 8 }}>
+              claude-approval
+            </Text>
+          </View>
+
+          {/* Header with icon */}
+          <View className="px-5 pt-5 items-center">
+            <View
+              className="w-14 h-14 rounded-full items-center justify-center mb-4"
+              style={{
+                backgroundColor: colors.dark[700],
+                borderWidth: 2,
+                borderColor: getAccentColor(),
+              }}
+            >
+              {getApprovalIcon(formatted.icon)}
             </View>
+            <Text className="text-dark-50 text-lg font-bold text-center mb-1">
+              {formatted.title}
+            </Text>
+            {formatted.toolName && (
+              <Text className="text-dark-400 text-sm mb-3">
+                Tool: {formatted.toolName}
+              </Text>
+            )}
           </View>
 
           {/* Content */}
-          <ScrollView className="px-6 py-4 max-h-80">
+          <ScrollView className="px-5 max-h-48">
             {/* Main description */}
-            <View className="mb-4">
-              <View className="bg-dark-900 rounded-lg p-4">
-                <Text className="text-dark-100 text-base leading-6">
-                  {formatted.description}
-                </Text>
-              </View>
+            <View
+              className="p-3 mb-3"
+              style={{
+                backgroundColor: colors.dark[700],
+                borderRadius: 8,
+              }}
+            >
+              <Text className="text-dark-200 text-sm leading-5 text-center">
+                {formatted.description}
+              </Text>
             </View>
 
             {/* File path if available */}
             {formatted.filePath && (
-              <View className="mb-4">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-2">
-                  Full Path
+              <View className="mb-3">
+                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+                  Path
                 </Text>
-                <View className="bg-dark-900 rounded-lg p-3">
-                  <Text className="text-dark-300 font-mono text-xs" numberOfLines={2}>
+                <View
+                  className="p-2.5"
+                  style={{
+                    backgroundColor: colors.dark[900],
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text className="text-dark-300 font-mono text-xs text-center" numberOfLines={2}>
                     {formatted.filePath}
                   </Text>
                 </View>
@@ -432,11 +554,17 @@ export function ClaudeApproval({
 
             {/* Command if available (for Bash) */}
             {formatted.command && formatted.command.length > 100 && (
-              <View className="mb-4">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-2">
-                  Full Command
+              <View className="mb-3">
+                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+                  Command
                 </Text>
-                <View className="bg-dark-900 rounded-lg p-3">
+                <View
+                  className="p-2.5"
+                  style={{
+                    backgroundColor: colors.dark[900],
+                    borderRadius: 6,
+                  }}
+                >
                   <Text className="text-dark-300 font-mono text-xs">
                     {formatted.command}
                   </Text>
@@ -446,35 +574,47 @@ export function ClaudeApproval({
           </ScrollView>
 
           {/* Action Buttons */}
-          <View className="px-6 pb-8 pt-4 border-t border-dark-600">
-            <View className="flex-row flex-wrap justify-center gap-3">
+          <View className="px-5 py-5">
+            <View className="flex-row justify-center gap-2.5">
               {parsedOptions.map((option) => {
                 const optionColor = getOptionColor(option.key);
+                const isYes = option.key.toLowerCase() === 'y';
+                const isNo = option.key.toLowerCase() === 'n';
+
                 return (
                   <TouchableOpacity
                     key={option.key}
                     onPress={() => handleRespond(option.key)}
-                    className={`px-6 py-3 rounded-xl ${optionColor.bg} border ${optionColor.border} min-w-[80px] items-center`}
+                    className="flex-1 py-3 rounded-lg items-center"
+                    style={{
+                      backgroundColor: isYes ? colors.primary[600] : isNo ? colors.dark[600] : colors.warning[600],
+                      borderWidth: isNo ? 1 : 0,
+                      borderColor: colors.dark[500],
+                      maxWidth: 100,
+                    }}
                   >
-                    <Text className={`${optionColor.text} font-bold text-base uppercase`}>
+                    <Text
+                      className="font-bold text-sm uppercase"
+                      style={{ color: isNo ? colors.dark[200] : '#fff' }}
+                    >
                       {option.label}
-                    </Text>
-                    <Text className={`${optionColor.text} text-xs opacity-70 mt-0.5`}>
-                      ({option.key})
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Dismiss button */}
+            {/* Dismiss text */}
             <TouchableOpacity
               onPress={onDismiss}
-              className="mt-4 py-2 items-center"
+              className="mt-3 py-2 items-center"
             >
-              <Text className="text-dark-400 text-sm">Dismiss (will timeout)</Text>
+              <Text className="text-dark-500 text-xs">Tap outside to dismiss</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Bottom accent bar */}
+          <View style={{ height: 3, backgroundColor: getAccentColor() }} />
         </View>
       </View>
     </Modal>

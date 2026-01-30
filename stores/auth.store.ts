@@ -22,7 +22,9 @@ interface AuthState {
   signUp: (credentials: RegisterCredentials) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  updateProfile: (updates: { name?: string; avatarUrl?: string }) => Promise<void>;
+  updateProfile: (updates: { name?: string; username?: string; avatarUrl?: string }) => Promise<void>;
+  validateUsername: (username: string) => { valid: boolean; error?: string };
+  checkUsernameAvailability: (username: string) => Promise<{ available: boolean; error?: string }>;
   deleteAccount: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   clearError: () => void;
@@ -384,6 +386,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (user) {
         analyticsService.setUserProperties({
           name: user.name,
+          username: user.username,
         });
       }
 
@@ -399,6 +402,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  validateUsername: (username: string) => {
+    return authService.validateUsername(username);
+  },
+
+  checkUsernameAvailability: async (username: string) => {
+    return authService.checkUsernameAvailability(username);
   },
 
   deleteAccount: async () => {

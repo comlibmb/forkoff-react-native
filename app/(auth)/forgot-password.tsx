@@ -6,8 +6,8 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react-native';
@@ -46,7 +46,7 @@ export default function ForgotPasswordScreen() {
     if (result.success) {
       setIsEmailSent(true);
     } else {
-      Alert.alert('Error', result.error || 'Failed to send reset email');
+      alert.error('Error', result.error || 'Failed to send reset email');
     }
   };
 

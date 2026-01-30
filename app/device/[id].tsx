@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -102,32 +103,26 @@ export default function DeviceDetailScreen() {
       try {
         await renameDevice(device.id, newName.trim());
       } catch (error) {
-        Alert.alert('Error', 'Failed to rename device');
+        alert.error('Error', 'Failed to rename device');
       }
     }
     setIsEditing(false);
   };
 
-  const handleRemove = () => {
-    Alert.alert(
+  const handleRemove = async () => {
+    const confirmed = await alert.confirm(
       'Remove Device',
       `Are you sure you want to remove "${device.name}"? This will disconnect all tools.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeDevice(device.id);
-              router.back();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to remove device');
-            }
-          },
-        },
-      ]
+      { confirmText: 'Remove', destructive: true }
     );
+    if (confirmed) {
+      try {
+        await removeDevice(device.id);
+        router.back();
+      } catch (error) {
+        alert.error('Error', 'Failed to remove device');
+      }
+    }
   };
 
   const formatLastSeen = (date: string) => {
