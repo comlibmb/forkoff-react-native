@@ -159,9 +159,11 @@ export default function DeviceDetailScreen() {
     return (
       <TouchableOpacity
         onPress={isClaudeTool ? () => handleToolPress(tool) : undefined}
+        disabled={!isClaudeTool}
         className="bg-dark-700 border border-dark-500 rounded-xl p-4 overflow-hidden"
+        style={!isClaudeTool ? { opacity: 0.6 } : undefined}
       >
-        {isToolActive && (
+        {isToolActive && isClaudeTool && (
           <View
             className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
             style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(30px)' }}
@@ -170,35 +172,45 @@ export default function DeviceDetailScreen() {
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center">
             <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
-              <Cpu size={20} color={isToolActive ? colors.primary[500] : colors.dark[300]} />
+              <Cpu size={20} color={isClaudeTool && isToolActive ? colors.primary[500] : colors.dark[300]} />
             </View>
             <View>
               <Text className="text-dark-50 font-medium">{tool.name}</Text>
-              <Text className="text-dark-200 text-xs">v{tool.version}</Text>
+              {isClaudeTool && <Text className="text-dark-200 text-xs">v{tool.version}</Text>}
             </View>
           </View>
           <View className="flex-row items-center gap-2">
-            <View
-              className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
-                isToolActive
-                  ? 'bg-primary-500/10 border border-primary-500/20'
-                  : 'bg-dark-500/30 border border-dark-500'
-              }`}
-            >
-              <View
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isToolActive ? 'bg-primary-500' : 'bg-dark-300'
-                }`}
-              />
-              <Text
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  isToolActive ? 'text-primary-500' : 'text-dark-200'
-                }`}
-              >
-                {isToolActive ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-            {isClaudeTool && <ChevronRight size={16} color={colors.dark[400]} />}
+            {isClaudeTool ? (
+              <>
+                <View
+                  className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
+                    isToolActive
+                      ? 'bg-primary-500/10 border border-primary-500/20'
+                      : 'bg-dark-500/30 border border-dark-500'
+                  }`}
+                >
+                  <View
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isToolActive ? 'bg-primary-500' : 'bg-dark-300'
+                    }`}
+                  />
+                  <Text
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isToolActive ? 'text-primary-500' : 'text-dark-200'
+                    }`}
+                  >
+                    {isToolActive ? 'Active' : 'Inactive'}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={colors.dark[400]} />
+              </>
+            ) : (
+              <View className="px-2 py-1 rounded bg-warning-300/10 border border-warning-300/20">
+                <Text className="text-warning-300 text-[10px] font-bold uppercase tracking-wider">
+                  Coming soon
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>

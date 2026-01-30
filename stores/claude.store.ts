@@ -4,6 +4,8 @@ import { ClaudeSession, DirectoryEntry, TabCompletionResult } from '@/types';
 import { wsService } from '@/services/websocket.service';
 import { apiClient } from '@/services/api.client';
 import { unstable_batchedUpdates } from 'react-native';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 
 interface ClaudeState {
   // Session state per device
@@ -64,12 +66,18 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
         `/claude-sessions/device/${deviceId}`
       );
 
+      analyticsService.track('claude_sessions_fetched', {
+        deviceId,
+        sessionCount: sessions.length,
+      });
+
       set((state) => {
         const newSessions = new Map(state.sessions);
         newSessions.set(deviceId, sessions);
         return { sessions: newSessions, isLoading: false };
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'fetch_claude_sessions', deviceId });
       // Sessions might come via WebSocket instead of API, so don't show error
       set({ isLoading: false });
     }
@@ -183,8 +191,24 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
         terminalSessionId,
       });
 
+      analyticsService.track('claude_session_resumed', {
+        deviceId,
+        sessionKey: session.sessionKey,
+        directory: session.directory,
+      });
+
+      sentryService.addBreadcrumb('Claude session resumed', 'claude', {
+        sessionKey: session.sessionKey,
+        deviceId,
+      });
+
       set({ isLoading: false });
     } catch (error) {
+      sentryService.captureException(error, {
+        context: 'resume_claude_session',
+        deviceId,
+        sessionKey: session.sessionKey,
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to resume session',
@@ -203,8 +227,23 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
         terminalSessionId,
       });
 
+      analyticsService.track('claude_session_started', {
+        deviceId,
+        directory,
+      });
+
+      sentryService.addBreadcrumb('Claude session started', 'claude', {
+        deviceId,
+        directory,
+      });
+
       set({ isLoading: false });
     } catch (error) {
+      sentryService.captureException(error, {
+        context: 'start_claude_session',
+        deviceId,
+        directory,
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to start session',
@@ -224,6 +263,11 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
         console.log('[ClaudeStore] Session not in API, removing locally');
       }
 
+      analyticsService.track('claude_session_deleted', {
+        deviceId,
+        sessionIdOrKey,
+      });
+
       // Remove from local state (match by id OR sessionKey)
       set((state) => {
         const newSessions = new Map(state.sessions);
@@ -235,6 +279,11 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
         return { sessions: newSessions, isLoading: false };
       });
     } catch (error) {
+      sentryService.captureException(error, {
+        context: 'delete_claude_session',
+        deviceId,
+        sessionIdOrKey,
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to delete session',

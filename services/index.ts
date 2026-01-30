@@ -6,3 +6,5 @@ export { projectService } from './project.service';
 export { githubService } from './github.service';
 export { notificationService } from './notification.service';
 export { subscriptionService } from './subscription.service';
+export { sentryService } from './sentry.service';
+export { analyticsService } from './analytics.service';

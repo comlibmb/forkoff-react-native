@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { User, LoginCredentials, RegisterCredentials } from '@/types';
 import { authService } from '@/services/auth.service';
+import { sentryService } from '@/services/sentry.service';
+import { analyticsService } from '@/services/analytics.service';
 
 interface AuthState {
   user: User | null;
@@ -89,12 +91,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.signIn(credentials);
 
+      // Identify user in analytics
+      analyticsService.identify(user.id, {
+        email: user.email,
+        name: user.name,
+      });
+
+      // Set user context in Sentry
+      sentryService.setUser({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
+
+      // Track sign in event
+      analyticsService.track('user_signed_in', {
+        method: 'password',
+      });
+
       set({
         user,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'sign_in' });
+      analyticsService.track('sign_in_failed', {
+        method: 'password',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Sign in failed',
@@ -109,12 +134,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.signUp(credentials);
 
+      // Track user signed up
+      analyticsService.track('user_signed_up', {
+        method: 'password',
+      });
+
+      // Identify user
+      analyticsService.identify(user.id, {
+        email: user.email,
+        name: user.name,
+        signUpDate: new Date().toISOString(),
+      });
+
+      sentryService.setUser({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
+
       set({
         user,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'sign_up' });
+      analyticsService.track('sign_up_failed', {
+        method: 'password',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Sign up failed',
@@ -130,6 +178,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       await authService.signUpWithOtp(email, name);
 
+      analyticsService.track('otp_requested', {
+        flow: 'sign_up',
+      });
+
       set({
         pendingEmail: email,
         pendingName: name,
@@ -137,6 +189,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'sign_up_with_otp' });
+      analyticsService.track('otp_request_failed', {
+        flow: 'sign_up',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to send verification code',
@@ -152,6 +209,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       await authService.signInWithOtp(email);
 
+      analyticsService.track('otp_requested', {
+        flow: 'sign_in',
+      });
+
       set({
         pendingEmail: email,
         pendingName: null,
@@ -159,6 +220,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'sign_in_with_otp' });
+      analyticsService.track('otp_request_failed', {
+        flow: 'sign_in',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to send verification code',
@@ -181,6 +247,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.verifyOtp(pendingEmail, code);
 
+      // Identify user in analytics
+      analyticsService.identify(user.id, {
+        email: user.email,
+        name: user.name,
+      });
+
+      // Set user context in Sentry
+      sentryService.setUser({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      });
+
+      // Track OTP verified event
+      analyticsService.track('otp_verified');
+      analyticsService.track('user_signed_in', {
+        method: 'otp',
+      });
+
       set({
         user,
         isAuthenticated: true,
@@ -190,6 +275,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         otpSent: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'verify_otp' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Invalid verification code',
@@ -212,8 +298,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       await authService.resendOtp(pendingEmail);
 
+      analyticsService.track('otp_resent');
+
       set({ isLoading: false });
     } catch (error) {
+      sentryService.captureException(error, { context: 'resend_otp' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to resend code',
@@ -236,7 +325,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
+      // Track sign out event before clearing user
+      analyticsService.track('user_signed_out');
+
       await authService.signOut();
+
+      // Reset analytics and Sentry user context
+      analyticsService.reset();
+      sentryService.setUser(null);
 
       set({
         user: null,
@@ -247,6 +343,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         otpSent: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'sign_out' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Sign out failed',
@@ -277,11 +374,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.updateProfile(updates);
 
+      analyticsService.track('profile_updated', {
+        updatedFields: Object.keys(updates),
+      });
+
+      // Update user properties in analytics
+      if (user) {
+        analyticsService.setUserProperties({
+          name: user.name,
+        });
+      }
+
       set({
         user,
         isLoading: false,
       });
     } catch (error) {
+      sentryService.captureException(error, { context: 'update_profile' });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Profile update failed',

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { Terminal, TerminalLine, Server, ServerStatus } from '@/types';
 import { wsService } from '@/services/websocket.service';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 
 interface TerminalState {
   terminals: Terminal[];
@@ -107,11 +109,26 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     if (!deviceId) {
       console.error('[Terminal Store] ERROR: No deviceId found for terminal');
+      sentryService.captureMessage('Terminal command failed - no deviceId', 'error', {
+        terminalId,
+        command: command.substring(0, 50),
+      });
     }
 
     if (!wsService.isConnected) {
       console.error('[Terminal Store] ERROR: WebSocket not connected');
+      sentryService.captureMessage('Terminal command failed - WebSocket not connected', 'error', {
+        terminalId,
+        command: command.substring(0, 50),
+      });
     }
+
+    // Track terminal command sent
+    analyticsService.track('terminal_command_sent', {
+      terminalId,
+      deviceId,
+      commandLength: command.length,
+    });
 
     // Send via WebSocket with deviceId
     wsService.sendTerminalCommand(terminalId, command, deviceId);

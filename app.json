@@ -54,7 +54,14 @@
           "color": "#6366f1"
         }
       ],
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "Forkoff-app",
+          "project": "Forkoff-app"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

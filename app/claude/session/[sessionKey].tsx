@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
 import { useClaudeStore } from '@/stores/claude.store';
+import { analyticsService } from '@/services/analytics.service';
+import { sentryService } from '@/services/sentry.service';
 import { colors } from '@/theme/colors';
 import PermissionRequest, { PermissionRequestData } from '@/components/claude/PermissionRequest';
 import { ThinkingBlock, ThinkingIndicator } from '@/components/claude/ThinkingBlock';
@@ -108,6 +110,22 @@ export default function ClaudeSessionScreen() {
 
     return () => clearInterval(interval);
   }, [isThinking]);
+
+  // Track session opened
+  useEffect(() => {
+    if (sessionKey && deviceId) {
+      analyticsService.track('claude_session_opened', {
+        sessionKey,
+        deviceId,
+        directory: session?.directory,
+      });
+
+      sentryService.addBreadcrumb('Claude session opened', 'navigation', {
+        sessionKey,
+        deviceId,
+      });
+    }
+  }, [sessionKey, deviceId]);
 
   useEffect(() => {
     if (!sessionKey || !deviceId) {
@@ -583,6 +601,18 @@ export default function ClaudeSessionScreen() {
     setIsTakingOver(true);
     setIsSessionReady(false);
 
+    // Track session take over
+    analyticsService.track('claude_session_takeover', {
+      sessionKey,
+      deviceId,
+      directory: session.directory,
+    });
+
+    sentryService.addBreadcrumb('Claude session take over', 'user_action', {
+      sessionKey,
+      deviceId,
+    });
+
     // Request resume - CLI will connect with session-scoped connection
     // and start routing messages to this session
     // Use sessionKey as terminalSessionId to uniquely identify this process
@@ -624,6 +654,13 @@ export default function ClaudeSessionScreen() {
     setInputText('');
     setIsSending(true);
 
+    // Track message sent
+    analyticsService.track('claude_message_sent', {
+      sessionKey,
+      deviceId,
+      messageLength: message.length,
+    });
+
     // Add user message optimistically (show immediately)
     const optimisticEntry: TranscriptEntry = {
       id: `local-${Date.now()}`,
@@ -659,6 +696,17 @@ export default function ClaudeSessionScreen() {
 
   const handlePermissionApprove = (requestId: string, remember: boolean) => {
     console.log('[Session] Permission approved:', requestId, 'remember:', remember);
+
+    // Track permission approved
+    analyticsService.track('claude_permission_approved', {
+      sessionKey,
+      deviceId,
+      requestId,
+      remember,
+      permissionType: permissionRequest?.type,
+      toolName: permissionRequest?.toolName,
+    });
+
     setShowPermissionModal(false);
     setPermissionRequest(null);
 
@@ -671,6 +719,17 @@ export default function ClaudeSessionScreen() {
 
   const handlePermissionDeny = (requestId: string, remember: boolean) => {
     console.log('[Session] Permission denied:', requestId, 'remember:', remember);
+
+    // Track permission denied
+    analyticsService.track('claude_permission_denied', {
+      sessionKey,
+      deviceId,
+      requestId,
+      remember,
+      permissionType: permissionRequest?.type,
+      toolName: permissionRequest?.toolName,
+    });
+
     setShowPermissionModal(false);
     setPermissionRequest(null);
 
