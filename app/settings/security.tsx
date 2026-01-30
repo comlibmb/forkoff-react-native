@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -10,27 +10,80 @@ import {
   Fingerprint,
   ChevronRight,
   AlertTriangle,
+  X,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
+import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
 
 export default function SecurityScreen() {
+  const { user, changePassword, resetPassword, isLoading } = useAuthStore();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleChangePassword = () => {
-    Alert.alert(
-      'Change Password',
-      'A password reset link will be sent to your email.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Link',
-          onPress: () => {
-            Alert.alert('Success', 'Password reset link sent to your email.');
-          },
-        },
-      ]
-    );
+    setShowChangePasswordModal(true);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+  };
+
+  const handleSubmitPasswordChange = async () => {
+    // Validate
+    if (!currentPassword) {
+      setPasswordError('Current password is required');
+      return;
+    }
+    if (!newPassword) {
+      setPasswordError('New password is required');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError('New password must be different from current password');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    setPasswordError('');
+
+    try {
+      await changePassword(currentPassword, newPassword);
+      setShowChangePasswordModal(false);
+      Alert.alert('Success', 'Password changed successfully');
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleSendResetLink = async () => {
+    if (!user?.email) return;
+
+    try {
+      await resetPassword(user.email);
+      Alert.alert('Success', 'Password reset link sent to your email');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send reset link');
+    }
   };
 
   const handleToggle2FA = () => {
@@ -103,7 +156,7 @@ export default function SecurityScreen() {
         <View className="bg-dark-700 border border-dark-500 rounded-xl p-4 mb-4">
           <TouchableOpacity
             onPress={handleChangePassword}
-            className="flex-row items-center"
+            className="flex-row items-center mb-3 pb-3 border-b border-dark-600"
           >
             <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
               <Key size={20} color={colors.dark[200]} />
@@ -111,7 +164,23 @@ export default function SecurityScreen() {
             <View className="flex-1">
               <Text className="text-dark-50 font-medium">Change Password</Text>
               <Text className="text-dark-300 text-sm">
-                Update your password regularly
+                Update your password
+              </Text>
+            </View>
+            <ChevronRight size={20} color={colors.dark[400]} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSendResetLink}
+            className="flex-row items-center"
+          >
+            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-4">
+              <Key size={20} color={colors.primary[400]} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-dark-50 font-medium">Reset via Email</Text>
+              <Text className="text-dark-300 text-sm">
+                Send reset link to {user?.email}
               </Text>
             </View>
             <ChevronRight size={20} color={colors.dark[400]} />
@@ -250,6 +319,112 @@ export default function SecurityScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowChangePasswordModal(false)}
+      >
+        <SafeAreaView className="flex-1 bg-dark-800">
+          {/* Modal Header */}
+          <View className="flex-row items-center justify-between px-4 py-4 border-b border-dark-600">
+            <TouchableOpacity onPress={() => setShowChangePasswordModal(false)}>
+              <X size={24} color={colors.dark[300]} />
+            </TouchableOpacity>
+            <Text className="text-dark-50 text-lg font-bold">Change Password</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView className="flex-1 px-4 py-6">
+            {/* Current Password */}
+            <View className="mb-4">
+              <Text className="text-dark-300 text-sm font-medium mb-2">Current Password</Text>
+              <View className="relative">
+                <TextInput
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry={!showCurrentPassword}
+                  placeholder="Enter current password"
+                  placeholderTextColor={colors.dark[400]}
+                  className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 pr-12 text-dark-50"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff size={20} color={colors.dark[400]} />
+                  ) : (
+                    <Eye size={20} color={colors.dark[400]} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* New Password */}
+            <View className="mb-4">
+              <Text className="text-dark-300 text-sm font-medium mb-2">New Password</Text>
+              <View className="relative">
+                <TextInput
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNewPassword}
+                  placeholder="Enter new password (min 6 characters)"
+                  placeholderTextColor={colors.dark[400]}
+                  className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 pr-12 text-dark-50"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                >
+                  {showNewPassword ? (
+                    <EyeOff size={20} color={colors.dark[400]} />
+                  ) : (
+                    <Eye size={20} color={colors.dark[400]} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Confirm Password */}
+            <View className="mb-6">
+              <Text className="text-dark-300 text-sm font-medium mb-2">Confirm New Password</Text>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showNewPassword}
+                placeholder="Confirm new password"
+                placeholderTextColor={colors.dark[400]}
+                className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 text-dark-50"
+              />
+            </View>
+
+            {/* Error Message */}
+            {passwordError ? (
+              <View className="bg-error-300/10 border border-error-300/20 rounded-xl p-3 mb-4">
+                <Text className="text-error-300 text-sm">{passwordError}</Text>
+              </View>
+            ) : null}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              onPress={handleSubmitPasswordChange}
+              disabled={isChangingPassword}
+              className={`py-4 rounded-xl items-center ${
+                isChangingPassword ? 'bg-primary-600/50' : 'bg-primary-600'
+              }`}
+            >
+              {isChangingPassword ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text className="text-white font-bold text-base">Change Password</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

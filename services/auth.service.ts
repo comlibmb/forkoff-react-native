@@ -354,6 +354,75 @@ class AuthService {
     return this.mapSupabaseUser(data.user);
   }
 
+  async deleteAccount(): Promise<void> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.mockSession = false;
+      this.notifyListeners(null);
+      return;
+    }
+
+    // Note: Supabase requires server-side admin API to delete users
+    // We'll call our backend API to handle the deletion
+    const token = await this.getAccessToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+    const response = await fetch(`${apiUrl}/auth/delete-account`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || 'Failed to delete account');
+    }
+
+    // Sign out locally after deletion
+    await this.signOut();
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (currentPassword !== 'password') {
+        throw new Error('Current password is incorrect');
+      }
+      return;
+    }
+
+    // Supabase doesn't have a direct "change password with current password" flow
+    // We need to re-authenticate first, then update password
+    const session = await this.getSession();
+    if (!session?.user?.email) {
+      throw new Error('Not authenticated');
+    }
+
+    // Verify current password by attempting to sign in
+    const { error: signInError } = await this.supabase!.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      throw new Error('Current password is incorrect');
+    }
+
+    // Update to new password
+    const { error } = await this.supabase!.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+  }
+
   async signInWithGitHub(): Promise<{ url: string }> {
     if (this.useMocks) {
       return { url: 'https://github.com/login/oauth/authorize?mock=true' };

@@ -23,6 +23,8 @@ interface AuthState {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateProfile: (updates: { name?: string; avatarUrl?: string }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   clearError: () => void;
   setUser: (user: User | null) => void;
 
@@ -394,6 +396,62 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Profile update failed',
+      });
+      throw error;
+    }
+  },
+
+  deleteAccount: async () => {
+    try {
+      set({ isLoading: true, error: null });
+
+      // Track account deletion
+      analyticsService.track('account_deletion_initiated');
+
+      await authService.deleteAccount();
+
+      // Track successful deletion
+      analyticsService.track('account_deleted');
+
+      // Reset analytics and Sentry
+      analyticsService.reset();
+      sentryService.setUser(null);
+
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        pendingEmail: null,
+        pendingName: null,
+        otpSent: false,
+      });
+    } catch (error) {
+      sentryService.captureException(error, { context: 'delete_account' });
+      analyticsService.track('account_deletion_failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to delete account',
+      });
+      throw error;
+    }
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    try {
+      set({ isLoading: true, error: null });
+
+      await authService.changePassword(currentPassword, newPassword);
+
+      analyticsService.track('password_changed');
+
+      set({ isLoading: false });
+    } catch (error) {
+      sentryService.captureException(error, { context: 'change_password' });
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to change password',
       });
       throw error;
     }
