@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -11,8 +11,21 @@ import {
   Laptop,
   Hammer,
 } from 'lucide-react-native';
-import { Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
+
+function Section({ title, children }: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.section}>
+      {title && <Text style={styles.sectionTitle}>{title}</Text>}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionContent}>{children}</View>
+      </View>
+    </View>
+  );
+}
 
 interface NotificationSetting {
   key: string;
@@ -84,98 +97,180 @@ export default function NotificationsScreen() {
   const allEnabled = settings.find((s) => s.key === 'all')?.enabled ?? true;
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-900" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View className="px-6 pt-4 pb-4 flex-row items-center">
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={styles.backButton}
         >
-          <ArrowLeft size={24} color={colors.dark[300]} />
-          <Text className="text-dark-300 ml-2">Back</Text>
+          <ArrowLeft size={24} color={colors.dark[200]} />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-6" contentContainerClassName="pb-8">
-        <Text className="text-white text-2xl font-bold mb-2">
-          Notifications
-        </Text>
-        <Text className="text-dark-400 mb-6">
-          Configure which notifications you receive
-        </Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={styles.pageSubtitle}>Configure which notifications you receive</Text>
 
         {/* Master Toggle */}
-        <Card padding="md" className="mb-6">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-10 h-10 bg-primary-500/20 rounded-lg items-center justify-center mr-4">
-                <Bell size={20} color={colors.primary[500]} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-semibold">
-                  Push Notifications
-                </Text>
-                <Text className="text-dark-400 text-sm">
-                  Enable all notifications
-                </Text>
-              </View>
+        <Section title="Master Toggle">
+          <View style={styles.settingRow}>
+            <View style={[styles.settingIcon, { backgroundColor: colors.primary[500] + '20' }]}>
+              <Bell size={20} color={colors.primary[500]} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Push Notifications</Text>
+              <Text style={styles.settingSubtitle}>Enable all notifications</Text>
             </View>
             <Switch
               value={allEnabled}
               onValueChange={() => toggleSetting('all')}
-              trackColor={{
-                false: colors.dark[600],
-                true: colors.primary[500],
-              }}
+              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
+              thumbColor={allEnabled ? '#fff' : colors.dark[200]}
             />
           </View>
-        </Card>
+        </Section>
 
         {/* Individual Settings */}
-        <Text className="text-dark-400 text-sm font-medium mb-3">
-          NOTIFICATION TYPES
-        </Text>
-        <Card padding="none">
+        <Section title="Notification Types">
           {settings
             .filter((s) => s.key !== 'all')
             .map((setting, index) => (
-              <View
-                key={setting.key}
-                className={`flex-row items-center justify-between px-4 py-4 ${
-                  index > 0 ? 'border-t border-dark-700' : ''
-                }`}
-                style={{ opacity: allEnabled ? 1 : 0.5 }}
-              >
-                <View className="flex-row items-center flex-1">
-                  <View className="w-10 h-10 bg-dark-700 rounded-lg items-center justify-center mr-4">
+              <View key={setting.key}>
+                {index > 0 && <View style={styles.divider} />}
+                <View style={[styles.settingRow, !allEnabled && styles.settingRowDisabled]}>
+                  <View style={styles.settingIcon}>
                     <setting.icon size={20} color={colors.dark[300]} />
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-white font-medium">
-                      {setting.title}
-                    </Text>
-                    <Text className="text-dark-400 text-sm">
-                      {setting.description}
-                    </Text>
+                  <View style={styles.settingContent}>
+                    <Text style={styles.settingTitle}>{setting.title}</Text>
+                    <Text style={styles.settingSubtitle}>{setting.description}</Text>
                   </View>
+                  <Switch
+                    value={setting.enabled && allEnabled}
+                    onValueChange={() => toggleSetting(setting.key)}
+                    disabled={!allEnabled}
+                    trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
+                    thumbColor={setting.enabled && allEnabled ? '#fff' : colors.dark[200]}
+                  />
                 </View>
-                <Switch
-                  value={setting.enabled && allEnabled}
-                  onValueChange={() => toggleSetting(setting.key)}
-                  disabled={!allEnabled}
-                  trackColor={{
-                    false: colors.dark[600],
-                    true: colors.primary[500],
-                  }}
-                />
               </View>
             ))}
-        </Card>
+        </Section>
 
-        <Text className="text-dark-500 text-sm text-center mt-6">
+        <Text style={styles.disclaimer}>
           You can also manage notifications in your device settings
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backText: {
+    color: colors.dark[200],
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginBottom: 20,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: colors.dark[300],
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+  },
+  sectionContent: {
+    padding: 16,
+  },
+  // Settings
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingRowDisabled: {
+    opacity: 0.5,
+  },
+  settingIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingContent: {
+    flex: 1,
+  },
+  settingTitle: {
+    color: colors.dark[50],
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  settingSubtitle: {
+    color: colors.dark[300],
+    fontSize: 13,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.dark[600],
+    marginVertical: 12,
+    marginLeft: 52,
+  },
+  disclaimer: {
+    color: colors.dark[400],
+    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 8,
+  },
+});

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,12 +41,13 @@ function SettingsItem({
     <TouchableOpacity
       onPress={onPress}
       disabled={!onPress}
-      className="flex-row items-center py-4"
+      style={styles.settingsItem}
     >
       <View
-        className={`w-10 h-10 rounded-lg items-center justify-center mr-4 ${
-          danger ? 'bg-error-300/10' : 'bg-dark-800 border border-dark-500'
-        }`}
+        style={[
+          styles.itemIcon,
+          danger && styles.itemIconDanger,
+        ]}
       >
         <Icon
           size={20}
@@ -54,14 +55,17 @@ function SettingsItem({
         />
       </View>
 
-      <View className="flex-1">
+      <View style={styles.itemContent}>
         <Text
-          className={`font-medium ${danger ? 'text-error-300' : 'text-dark-50'}`}
+          style={[
+            styles.itemTitle,
+            danger && styles.itemTitleDanger,
+          ]}
         >
           {title}
         </Text>
         {subtitle && (
-          <Text className="text-dark-200 text-xs mt-0.5">{subtitle}</Text>
+          <Text style={styles.itemSubtitle}>{subtitle}</Text>
         )}
       </View>
 
@@ -80,14 +84,14 @@ function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <View className="mb-6">
+    <View style={styles.section}>
       {title && (
-        <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-2 px-1">
+        <Text style={styles.sectionTitle}>
           {title}
         </Text>
       )}
-      <View className="bg-dark-700 border border-dark-500 rounded-xl overflow-hidden">
-        <View className="px-4 divide-y divide-dark-500">{children}</View>
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionContent}>{children}</View>
       </View>
     </View>
   );
@@ -111,53 +115,48 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2">
-        <Text className="text-dark-50 text-2xl font-bold">Settings</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerSubtitle}>Preferences & account</Text>
       </View>
 
       <ScrollView
-        className="flex-1 px-4"
-        contentContainerClassName="py-4"
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
         {/* Profile Card */}
         <TouchableOpacity
           onPress={() => router.push('/settings/account')}
-          className="bg-dark-700 border border-dark-500 rounded-xl p-5 mb-6 overflow-hidden"
+          style={styles.profileCard}
         >
-          {/* Gradient glow */}
-          <View
-            className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-            style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(30px)' }}
-          />
+          <View style={styles.profileContent}>
+            {/* Gradient glow */}
+            <View style={styles.profileGlow} />
 
-          <View className="flex-row items-center">
-            {/* Initials avatar */}
-            <View
-              className="w-14 h-14 rounded-full items-center justify-center mr-4"
-              style={{ backgroundColor: colors.primary[600] }}
-            >
-              <Text className="text-white text-lg font-bold">
-                {(user?.name || 'U').charAt(0).toUpperCase()}
-              </Text>
-            </View>
+            <View style={styles.profileRow}>
+              {/* Initials avatar */}
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {(user?.name || 'U').charAt(0).toUpperCase()}
+                </Text>
+              </View>
 
-            <View className="flex-1">
-              <Text className="text-dark-50 text-lg font-bold">
-                {user?.name || 'User'}
-              </Text>
-              <Text className="text-dark-200 text-sm">{user?.email || 'email@example.com'}</Text>
-              <View className="flex-row items-center mt-2">
-                <View className="bg-primary-500/10 border border-primary-500/20 px-2.5 py-1 rounded flex-row items-center gap-1.5">
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>
+                  {user?.name || 'User'}
+                </Text>
+                <Text style={styles.profileEmail}>{user?.email || 'email@example.com'}</Text>
+                <View style={styles.subscriptionBadge}>
                   <Sparkles size={12} color={colors.primary[500]} />
-                  <Text className="text-primary-500 text-xs font-bold uppercase tracking-wider">
+                  <Text style={styles.subscriptionText}>
                     {user?.subscription || 'Free'} Plan
                   </Text>
                 </View>
               </View>
+              <ChevronRight size={20} color={colors.dark[400]} />
             </View>
-            <ChevronRight size={20} color={colors.dark[400]} />
           </View>
         </TouchableOpacity>
 
@@ -169,12 +168,14 @@ export default function SettingsScreen() {
             subtitle="Edit your profile information"
             onPress={() => router.push('/settings/account')}
           />
+          <View style={styles.divider} />
           <SettingsItem
             icon={Shield}
             title="Security"
             subtitle="Password, 2FA, biometrics"
             onPress={() => router.push('/settings/security')}
           />
+          <View style={styles.divider} />
           <SettingsItem
             icon={Github}
             title="GitHub"
@@ -202,6 +203,7 @@ export default function SettingsScreen() {
               />
             }
           />
+          <View style={styles.divider} />
           <SettingsItem
             icon={Moon}
             title="Dark Mode"
@@ -238,6 +240,7 @@ export default function SettingsScreen() {
             onPress={() => {}}
             rightElement={<ExternalLink size={16} color={colors.dark[400]} />}
           />
+          <View style={styles.divider} />
           <SettingsItem
             icon={MessageCircle}
             title="Contact Support"
@@ -256,10 +259,184 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         {/* Version */}
-        <Text className="text-dark-400 text-center text-xs mt-4 mb-8">
+        <Text style={styles.version}>
           ForkOff v1.0.0
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.dark[800],
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginTop: 4,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    color: colors.dark[300],
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+  },
+  sectionContent: {
+    paddingHorizontal: 16,
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  itemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  itemIconDanger: {
+    backgroundColor: colors.error[300] + '15',
+    borderColor: colors.error[300] + '30',
+  },
+  itemContent: {
+    flex: 1,
+  },
+  itemTitle: {
+    color: colors.dark[50],
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  itemTitleDanger: {
+    color: colors.error[300],
+  },
+  itemSubtitle: {
+    color: colors.dark[200],
+    fontSize: 12,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.dark[600],
+    marginLeft: 56,
+  },
+  profileCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  profileContent: {
+    padding: 20,
+    overflow: 'hidden',
+  },
+  profileGlow: {
+    position: 'absolute',
+    top: -48,
+    right: -48,
+    width: 96,
+    height: 96,
+    backgroundColor: colors.primary[500],
+    borderRadius: 48,
+    opacity: 0.1,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    color: colors.dark[50],
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileEmail: {
+    color: colors.dark[200],
+    fontSize: 14,
+    marginTop: 2,
+  },
+  subscriptionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[500] + '15',
+    borderWidth: 1,
+    borderColor: colors.primary[500] + '30',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    gap: 6,
+  },
+  subscriptionText: {
+    color: colors.primary[500],
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  version: {
+    color: colors.dark[400],
+    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 16,
+    marginBottom: 32,
+  },
+});

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, memo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -77,17 +77,12 @@ const DeviceCard = memo(({
   return (
     <TouchableOpacity
       onPress={handlePress}
-      className="bg-dark-700 border border-dark-500 rounded-xl p-5 overflow-hidden mb-4"
+      style={styles.deviceCard}
     >
-      {isOnline && (
-        <View
-          className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-          style={{ backgroundColor: colors.primary[500], borderRadius: 100 }}
-        />
-      )}
+      {isOnline && <View style={styles.glowEffect} />}
 
       <View className="flex-row items-start">
-        <View className="w-12 h-12 bg-dark-800 border border-dark-500 rounded-xl items-center justify-center mr-4">
+        <View style={styles.deviceIcon}>
           <Icon size={24} color={isOnline ? colors.primary[500] : colors.dark[300]} />
         </View>
 
@@ -137,6 +132,9 @@ const DeviceCard = memo(({
 
         <ChevronRight size={20} color={colors.dark[400]} className="ml-2" />
       </View>
+
+      {/* Accent bar */}
+      <View style={[styles.accentBar, { backgroundColor: isOnline ? colors.primary[500] : colors.dark[600] }]} />
     </TouchableOpacity>
   );
 });
@@ -162,11 +160,10 @@ const FilterPill = memo(({
   return (
     <TouchableOpacity
       onPress={handlePress}
-      className={`px-4 py-1.5 rounded-full border flex-row items-center gap-2 mr-2 ${
-        isActive
-          ? 'bg-primary-500/10 border-primary-500'
-          : 'bg-dark-700 border-dark-500'
-      }`}
+      style={[
+        styles.filterPill,
+        isActive && styles.filterPillActive,
+      ]}
     >
       {FilterIcon && (
         <FilterIcon
@@ -175,9 +172,10 @@ const FilterPill = memo(({
         />
       )}
       <Text
-        className={`text-xs font-medium ${
-          isActive ? 'text-primary-500' : 'text-dark-200'
-        }`}
+        style={[
+          styles.filterPillText,
+          isActive && styles.filterPillTextActive,
+        ]}
       >
         {label}
       </Text>
@@ -193,9 +191,9 @@ const EmptyState = memo(({
   filter: FilterType;
   onAddDevice: () => void;
 }) => (
-  <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
+  <View style={styles.emptyState}>
     <Laptop size={48} color={colors.dark[400]} />
-    <Text className="text-dark-200 mt-4 text-center">
+    <Text style={styles.emptyStateText}>
       {filter === 'all'
         ? 'No devices connected.\nAdd a device to get started.'
         : `No ${filter} devices`}
@@ -203,10 +201,10 @@ const EmptyState = memo(({
     {filter === 'all' && (
       <TouchableOpacity
         onPress={onAddDevice}
-        className="mt-4 bg-primary-500 px-6 py-3 rounded-full flex-row items-center gap-2"
+        style={styles.addDeviceButton}
       >
         <Plus size={18} color="#fff" />
-        <Text className="text-white font-medium">Add Device</Text>
+        <Text style={styles.addDeviceButtonText}>Add Device</Text>
       </TouchableOpacity>
     )}
   </View>
@@ -279,40 +277,42 @@ export default function DevicesScreen() {
     <EmptyState filter={filter} onAddDevice={handleAddDevice} />
   ), [filter, handleAddDevice]);
 
+  // Add device button for header
+  const addButton = (
+    <TouchableOpacity
+      onPress={handleAddDevice}
+      style={styles.addButton}
+    >
+      <Plus size={16} color="#fff" />
+      <Text style={styles.addButtonText}>Add</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2">
-        {/* Title Row */}
-        <View className="flex-row items-center justify-between mb-4">
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
           <View>
-            <Text className="text-dark-50 text-2xl font-bold">Devices</Text>
-            <Text className="text-dark-200 text-sm mt-0.5">
-              {onlineCount} of {devices.length} online
-            </Text>
+            <Text style={styles.headerTitle}>Devices</Text>
+            <Text style={styles.headerSubtitle}>{onlineCount} of {devices.length} online</Text>
           </View>
-          <TouchableOpacity
-            onPress={handleAddDevice}
-            className="bg-primary-500 px-4 py-2 rounded-full flex-row items-center gap-2"
-          >
-            <Plus size={16} color="#fff" />
-            <Text className="text-white font-medium text-sm">Add</Text>
-          </TouchableOpacity>
+          {addButton}
         </View>
+      </View>
 
-        {/* Filter Pills */}
-        <View className="flex-row">
-          {filters.map((f) => (
-            <FilterPill
-              key={f.key}
-              filterKey={f.key}
-              label={f.label}
-              icon={f.icon}
-              isActive={filter === f.key}
-              onPress={handleFilterChange}
-            />
-          ))}
-        </View>
+      {/* Filter Pills */}
+      <View style={styles.filterContainer}>
+        {filters.map((f) => (
+          <FilterPill
+            key={f.key}
+            filterKey={f.key}
+            label={f.label}
+            icon={f.icon}
+            isActive={filter === f.key}
+            onPress={handleFilterChange}
+          />
+        ))}
       </View>
 
       {/* Device List */}
@@ -338,3 +338,137 @@ export default function DevicesScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginTop: 4,
+  },
+  deviceCard: {
+    backgroundColor: colors.dark[800],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    padding: 20,
+    paddingBottom: 0,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  glowEffect: {
+    position: 'absolute',
+    top: -48,
+    right: -48,
+    width: 96,
+    height: 96,
+    backgroundColor: colors.primary[500],
+    borderRadius: 48,
+    opacity: 0.1,
+  },
+  deviceIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  accentBar: {
+    height: 3,
+    marginTop: 20,
+    marginHorizontal: -20,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.dark[700],
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+    gap: 6,
+  },
+  filterPillActive: {
+    backgroundColor: colors.primary[500] + '15',
+    borderColor: colors.primary[500],
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.dark[200],
+  },
+  filterPillTextActive: {
+    color: colors.primary[500],
+  },
+  emptyState: {
+    backgroundColor: colors.dark[800],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: colors.dark[200],
+    marginTop: 16,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  addDeviceButton: {
+    marginTop: 16,
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addDeviceButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  addButton: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});

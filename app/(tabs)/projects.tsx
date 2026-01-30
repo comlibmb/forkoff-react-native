@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -126,21 +126,15 @@ const ProjectCard = memo(({
   }, [onToggle, projectKey]);
 
   return (
-    <View className="bg-dark-700 border border-dark-500 rounded-xl overflow-hidden mb-3">
+    <View style={styles.projectCard}>
       {project.hasActive && (
-        <View
-          className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-          style={{
-            backgroundColor: colors.primary[500],
-            borderRadius: 100,
-          }}
-        />
+        <View style={styles.glowEffect} />
       )}
 
-      <TouchableOpacity onPress={handleToggle} className="p-4">
+      <TouchableOpacity onPress={handleToggle} style={styles.projectHeader}>
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center flex-1 mr-3">
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
+            <View style={styles.folderIcon}>
               <Folder
                 size={20}
                 color={project.hasActive ? colors.primary[500] : colors.dark[300]}
@@ -180,7 +174,7 @@ const ProjectCard = memo(({
       </TouchableOpacity>
 
       {isExpanded && (
-        <View className="border-t border-dark-600 bg-dark-800">
+        <View style={styles.sessionList}>
           {project.sessions.map((session, index) => (
             <SessionItem
               key={session.sessionKey}
@@ -196,7 +190,7 @@ const ProjectCard = memo(({
   );
 });
 
-// Memoized device group component
+// Memoized device group component - styled as macOS window
 const DeviceGroup = memo(({
   deviceGroup,
   expandedProjects,
@@ -215,28 +209,48 @@ const DeviceGroup = memo(({
   expandedProjects: Set<string>;
   onToggleProject: (key: string) => void;
   onSessionPress: (deviceId: string, session: ClaudeSession) => void;
-}) => (
-  <View className="mb-6">
-    <View className="flex-row items-center mb-3 px-2">
-      <Laptop size={16} color={colors.dark[400]} />
-      <Text className="text-dark-300 text-sm font-bold ml-2 uppercase tracking-wider">
-        {deviceGroup.device.name}
-      </Text>
-      <View className="flex-1 h-px bg-dark-700 ml-3" />
-    </View>
+}) => {
+  const hasActiveProject = deviceGroup.projects.some(p => p.hasActive);
 
-    {deviceGroup.projects.map((project) => (
-      <ProjectCard
-        key={project.directory}
-        project={project}
-        deviceId={deviceGroup.device.id}
-        isExpanded={expandedProjects.has(`${deviceGroup.device.id}:${project.directory}`)}
-        onToggle={onToggleProject}
-        onSessionPress={onSessionPress}
-      />
-    ))}
-  </View>
-));
+  return (
+    <View style={styles.deviceWindow}>
+      {/* macOS Title Bar */}
+      <View style={styles.deviceTitleBar}>
+        <View style={styles.trafficLights}>
+          <View style={[styles.trafficDot, styles.dotRed]} />
+          <View style={[styles.trafficDot, styles.dotYellow]} />
+          <View style={[styles.trafficDot, styles.dotGreen]} />
+        </View>
+        <View style={styles.deviceTitleContent}>
+          <Laptop size={14} color={colors.dark[300]} />
+          <Text style={styles.deviceTitleText}>{deviceGroup.device.name}</Text>
+        </View>
+        <View style={styles.deviceTitleRight}>
+          <Text style={styles.projectCount}>
+            {deviceGroup.projects.length} project{deviceGroup.projects.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      </View>
+
+      {/* Projects Content */}
+      <View style={styles.deviceContent}>
+        {deviceGroup.projects.map((project) => (
+          <ProjectCard
+            key={project.directory}
+            project={project}
+            deviceId={deviceGroup.device.id}
+            isExpanded={expandedProjects.has(`${deviceGroup.device.id}:${project.directory}`)}
+            onToggle={onToggleProject}
+            onSessionPress={onSessionPress}
+          />
+        ))}
+      </View>
+
+      {/* Accent bar */}
+      <View style={[styles.deviceAccentBar, { backgroundColor: hasActiveProject ? colors.primary[500] : colors.dark[600] }]} />
+    </View>
+  );
+});
 
 // Empty states as memoized components
 const NoDevicesState = memo(() => (
@@ -500,6 +514,15 @@ export default function ProjectsScreen() {
 
   const keyExtractor = useCallback((item: typeof deviceProjects[0]) => item.device.id, []);
 
+  // Project count badge
+  const projectBadge = (
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>
+        {totalProjects} project{totalProjects !== 1 ? 's' : ''}
+      </Text>
+    </View>
+  );
+
   // Render content based on state
   const renderContent = () => {
     if (isScanning) {
@@ -542,24 +565,154 @@ export default function ProjectsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-dark-900" edges={['top']}>
       {/* Header */}
-      <View className="px-6 pt-4 pb-4">
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-white text-2xl font-bold">Projects</Text>
-          <View className="bg-dark-700 px-3 py-1 rounded-full">
-            <Text className="text-dark-300 text-sm">
-              {totalProjects} project{totalProjects !== 1 ? 's' : ''}
-            </Text>
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Projects</Text>
+            <Text style={styles.headerSubtitle}>Claude sessions grouped by directory</Text>
           </View>
+          {projectBadge}
         </View>
-        <Text className="text-dark-400 text-sm">
-          Claude sessions grouped by directory
-        </Text>
       </View>
 
       {/* Project List */}
-      <View className="flex-1 px-4">
+      <View className="flex-1 px-4 pt-4">
         {renderContent()}
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.dark[50],
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.dark[300],
+    marginTop: 4,
+  },
+  // Device Window (macOS style)
+  deviceWindow: {
+    backgroundColor: colors.dark[800],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dark[600],
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  deviceTitleBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.dark[700],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark[600],
+  },
+  trafficLights: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trafficDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  dotRed: {
+    backgroundColor: colors.error[300],
+  },
+  dotYellow: {
+    backgroundColor: colors.warning[300],
+  },
+  dotGreen: {
+    backgroundColor: colors.success[200],
+  },
+  deviceTitleContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    gap: 8,
+  },
+  deviceTitleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.dark[200],
+    fontFamily: 'monospace',
+  },
+  deviceTitleRight: {
+    marginLeft: 'auto',
+  },
+  projectCount: {
+    fontSize: 11,
+    color: colors.dark[400],
+  },
+  deviceContent: {
+    padding: 12,
+  },
+  deviceAccentBar: {
+    height: 3,
+  },
+  projectCard: {
+    backgroundColor: colors.dark[700],
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  glowEffect: {
+    position: 'absolute',
+    top: -48,
+    right: -48,
+    width: 96,
+    height: 96,
+    backgroundColor: colors.primary[500],
+    borderRadius: 48,
+    opacity: 0.1,
+  },
+  projectHeader: {
+    padding: 12,
+  },
+  folderIcon: {
+    width: 36,
+    height: 36,
+    backgroundColor: colors.dark[600],
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sessionList: {
+    borderTopWidth: 1,
+    borderTopColor: colors.dark[600],
+    backgroundColor: colors.dark[600],
+  },
+  badge: {
+    backgroundColor: colors.dark[700],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.dark[500],
+  },
+  badgeText: {
+    color: colors.dark[300],
+    fontSize: 13,
+    fontWeight: '500',
+  },
+});
