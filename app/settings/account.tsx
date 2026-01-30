@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Mail, User, Sparkles, ChevronRight, Trash2 } from 'lucide-react-native';
@@ -7,7 +7,8 @@ import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
 
 export default function AccountScreen() {
-  const { user, updateProfile, isLoading } = useAuthStore();
+  const { user, updateProfile, deleteAccount, isLoading } = useAuthStore();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [name, setName] = useState(user?.name || '');
   const [hasChanges, setHasChanges] = useState(false);
@@ -146,23 +147,61 @@ export default function AccountScreen() {
             onPress={() => {
               Alert.alert(
                 'Delete Account',
-                'Are you sure you want to delete your account? This action cannot be undone.',
+                'Are you sure you want to delete your account? This will permanently delete all your data including devices, projects, and sessions. This action cannot be undone.',
                 [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: () => {
-                      // Handle account deletion
+                    onPress: async () => {
+                      // Confirm again with typed confirmation
+                      Alert.prompt(
+                        'Confirm Deletion',
+                        'Type "DELETE" to confirm account deletion:',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Confirm',
+                            style: 'destructive',
+                            onPress: async (text) => {
+                              if (text?.toUpperCase() !== 'DELETE') {
+                                Alert.alert('Error', 'Please type DELETE to confirm');
+                                return;
+                              }
+
+                              setIsDeleting(true);
+                              try {
+                                await deleteAccount();
+                                router.replace('/(auth)/login');
+                              } catch (error) {
+                                Alert.alert(
+                                  'Error',
+                                  error instanceof Error ? error.message : 'Failed to delete account'
+                                );
+                              } finally {
+                                setIsDeleting(false);
+                              }
+                            },
+                          },
+                        ],
+                        'plain-text'
+                      );
                     },
                   },
                 ]
               );
             }}
+            disabled={isDeleting}
             className="bg-error-300/10 border border-error-300/20 rounded-xl p-4 flex-row items-center justify-center gap-2"
           >
-            <Trash2 size={18} color={colors.error[300]} />
-            <Text className="text-error-300 font-bold">Delete Account</Text>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={colors.error[300]} />
+            ) : (
+              <Trash2 size={18} color={colors.error[300]} />
+            )}
+            <Text className="text-error-300 font-bold">
+              {isDeleting ? 'Deleting...' : 'Delete Account'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
