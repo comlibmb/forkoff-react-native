@@ -7,17 +7,24 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Github, ArrowRight } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
 
+// Warm up the browser for faster OAuth flow
+WebBrowser.maybeCompleteAuthSession();
+
 export default function LoginScreen() {
-  const { signInWithOtp, isLoading, error, clearError } = useAuthStore();
+  const { signInWithOtp, signInWithGitHub, isLoading, error, clearError } = useAuthStore();
   const [email, setEmail] = useState('');
+  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     email?: string;
   }>({});
@@ -53,8 +60,42 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGitHubLogin = () => {
-    alert.show('Coming Soon', 'GitHub login will be available soon!');
+  const handleGitHubLogin = async () => {
+    try {
+      setIsGitHubLoading(true);
+      clearError();
+
+      const { url } = await signInWithGitHub();
+
+      // Get the redirect URI that matches what we sent to Supabase
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'forkoff',
+        preferLocalhost: false,
+      });
+
+      console.log('[Login] Opening GitHub OAuth with redirect:', redirectUri);
+
+      // Open the OAuth URL in a browser
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+
+      console.log('[Login] OAuth result:', result.type);
+
+      if (result.type === 'success' && result.url) {
+        // Extract the URL and navigate to callback handler
+        console.log('[Login] OAuth success, URL:', result.url);
+        router.replace('/auth/callback');
+      } else if (result.type === 'cancel') {
+        console.log('[Login] GitHub auth cancelled by user');
+      }
+    } catch (err) {
+      console.error('[Login] GitHub auth error:', err);
+      alert.error(
+        'GitHub Sign In Failed',
+        error || 'Please try again'
+      );
+    } finally {
+      setIsGitHubLoading(false);
+    }
   };
 
   return (
@@ -167,10 +208,18 @@ export default function LoginScreen() {
             {/* Social Login */}
             <TouchableOpacity
               onPress={handleGitHubLogin}
+              disabled={isGitHubLoading || isLoading}
               className="bg-dark-700 border border-dark-500 rounded-xl p-4 flex-row items-center justify-center gap-3"
+              style={{ opacity: isGitHubLoading || isLoading ? 0.7 : 1 }}
             >
-              <Github size={20} color={colors.dark[50]} />
-              <Text className="text-dark-50 font-medium">Continue with GitHub</Text>
+              {isGitHubLoading ? (
+                <ActivityIndicator size="small" color={colors.dark[50]} />
+              ) : (
+                <Github size={20} color={colors.dark[50]} />
+              )}
+              <Text className="text-dark-50 font-medium">
+                {isGitHubLoading ? 'Connecting...' : 'Continue with GitHub'}
+              </Text>
             </TouchableOpacity>
 
             {/* Footer */}

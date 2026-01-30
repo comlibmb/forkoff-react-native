@@ -36,6 +36,9 @@ interface AuthState {
   verifyOtp: (code: string) => Promise<void>;
   resendOtp: () => Promise<void>;
   clearOtpState: () => void;
+
+  // OAuth actions
+  signInWithGitHub: () => Promise<{ url: string }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -469,6 +472,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  // GitHub OAuth login
+  signInWithGitHub: async () => {
+    try {
+      set({ isLoading: true, error: null });
+
+      const result = await authService.signInWithGitHub();
+
+      analyticsService.track('oauth_initiated', {
+        provider: 'github',
+      });
+
+      set({ isLoading: false });
+      return result;
+    } catch (error) {
+      sentryService.captureException(error, { context: 'sign_in_with_github' });
+      analyticsService.track('oauth_failed', {
+        provider: 'github',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'GitHub sign in failed',
+      });
+      throw error;
+    }
+  },
 
   setUser: (user) =>
     set({

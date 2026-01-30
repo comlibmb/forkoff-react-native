@@ -579,31 +579,43 @@ class AuthService {
   }
 
   async signInWithGitHub(): Promise<{ url: string }> {
+    console.log('[Auth] signInWithGitHub called, useMocks:', this.useMocks);
+
     if (this.useMocks) {
       return { url: 'https://github.com/login/oauth/authorize?mock=true' };
     }
 
+    // For Expo Go development, we need to use a redirect that Supabase accepts
+    // In production (native build), use the app scheme
     const redirectUri = AuthSession.makeRedirectUri({
       scheme: 'forkoff',
-      path: 'auth/callback',
+      preferLocalhost: false,
     });
+
+    console.log('[Auth] GitHub OAuth redirect URI:', redirectUri);
 
     const { data, error } = await this.supabase!.auth.signInWithOAuth({
       provider: 'github',
       options: {
         redirectTo: redirectUri,
-        scopes: 'read:user user:email repo',
+        scopes: 'read:user user:email',
+        skipBrowserRedirect: false,
       },
     });
 
+    console.log('[Auth] GitHub OAuth response:', { data, error });
+
     if (error) {
+      console.error('[Auth] GitHub OAuth error:', error.message, error);
       throw this.formatError(error);
     }
 
     if (!data.url) {
+      console.error('[Auth] GitHub OAuth no URL returned');
       throw new Error('Failed to get OAuth URL');
     }
 
+    console.log('[Auth] GitHub OAuth URL obtained:', data.url.substring(0, 50) + '...');
     return { url: data.url };
   }
 
@@ -643,9 +655,12 @@ class AuthService {
       'Password should be at least 6 characters': 'Password must be at least 6 characters.',
       'Token has expired or is invalid': 'Invalid or expired verification code.',
       'OTP has expired': 'Verification code has expired. Please request a new one.',
+      'Provider not enabled': 'GitHub login is not enabled. Please contact support.',
+      'OAuth provider not enabled': 'GitHub login is not enabled. Please contact support.',
     };
 
     const message = errorMessages[error.message] || error.message;
+    console.log('[Auth] formatError:', error.message, '->', message);
     return new Error(message);
   }
 

@@ -7,18 +7,24 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, User, ArrowRight } from 'lucide-react-native';
+import { Mail, User, ArrowRight, Github } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function RegisterScreen() {
-  const { signUpWithOtp, isLoading, clearError } = useAuthStore();
+  const { signUpWithOtp, signInWithGitHub, isLoading, error, clearError } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     name?: string;
     email?: string;
@@ -54,11 +60,46 @@ export default function RegisterScreen() {
     try {
       await signUpWithOtp(email, name);
       router.push('/(auth)/verify-otp');
-    } catch (error) {
+    } catch (err) {
       alert.error(
         'Registration Failed',
-        error instanceof Error ? error.message : 'Please try again'
+        err instanceof Error ? err.message : 'Please try again'
       );
+    }
+  };
+
+  const handleGitHubSignUp = async () => {
+    try {
+      setIsGitHubLoading(true);
+      clearError();
+
+      const { url } = await signInWithGitHub();
+
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'forkoff',
+        preferLocalhost: false,
+      });
+
+      console.log('[Register] Opening GitHub OAuth with redirect:', redirectUri);
+
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+
+      console.log('[Register] OAuth result:', result.type);
+
+      if (result.type === 'success' && result.url) {
+        console.log('[Register] OAuth success, URL:', result.url);
+        router.replace('/auth/callback');
+      } else if (result.type === 'cancel') {
+        console.log('[Register] GitHub auth cancelled by user');
+      }
+    } catch (err) {
+      console.error('[Register] GitHub auth error:', err);
+      alert.error(
+        'GitHub Sign Up Failed',
+        error || 'Please try again'
+      );
+    } finally {
+      setIsGitHubLoading(false);
     }
   };
 
@@ -182,7 +223,7 @@ export default function RegisterScreen() {
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleRegister}
-                disabled={isLoading}
+                disabled={isLoading || isGitHubLoading}
                 className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-2"
                 style={{
                   shadowColor: colors.primary[500],
@@ -190,13 +231,37 @@ export default function RegisterScreen() {
                   shadowOpacity: 0.2,
                   shadowRadius: 12,
                   elevation: 5,
-                  opacity: isLoading ? 0.7 : 1,
+                  opacity: isLoading || isGitHubLoading ? 0.7 : 1,
                 }}
               >
                 <Text className="text-white font-bold text-base">
                   {isLoading ? 'Creating...' : 'Continue'}
                 </Text>
                 {!isLoading && <ArrowRight size={18} color="#fff" />}
+              </TouchableOpacity>
+
+              {/* Divider */}
+              <View className="flex-row items-center my-6">
+                <View className="flex-1 h-px bg-dark-500" />
+                <Text className="px-4 text-dark-300 text-xs uppercase tracking-wider">or</Text>
+                <View className="flex-1 h-px bg-dark-500" />
+              </View>
+
+              {/* GitHub Sign Up */}
+              <TouchableOpacity
+                onPress={handleGitHubSignUp}
+                disabled={isGitHubLoading || isLoading}
+                className="bg-dark-700 border border-dark-500 rounded-xl p-4 flex-row items-center justify-center gap-3"
+                style={{ opacity: isGitHubLoading || isLoading ? 0.7 : 1 }}
+              >
+                {isGitHubLoading ? (
+                  <ActivityIndicator size="small" color={colors.dark[50]} />
+                ) : (
+                  <Github size={20} color={colors.dark[50]} />
+                )}
+                <Text className="text-dark-50 font-medium">
+                  {isGitHubLoading ? 'Connecting...' : 'Sign up with GitHub'}
+                </Text>
               </TouchableOpacity>
             </View>
 
