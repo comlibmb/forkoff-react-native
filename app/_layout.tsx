@@ -16,6 +16,7 @@ import { ClaudeApproval } from '@/components/claude/PermissionRequest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ScreenTracker } from '@/components/ScreenTracker';
 import { PostHogBridge } from '@/components/PostHogBridge';
+import { AlertProvider } from '@/components/ui/AlertModal';
 import '../global.css';
 
 // Initialize Sentry FIRST to catch all errors
@@ -160,9 +161,10 @@ export default function RootLayout() {
         }}
       >
         <PostHogBridge>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <QueryClientProvider client={queryClient}>
-              <ScreenTracker>
+          <AlertProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <QueryClientProvider client={queryClient}>
+                <ScreenTracker>
                 <StatusBar style="light" />
                 <Stack
                   screenOptions={{
@@ -213,8 +215,9 @@ export default function RootLayout() {
                   onDismiss={hideApproval}
                 />
               </ScreenTracker>
-            </QueryClientProvider>
-          </GestureHandlerRootView>
+              </QueryClientProvider>
+            </GestureHandlerRootView>
+          </AlertProvider>
         </PostHogBridge>
       </PostHogProvider>
     </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Check, Zap, Star, Users, ArrowRight } from 'lucide-react-native';
@@ -80,11 +81,11 @@ export default function SubscriptionScreen() {
     // Simulate subscription process
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    Alert.alert(
+    await alert.success(
       'Subscription Updated',
-      `You've been upgraded to the ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan!`,
-      [{ text: 'OK', onPress: () => router.back() }]
+      `You've been upgraded to the ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan!`
     );
+    router.back();
 
     setIsLoading(false);
   };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, FlashlightOff, Flashlight, Camera } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -33,16 +34,10 @@ export function QRScanner({
     if (data.startsWith('forkoff://') || data.startsWith('https://forkoff.dev/')) {
       onScan(data);
     } else {
-      Alert.alert(
+      alert.error(
         'Invalid QR Code',
-        'This QR code is not a valid ForkOff pairing code. Please scan the code shown in the ForkOff desktop app.',
-        [
-          {
-            text: 'Try Again',
-            onPress: () => setScanned(false),
-          },
-        ]
-      );
+        'This QR code is not a valid ForkOff pairing code. Please scan the code shown in the ForkOff desktop app.'
+      ).then(() => setScanned(false));
     }
   };
 

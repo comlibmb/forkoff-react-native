@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -67,7 +68,7 @@ export default function SecurityScreen() {
     try {
       await changePassword(currentPassword, newPassword);
       setShowChangePasswordModal(false);
-      Alert.alert('Success', 'Password changed successfully');
+      alert.success('Success', 'Password changed successfully');
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
     } finally {
@@ -80,56 +81,46 @@ export default function SecurityScreen() {
 
     try {
       await resetPassword(user.email);
-      Alert.alert('Success', 'Password reset link sent to your email');
+      alert.success('Success', 'Password reset link sent to your email');
     } catch (error) {
-      Alert.alert('Error', 'Failed to send reset link');
+      alert.error('Error', 'Failed to send reset link');
     }
   };
 
-  const handleToggle2FA = () => {
+  const handleToggle2FA = async () => {
     if (twoFactorEnabled) {
-      Alert.alert(
+      const confirmed = await alert.confirm(
         'Disable 2FA',
         'Are you sure you want to disable two-factor authentication? This will make your account less secure.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disable',
-            style: 'destructive',
-            onPress: () => setTwoFactorEnabled(false),
-          },
-        ]
+        { confirmText: 'Disable', destructive: true }
       );
+      if (confirmed) {
+        setTwoFactorEnabled(false);
+      }
     } else {
-      Alert.alert(
+      const confirmed = await alert.confirm(
         'Enable 2FA',
         'Two-factor authentication adds an extra layer of security to your account.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Enable',
-            onPress: () => setTwoFactorEnabled(true),
-          },
-        ]
+        { confirmText: 'Enable' }
       );
+      if (confirmed) {
+        setTwoFactorEnabled(true);
+      }
     }
   };
 
-  const handleToggleBiometric = () => {
+  const handleToggleBiometric = async () => {
     if (biometricEnabled) {
       setBiometricEnabled(false);
     } else {
-      Alert.alert(
+      const confirmed = await alert.confirm(
         'Enable Biometric',
         'Use Face ID or fingerprint to unlock the app.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Enable',
-            onPress: () => setBiometricEnabled(true),
-          },
-        ]
+        { confirmText: 'Enable' }
       );
+      if (confirmed) {
+        setBiometricEnabled(true);
+      }
     }
   };
 
@@ -285,19 +276,15 @@ export default function SecurityScreen() {
         {/* Sign Out All Devices */}
         <View className="mt-6">
           <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
+            onPress={async () => {
+              const confirmed = await alert.confirm(
                 'Sign Out All Devices',
                 'This will sign out all other devices. You will remain logged in on this device.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Sign Out All',
-                    style: 'destructive',
-                    onPress: () => {},
-                  },
-                ]
+                { confirmText: 'Sign Out All', destructive: true }
               );
+              if (confirmed) {
+                // TODO: Implement sign out all devices
+              }
             }}
             className="bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
           >

@@ -6,9 +6,9 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
   TextInput,
 } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Github, ArrowRight } from 'lucide-react-native';
@@ -46,7 +46,7 @@ export default function LoginScreen() {
       await signInWithOtp(email);
       router.push('/(auth)/verify-otp');
     } catch (err) {
-      Alert.alert(
+      alert.error(
         'Sign In Failed',
         error || 'Please try again'
       );
@@ -54,7 +54,7 @@ export default function LoginScreen() {
   };
 
   const handleGitHubLogin = () => {
-    Alert.alert('Coming Soon', 'GitHub login will be available soon!');
+    alert.show('Coming Soon', 'GitHub login will be available soon!');
   };
 
   return (

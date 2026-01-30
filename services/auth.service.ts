@@ -46,11 +46,16 @@ const ExpoSecureStoreAdapter = {
 const MOCK_USER: User = {
   id: 'mock-user-id',
   email: 'demo@forkoff.dev',
+  username: 'demouser',
   name: 'Demo User',
   avatarUrl: undefined,
   createdAt: new Date().toISOString(),
   subscription: 'free',
 };
+
+// Username validation rules
+const USERNAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+const RESERVED_USERNAMES = ['admin', 'root', 'system', 'forkoff', 'support', 'help', 'api', 'www'];
 
 // Store pending registration data
 interface PendingRegistration {
@@ -87,6 +92,7 @@ class AuthService {
     return {
       id: supabaseUser.id,
       email: supabaseUser.email || '',
+      username: supabaseUser.user_metadata?.username,
       name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || '',
       avatarUrl: supabaseUser.user_metadata?.avatar_url,
       createdAt: supabaseUser.created_at,
@@ -191,7 +197,35 @@ class AuthService {
     }
 
     this.pendingRegistration = null;
-    return this.mapSupabaseUser(data.user);
+
+    // Fetch full profile from API to get DB-stored fields like username
+    const baseUser = this.mapSupabaseUser(data.user);
+    try {
+      const token = data.session?.access_token;
+      if (token) {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+        const response = await fetch(`${apiUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const profile = await response.json();
+          return {
+            ...baseUser,
+            username: profile.username || baseUser.username,
+            name: profile.name || baseUser.name,
+            avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
+            subscription: profile.subscription || baseUser.subscription,
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile from API after OTP verification:', error);
+    }
+
+    return baseUser;
   }
 
   // Resend OTP code
@@ -284,10 +318,41 @@ class AuthService {
     }
 
     const { data, error } = await this.supabase!.auth.getUser();
-    if (error) {
+    if (error || !data.user) {
       return null;
     }
-    return data.user ? this.mapSupabaseUser(data.user) : null;
+
+    // Get base user from Supabase
+    const baseUser = this.mapSupabaseUser(data.user);
+
+    // Fetch profile from our API to get username and other DB-stored fields
+    try {
+      const token = await this.getAccessToken();
+      if (token) {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+        const response = await fetch(`${apiUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const profile = await response.json();
+          // Merge API profile data with Supabase user
+          return {
+            ...baseUser,
+            username: profile.username || baseUser.username,
+            name: profile.name || baseUser.name,
+            avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
+            subscription: profile.subscription || baseUser.subscription,
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile from API:', error);
+    }
+
+    return baseUser;
   }
 
   async getAccessToken(): Promise<string | null> {
@@ -329,16 +394,51 @@ class AuthService {
     }
   }
 
-  async updateProfile(updates: { name?: string; avatarUrl?: string }): Promise<User> {
+  async updateProfile(updates: { name?: string; username?: string; avatarUrl?: string }): Promise<User> {
     if (this.useMocks) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       const user = { ...MOCK_USER, ...updates };
       return user;
     }
 
+    // If username is being updated, validate and check via API
+    if (updates.username) {
+      const validation = this.validateUsername(updates.username);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      // Check availability via API
+      const available = await this.checkUsernameAvailability(updates.username);
+      if (!available.available) {
+        throw new Error(available.error || 'Username is already taken');
+      }
+    }
+
+    // Update via API (which handles DB update)
+    const token = await this.getAccessToken();
+    if (token) {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiUrl}/auth/me`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to update profile');
+      }
+    }
+
+    // Also update Supabase auth metadata
     const { data, error } = await this.supabase!.auth.updateUser({
       data: {
         name: updates.name,
+        username: updates.username,
         avatar_url: updates.avatarUrl,
       },
     });
@@ -352,6 +452,61 @@ class AuthService {
     }
 
     return this.mapSupabaseUser(data.user);
+  }
+
+  // Validate username format locally
+  validateUsername(username: string): { valid: boolean; error?: string } {
+    if (username.length < 3) {
+      return { valid: false, error: 'Username must be at least 3 characters' };
+    }
+    if (username.length > 20) {
+      return { valid: false, error: 'Username must be at most 20 characters' };
+    }
+    if (!/^[a-zA-Z]/.test(username)) {
+      return { valid: false, error: 'Username must start with a letter' };
+    }
+    if (!USERNAME_REGEX.test(username)) {
+      return { valid: false, error: 'Username can only contain letters, numbers, and underscores' };
+    }
+    if (RESERVED_USERNAMES.includes(username.toLowerCase())) {
+      return { valid: false, error: 'This username is reserved' };
+    }
+    return { valid: true };
+  }
+
+  // Check username availability via API
+  async checkUsernameAvailability(username: string): Promise<{ available: boolean; error?: string }> {
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Mock: usernames starting with 'taken' are unavailable
+      if (username.toLowerCase().startsWith('taken')) {
+        return { available: false, error: 'Username is already taken' };
+      }
+      return { available: true };
+    }
+
+    const token = await this.getAccessToken();
+    if (!token) {
+      return { available: true }; // Allow if not authenticated yet
+    }
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+    try {
+      const response = await fetch(`${apiUrl}/auth/username/check/${encodeURIComponent(username)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return { available: false, error: 'Failed to check username' };
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Username check error:', error);
+      return { available: true }; // Fail open
+    }
   }
 
   async deleteAccount(): Promise<void> {

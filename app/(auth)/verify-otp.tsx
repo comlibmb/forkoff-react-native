@@ -6,8 +6,8 @@ import {
   Platform,
   TextInput,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, ArrowRight } from 'lucide-react-native';
@@ -87,7 +87,7 @@ export default function VerifyOtpScreen() {
     const code = otp.join('');
 
     if (code.length !== OTP_LENGTH) {
-      Alert.alert('Invalid Code', 'Please enter the complete 6-digit code');
+      alert.warning('Invalid Code', 'Please enter the complete 6-digit code');
       return;
     }
 
@@ -101,7 +101,7 @@ export default function VerifyOtpScreen() {
         router.replace('/(tabs)');
       }
     } catch (err) {
-      Alert.alert('Verification Failed', error || 'Invalid verification code');
+      alert.error('Verification Failed', error || 'Invalid verification code');
     }
   };
 
@@ -109,9 +109,9 @@ export default function VerifyOtpScreen() {
     try {
       await resendOtp();
       setResendTimer(60);
-      Alert.alert('Code Sent', 'A new verification code has been sent to your email');
+      alert.success('Code Sent', 'A new verification code has been sent to your email');
     } catch (err) {
-      Alert.alert('Error', 'Failed to resend verification code');
+      alert.error('Error', 'Failed to resend verification code');
     }
   };
 

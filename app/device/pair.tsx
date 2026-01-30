@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, CameraView } from 'expo-camera';
@@ -41,22 +42,16 @@ export default function PairDeviceScreen() {
       setPairedDeviceName(device.name);
       setIsPaired(true);
     } catch (error) {
-      Alert.alert('Pairing Failed', 'Invalid QR code or device not found. Please try again.', [
-        {
-          text: 'Try Again',
-          onPress: () => {
-            isProcessingRef.current = false;
-            setScanned(false);
-          },
-        },
-      ]);
+      await alert.error('Pairing Failed', 'Invalid QR code or device not found. Please try again.');
+      isProcessingRef.current = false;
+      setScanned(false);
     }
   };
 
   const handleManualPair = async () => {
     if (manualCode.length < 8 || isLoading) {
       if (manualCode.length < 8) {
-        Alert.alert('Invalid Code', 'Please enter the 8-character pairing code.');
+        alert.warning('Invalid Code', 'Please enter the 8-character pairing code.');
       }
       return;
     }
@@ -66,7 +61,7 @@ export default function PairDeviceScreen() {
       setPairedDeviceName(device.name);
       setIsPaired(true);
     } catch (error) {
-      Alert.alert('Pairing Failed', 'Invalid pairing code or device not found. Please try again.');
+      alert.error('Pairing Failed', 'Invalid pairing code or device not found. Please try again.');
     }
   };
 

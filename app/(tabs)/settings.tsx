@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -97,18 +98,16 @@ export default function SettingsScreen() {
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
 
-  const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
+  const handleSignOut = async () => {
+    const confirmed = await alert.confirm(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      { confirmText: 'Sign Out', destructive: true }
+    );
+    if (confirmed) {
+      await signOut();
+      router.replace('/(auth)/login');
+    }
   };
 
   return (

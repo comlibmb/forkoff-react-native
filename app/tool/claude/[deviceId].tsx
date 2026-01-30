@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -113,21 +113,14 @@ export default function ClaudeToolDetailScreen() {
   };
 
   const handleDeleteSession = async (session: ClaudeSession) => {
-    Alert.alert(
+    const confirmed = await alert.confirm(
       'Delete Session',
       `Are you sure you want to delete this session from ${session.directory}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!deviceId) return;
-            await deleteSession(session.id || session.sessionKey, deviceId);
-          },
-        },
-      ]
+      { confirmText: 'Delete', destructive: true }
     );
+    if (confirmed && deviceId) {
+      await deleteSession(session.id || session.sessionKey, deviceId);
+    }
   };
 
   const handleStartNewSession = async (directory: string) => {

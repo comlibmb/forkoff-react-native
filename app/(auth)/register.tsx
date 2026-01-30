@@ -6,9 +6,9 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
   TextInput,
 } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, User, ArrowRight } from 'lucide-react-native';
@@ -55,7 +55,7 @@ export default function RegisterScreen() {
       await signUpWithOtp(email, name);
       router.push('/(auth)/verify-otp');
     } catch (error) {
-      Alert.alert(
+      alert.error(
         'Registration Failed',
         error instanceof Error ? error.message : 'Please try again'
       );

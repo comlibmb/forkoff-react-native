@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Github, CheckCircle, ExternalLink, ArrowRight } from 'lucide-react-native';
@@ -23,7 +24,7 @@ export default function ConnectGitHubScreen() {
         setIsConnected(true);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect GitHub. Please try again.');
+      alert.error('Error', 'Failed to connect GitHub. Please try again.');
     } finally {
       setIsConnecting(false);
     }
