@@ -418,3 +418,41 @@ export interface QueueSchedule {
   createdAt: string;
   updatedAt: string;
 }
+
+// ==================== SUBSCRIPTION LIMITS TYPES ====================
+
+export type LimitType =
+  | 'messages_daily'
+  | 'sessions_monthly'
+  | 'projects_max'
+  | 'devices_max'
+  | 'repairs_monthly'
+  | 'phone_session';
+
+export interface SubscriptionUsage {
+  messagesUsedToday: number;
+  messageLimitResetAt: string;
+  sessionsUsedThisMonth: number;
+  repairsUsedThisMonth: number;
+  monthlyLimitResetAt: string;
+  activeProjectCount: number;
+  pairedDeviceCount: number;
+}
+
+export interface LimitCheckResult {
+  allowed: boolean;
+  limitType?: LimitType;
+  currentUsage?: number;
+  limit?: number;
+  resetAt?: string;
+}
+
+export interface SubscriptionLimits {
+  messagesPerDay: number;
+  sessionsPerMonth: number;
+  maxProjects: number;
+  maxDevices: number;
+  repairsPerMonth: number;
+  historyRetentionDays: number;
+  maxPhoneSessions?: number;
+}

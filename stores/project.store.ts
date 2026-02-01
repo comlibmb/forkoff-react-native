@@ -3,6 +3,7 @@ import { Project, ToolConfig, FileNode } from '@/types';
 import { projectService } from '@/services/project.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
+import { useUsageStore } from './usage.store';
 
 interface ProjectState {
   projects: Project[];
@@ -69,9 +70,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   createProject: async (data) => {
     try {
+      // Check project limit
+      const { canAddProject, setActiveProjectCount, activeProjectCount } = useUsageStore.getState();
+      if (!canAddProject()) {
+        const error = new Error('PROJECT_LIMIT_REACHED');
+        set({ error: error.message });
+        throw error;
+      }
+
       set({ isLoading: true, error: null });
 
       const project = await projectService.createProject(data);
+
+      // Update project count
+      setActiveProjectCount(activeProjectCount + 1);
 
       analyticsService.track('project_created', {
         projectId: project.id,

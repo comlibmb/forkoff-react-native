@@ -1,8 +1,29 @@
 import { Platform } from 'react-native';
 import { apiClient } from './api.client';
+import { SubscriptionLimits, SubscriptionUsage } from '@/types';
 
 export type SubscriptionTier = 'free' | 'pro' | 'team';
 export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'trial';
+
+// Limit constants
+export const FREE_LIMITS: SubscriptionLimits = {
+  messagesPerDay: 20,
+  sessionsPerMonth: 10,
+  maxProjects: 2,
+  maxDevices: 1,
+  repairsPerMonth: 3,
+  historyRetentionDays: 7,
+};
+
+export const PRO_LIMITS: SubscriptionLimits = {
+  messagesPerDay: Infinity,
+  sessionsPerMonth: Infinity,
+  maxProjects: Infinity,
+  maxDevices: Infinity,
+  repairsPerMonth: Infinity,
+  historyRetentionDays: Infinity,
+  maxPhoneSessions: 1,
+};
 
 export interface Subscription {
   id: string;
@@ -57,10 +78,12 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     currency: 'USD',
     interval: 'month',
     features: [
-      '1 connected device',
-      '1 project',
-      'Basic chat (100 messages/day)',
-      'Community support',
+      `${FREE_LIMITS.messagesPerDay} messages/day`,
+      `${FREE_LIMITS.sessionsPerMonth} sessions/month`,
+      `${FREE_LIMITS.maxProjects} active projects`,
+      `${FREE_LIMITS.maxDevices} paired PC`,
+      `${FREE_LIMITS.repairsPerMonth} re-pairs/month`,
+      `${FREE_LIMITS.historyRetentionDays}-day history`,
     ],
     productId: {
       ios: '',
@@ -75,12 +98,13 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     currency: 'USD',
     interval: 'month',
     features: [
-      'Unlimited devices',
+      'Unlimited messages',
+      'Unlimited sessions',
       'Unlimited projects',
-      'Unlimited chat history',
-      'Code diff viewer',
-      'Terminal access',
-      'Priority support',
+      'Unlimited paired PCs',
+      'Unlimited re-pairs',
+      'Full history retention',
+      'Single phone session',
     ],
     productId: {
       ios: 'com.forkoff.pro.monthly',
@@ -244,6 +268,10 @@ class SubscriptionService {
     const featureAccess: Record<string, SubscriptionTier[]> = {
       'unlimited-devices': ['pro', 'team'],
       'unlimited-projects': ['pro', 'team'],
+      'unlimited-messages': ['pro', 'team'],
+      'unlimited-sessions': ['pro', 'team'],
+      'unlimited-repairs': ['pro', 'team'],
+      'full-history': ['pro', 'team'],
       'code-diff': ['pro', 'team'],
       'terminal-access': ['pro', 'team'],
       'priority-support': ['pro', 'team'],
@@ -262,12 +290,36 @@ class SubscriptionService {
     const messages: Record<string, string> = {
       'unlimited-devices': 'Upgrade to Pro to connect unlimited devices',
       'unlimited-projects': 'Upgrade to Pro for unlimited projects',
+      'unlimited-messages': 'Upgrade to Pro for unlimited messages',
+      'unlimited-sessions': 'Upgrade to Pro for unlimited sessions',
+      'unlimited-repairs': 'Upgrade to Pro for unlimited re-pairs',
+      'full-history': 'Upgrade to Pro for full chat history',
       'code-diff': 'Upgrade to Pro to view code diffs',
       'terminal-access': 'Upgrade to Pro for terminal access',
       'team-collaboration': 'Upgrade to Team for collaboration features',
     };
 
     return messages[feature] || 'Upgrade your plan to access this feature';
+  }
+
+  getLimitsForTier(tier: SubscriptionTier): SubscriptionLimits {
+    return tier === 'pro' || tier === 'team' ? PRO_LIMITS : FREE_LIMITS;
+  }
+
+  async fetchUsage(): Promise<SubscriptionUsage> {
+    return apiClient.get<SubscriptionUsage>('/subscription/usage');
+  }
+
+  async recordMessageSent(): Promise<{ allowed: boolean; remaining: number }> {
+    return apiClient.post<{ allowed: boolean; remaining: number }>('/subscription/usage/message', {});
+  }
+
+  async recordSessionStarted(): Promise<{ allowed: boolean; remaining: number }> {
+    return apiClient.post<{ allowed: boolean; remaining: number }>('/subscription/usage/session', {});
+  }
+
+  async recordDeviceRepair(): Promise<{ allowed: boolean; remaining: number }> {
+    return apiClient.post<{ allowed: boolean; remaining: number }>('/subscription/usage/repair', {});
   }
 }
 

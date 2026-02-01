@@ -4,6 +4,7 @@ import { deviceService } from '@/services/device.service';
 import { wsService } from '@/services/websocket.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
+import { useUsageStore } from './usage.store';
 
 interface DeviceState {
   devices: Device[];
@@ -59,15 +60,51 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
   pairDevice: async (pairingCode) => {
     try {
+      const {
+        canPairDevice,
+        canRepairDevice,
+        incrementRepairs,
+        pairedDeviceCount,
+        setPairedDeviceCount,
+      } = useUsageStore.getState();
+
+      // Check if this is a re-pair (device was previously paired)
+      // We determine this by checking if we already have devices paired
+      const isRepair = pairedDeviceCount > 0;
+
+      // Check appropriate limit
+      if (isRepair) {
+        if (!canRepairDevice()) {
+          const error = new Error('REPAIR_LIMIT_REACHED');
+          set({ error: error.message });
+          throw error;
+        }
+      } else {
+        if (!canPairDevice()) {
+          const error = new Error('DEVICE_LIMIT_REACHED');
+          set({ error: error.message });
+          throw error;
+        }
+      }
+
       set({ isLoading: true, error: null });
 
       const device = await deviceService.pairDevice(pairingCode);
+
+      // Increment repair count if this was a re-pair
+      if (isRepair) {
+        incrementRepairs();
+      }
+
+      // Update paired device count
+      setPairedDeviceCount(pairedDeviceCount + 1);
 
       // Track device paired event
       analyticsService.track('device_paired', {
         deviceId: device.id,
         deviceName: device.name,
         platform: device.platform,
+        isRepair,
       });
 
       set((state) => ({
