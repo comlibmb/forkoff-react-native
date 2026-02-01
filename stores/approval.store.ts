@@ -3,6 +3,18 @@ import { wsService } from '@/services/websocket.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 
+// SECURITY: Input validation constants
+const MAX_PROMPT_TEXT_LENGTH = 500;
+const MAX_CONTEXT_ITEMS = 10;
+const MAX_CONTEXT_ITEM_LENGTH = 200;
+const MAX_OPTIONS = 5;
+const MAX_OPTION_LENGTH = 50;
+const MAX_PENDING_APPROVALS = 10;
+const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+// SECURITY: Validate option format (key:label)
+const OPTION_REGEX = /^[a-zA-Z0-9]:[\w\s]{1,30}$/;
+
 /**
  * Represents a Claude CLI approval request received from the backend.
  *
@@ -53,6 +65,64 @@ export interface ClaudeApprovalRequest {
 export function parseApprovalOption(option: string): { key: string; label: string } {
   const [key, label] = option.split(':');
   return { key, label: label || key };
+}
+
+/**
+ * SECURITY: Sanitize and validate an incoming approval request.
+ * Returns sanitized approval or null if validation fails.
+ */
+function sanitizeApprovalRequest(data: Partial<ClaudeApprovalRequest>): ClaudeApprovalRequest | null {
+  // Required field validation
+  if (!data.approvalId || typeof data.approvalId !== 'string') {
+    console.error('[ApprovalStore] Invalid approval: missing approvalId');
+    return null;
+  }
+
+  // Sanitize and truncate promptText
+  let promptText = data.promptText || 'Approval needed';
+  if (typeof promptText !== 'string') {
+    promptText = 'Approval needed';
+  }
+  if (promptText.length > MAX_PROMPT_TEXT_LENGTH) {
+    promptText = promptText.substring(0, MAX_PROMPT_TEXT_LENGTH) + '...';
+  }
+
+  // Sanitize context array
+  let context: string[] = [];
+  if (Array.isArray(data.context)) {
+    context = data.context
+      .slice(0, MAX_CONTEXT_ITEMS)
+      .filter((item): item is string => typeof item === 'string')
+      .map(item => item.length > MAX_CONTEXT_ITEM_LENGTH
+        ? item.substring(0, MAX_CONTEXT_ITEM_LENGTH) + '...'
+        : item);
+  }
+
+  // Sanitize and validate options
+  let options: string[] = ['y:yes', 'n:no']; // Default options
+  if (Array.isArray(data.options) && data.options.length > 0) {
+    const validOptions = data.options
+      .slice(0, MAX_OPTIONS)
+      .filter((opt): opt is string =>
+        typeof opt === 'string' &&
+        opt.length <= MAX_OPTION_LENGTH &&
+        (OPTION_REGEX.test(opt) || opt.length === 1) // Allow single char options
+      );
+    if (validOptions.length > 0) {
+      options = validOptions;
+    }
+  }
+
+  return {
+    approvalId: data.approvalId,
+    terminalSessionId: typeof data.terminalSessionId === 'string' ? data.terminalSessionId : '',
+    sessionKey: typeof data.sessionKey === 'string' ? data.sessionKey : undefined,
+    deviceId: typeof data.deviceId === 'string' ? data.deviceId : undefined,
+    context,
+    options,
+    promptText,
+    timestamp: typeof data.timestamp === 'string' ? data.timestamp : new Date().toISOString(),
+  };
 }
 
 /**
@@ -110,6 +180,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
   /**
    * Adds a new approval request to the pending list.
    * Prevents duplicate approvals with the same approvalId.
+   * SECURITY: Enforces rate limiting (max pending approvals) and auto-expiration.
    *
    * @param {ClaudeApprovalRequest} approval - The approval request to add
    */
@@ -119,7 +190,25 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
       if (state.pendingApprovals.some(a => a.approvalId === approval.approvalId)) {
         return state;
       }
-      return { pendingApprovals: [...state.pendingApprovals, approval] };
+
+      // SECURITY: Remove expired approvals first
+      const now = Date.now();
+      const validApprovals = state.pendingApprovals.filter(a => {
+        const approvalTime = new Date(a.timestamp).getTime();
+        return now - approvalTime < APPROVAL_TIMEOUT_MS;
+      });
+
+      // SECURITY: Rate limiting - reject if too many pending approvals
+      if (validApprovals.length >= MAX_PENDING_APPROVALS) {
+        console.warn('[ApprovalStore] Rate limit exceeded - too many pending approvals');
+        sentryService.captureMessage('Approval rate limit exceeded', 'warning', {
+          pendingCount: validApprovals.length,
+          rejectedApprovalId: approval.approvalId,
+        });
+        return { pendingApprovals: validApprovals };
+      }
+
+      return { pendingApprovals: [...validApprovals, approval] };
     });
   },
 
@@ -231,35 +320,25 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     const unsubscribe = wsService.on('claude_approval_request', (data) => {
       console.log('[ApprovalStore] Received approval request:', data.approvalId);
 
-      // Validate required fields - only approvalId is required
-      if (!data.approvalId) {
-        console.error('[ApprovalStore] Invalid approval request data - missing approvalId:', data);
+      // SECURITY: Sanitize and validate incoming approval request
+      const approval = sanitizeApprovalRequest(data);
+      if (!approval) {
+        console.error('[ApprovalStore] Invalid approval request data - validation failed');
+        sentryService.captureMessage('Invalid approval request rejected', 'warning', {
+          hasApprovalId: !!data?.approvalId,
+        });
         return;
       }
 
-      const approval: ClaudeApprovalRequest = {
-        approvalId: data.approvalId,
-        terminalSessionId: data.terminalSessionId || '',
-        sessionKey: data.sessionKey,
-        deviceId: data.deviceId,
-        context: data.context || [],
-        options: data.options || ['y:yes', 'n:no'],
-        promptText: data.promptText || 'Approval needed',
-        timestamp: data.timestamp || new Date().toISOString(),
-      };
-
-      // Track approval requested event
+      // Track approval requested event (don't include sensitive data)
       analyticsService.track('approval_requested', {
         approvalId: approval.approvalId,
-        deviceId: approval.deviceId,
-        sessionKey: approval.sessionKey,
         optionsCount: approval.options.length,
       });
 
-      // Add breadcrumb for debugging
+      // Add breadcrumb for debugging (truncate sensitive data)
       sentryService.addBreadcrumb('Approval request received', 'approval', {
         approvalId: approval.approvalId,
-        promptText: approval.promptText.substring(0, 100),
       });
 
       // Add to pending list

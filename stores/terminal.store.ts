@@ -4,6 +4,20 @@ import { wsService } from '@/services/websocket.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 
+// SECURITY: Command validation constants
+const MAX_COMMAND_LENGTH = 10000; // 10KB max command size
+
+// SECURITY: Keywords that should never be logged
+const SENSITIVE_KEYWORDS = ['token', 'key', 'password', 'secret', 'api_key', 'apikey', 'auth', 'credential', 'bearer'];
+
+/**
+ * SECURITY: Check if a command might contain sensitive data
+ */
+function mightContainSensitiveData(command: string): boolean {
+  const lowerCommand = command.toLowerCase();
+  return SENSITIVE_KEYWORDS.some(keyword => lowerCommand.includes(keyword));
+}
+
 interface TerminalState {
   terminals: Terminal[];
   servers: Server[];
@@ -85,6 +99,16 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   },
 
   sendCommand: (terminalId, command) => {
+    // SECURITY: Validate command length
+    if (command.length > MAX_COMMAND_LENGTH) {
+      console.error('[Terminal Store] Command exceeds maximum length');
+      sentryService.captureMessage('Terminal command rejected - too long', 'warning', {
+        terminalId,
+        commandLength: command.length,
+      });
+      return;
+    }
+
     // Add input line locally
     const inputLine: TerminalLine = {
       id: `line-${Date.now()}`,
@@ -99,19 +123,18 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     const terminal = get().terminals.find(t => t.id === terminalId);
     const deviceId = terminal?.deviceId;
 
-    // Debug logging
+    // SECURITY: Sanitized logging - never log command content
     console.log('[Terminal Store] sendCommand called');
     console.log('[Terminal Store] terminalId:', terminalId);
     console.log('[Terminal Store] deviceId:', deviceId);
-    console.log('[Terminal Store] command:', command);
+    console.log('[Terminal Store] commandLength:', command.length);
     console.log('[Terminal Store] WebSocket connected:', wsService.isConnected);
-    console.log('[Terminal Store] All terminals:', get().terminals.map(t => ({ id: t.id, deviceId: t.deviceId })));
 
     if (!deviceId) {
       console.error('[Terminal Store] ERROR: No deviceId found for terminal');
       sentryService.captureMessage('Terminal command failed - no deviceId', 'error', {
         terminalId,
-        command: command.substring(0, 50),
+        // SECURITY: Don't include command content in error reports
       });
     }
 
@@ -119,15 +142,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       console.error('[Terminal Store] ERROR: WebSocket not connected');
       sentryService.captureMessage('Terminal command failed - WebSocket not connected', 'error', {
         terminalId,
-        command: command.substring(0, 50),
+        // SECURITY: Don't include command content in error reports
       });
     }
 
-    // Track terminal command sent
+    // SECURITY: Track only non-sensitive metadata
     analyticsService.track('terminal_command_sent', {
       terminalId,
-      deviceId,
       commandLength: command.length,
+      // SECURITY: Don't track deviceId to prevent correlation attacks
     });
 
     // Send via WebSocket with deviceId

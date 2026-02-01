@@ -6,6 +6,48 @@ import { analyticsService } from './analytics.service';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
+// SECURITY: Sensitive query parameter names to redact from logs
+const SENSITIVE_PARAMS = ['token', 'key', 'api_key', 'apikey', 'secret', 'password', 'auth', 'bearer', 'credential', 'session'];
+
+/**
+ * SECURITY: Sanitize URL by removing sensitive query parameters
+ */
+function sanitizeUrl(url: string | undefined): string {
+  if (!url) return '';
+
+  try {
+    // Handle relative URLs
+    const fullUrl = url.startsWith('http') ? url : `https://placeholder.com${url}`;
+    const urlObj = new URL(fullUrl);
+
+    // Redact sensitive query parameters
+    const params = new URLSearchParams(urlObj.search);
+    for (const param of SENSITIVE_PARAMS) {
+      if (params.has(param)) {
+        params.set(param, '[REDACTED]');
+      }
+      // Also check for params containing sensitive words
+      for (const [key] of params.entries()) {
+        if (key.toLowerCase().includes(param)) {
+          params.set(key, '[REDACTED]');
+        }
+      }
+    }
+
+    // Return just the path and sanitized query string for relative URLs
+    if (!url.startsWith('http')) {
+      const sanitizedSearch = params.toString();
+      return urlObj.pathname + (sanitizedSearch ? `?${sanitizedSearch}` : '');
+    }
+
+    urlObj.search = params.toString();
+    return urlObj.toString();
+  } catch {
+    // If URL parsing fails, just return the path portion
+    return url.split('?')[0] || url;
+  }
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -34,13 +76,14 @@ class ApiClient {
           console.log('Failed to get access token:', error);
         }
 
-        // Add breadcrumb for API request
+        // SECURITY: Add breadcrumb with sanitized URL
+        const sanitizedUrl = sanitizeUrl(config.url);
         sentryService.addBreadcrumb(
-          `API ${config.method?.toUpperCase()} ${config.url}`,
+          `API ${config.method?.toUpperCase()} ${sanitizedUrl}`,
           'http',
           {
             method: config.method,
-            url: config.url,
+            url: sanitizedUrl,
           }
         );
 
@@ -55,13 +98,14 @@ class ApiClient {
     // Response interceptor - handle errors and tracking
     this.client.interceptors.response.use(
       (response) => {
-        // Track API latency
+        // Track API latency with sanitized URL
         const config = response.config as InternalAxiosRequestConfig & { metadata?: { startTime: number } };
         if (config.metadata?.startTime) {
           const latency = Date.now() - config.metadata.startTime;
+          // SECURITY: Sanitize URL in analytics
           analyticsService.track('api_request', {
             method: config.method,
-            url: config.url,
+            url: sanitizeUrl(config.url),
             status: response.status,
             latency_ms: latency,
           });
@@ -71,12 +115,13 @@ class ApiClient {
       async (error: AxiosError) => {
         const config = error.config as (InternalAxiosRequestConfig & { metadata?: { startTime: number } }) | undefined;
 
-        // Track API error latency
+        // Track API error latency with sanitized URL
         if (config?.metadata?.startTime) {
           const latency = Date.now() - config.metadata.startTime;
+          // SECURITY: Sanitize URL in analytics
           analyticsService.track('api_request', {
             method: config.method,
-            url: config.url,
+            url: sanitizeUrl(config.url),
             status: error.response?.status || 0,
             latency_ms: latency,
             error: true,
@@ -89,12 +134,12 @@ class ApiClient {
           // If it fails, user will need to sign in again
           console.log('Unauthorized - token may be expired');
         } else {
-          // Capture non-401 errors to Sentry
+          // SECURITY: Capture non-401 errors to Sentry with sanitized URL
           sentryService.captureException(error, {
-            url: config?.url,
+            url: sanitizeUrl(config?.url),
             method: config?.method,
             status: error.response?.status,
-            data: error.response?.data,
+            // SECURITY: Don't include response data as it might contain sensitive info
           });
         }
 

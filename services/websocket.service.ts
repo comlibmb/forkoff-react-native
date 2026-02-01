@@ -4,7 +4,34 @@ import { sentryService } from './sentry.service';
 import { analyticsService } from './analytics.service';
 import { DeviceStatus, ServerStatus, ApprovalRequest, CodeChange, ClaudeSession, DirectoryEntry } from '@/types';
 
-const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
+// SECURITY: Determine if we're in development mode
+const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV === 'development';
+
+// SECURITY: Get WebSocket URL and validate protocol
+const RAW_WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
+
+// SECURITY: Enforce secure WebSocket in production
+function getSecureWsUrl(): string {
+  const url = RAW_WS_URL;
+
+  // In development, allow insecure connections to localhost only
+  if (IS_DEV_BUILD) {
+    if (url.startsWith('ws://localhost') || url.startsWith('ws://127.0.0.1') || url.startsWith('ws://192.168.')) {
+      console.warn('[WS] SECURITY WARNING: Using insecure WebSocket connection (development only)');
+      return url;
+    }
+  }
+
+  // In production or for non-local URLs, enforce wss://
+  if (url.startsWith('ws://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+    console.warn('[WS] SECURITY: Upgrading insecure WebSocket URL to wss://');
+    return url.replace('ws://', 'wss://');
+  }
+
+  return url;
+}
+
+const WS_URL = getSecureWsUrl();
 
 type EventCallback<T> = (data: T) => void;
 
@@ -589,7 +616,8 @@ class WebSocketService {
 
   // Public emit method to send events to the server
   emit(event: string, data?: unknown): void {
-    console.log(`[WS] emit(${event}):`, JSON.stringify(data)?.substring(0, 100));
+    // SECURITY: Don't log potentially sensitive data
+    console.log(`[WS] emit(${event})`);
     console.log(`[WS] socket connected:`, this.socket?.connected);
     this.socket?.emit(event, data);
   }
@@ -597,7 +625,8 @@ class WebSocketService {
   // Public emit method with acknowledgment callback for getting server response
   emitWithAck<T = unknown>(event: string, data?: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
-      console.log(`[WS] emitWithAck(${event}):`, JSON.stringify(data)?.substring(0, 100));
+      // SECURITY: Don't log potentially sensitive data
+      console.log(`[WS] emitWithAck(${event})`);
       if (!this.socket?.connected) {
         reject(new Error('WebSocket not connected'));
         return;
@@ -660,7 +689,8 @@ class WebSocketService {
 
   // Send terminal command (legacy)
   sendTerminalCommand(terminalId: string, command: string, deviceId?: string): void {
-    console.log(`[WS] Sending terminal_command to device ${deviceId}:`, command);
+    // SECURITY: Never log command content
+    console.log(`[WS] Sending terminal_command to device ${deviceId}, length: ${command.length}`);
     this.socket?.emit('terminal_command', {
       terminalSessionId: terminalId,
       command,
@@ -678,7 +708,8 @@ class WebSocketService {
       model?: string;
     }
   ): void {
-    console.log(`[WS] Sending user_message to device ${deviceId}:`, message.substring(0, 50));
+    // SECURITY: Never log message content
+    console.log(`[WS] Sending user_message to device ${deviceId}, length: ${message.length}`);
     this.socket?.emit('user_message', {
       deviceId,
       message,
