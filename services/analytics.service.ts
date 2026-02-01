@@ -24,7 +24,33 @@ class AnalyticsService {
 
     this.userId = userId;
     this.client.identify(userId, properties);
-    console.log('[Analytics] User identified:', userId);
+    console.log('[Analytics] User identified:', userId, properties);
+  }
+
+  identifyWithCountry(
+    userId: string,
+    properties: {
+      email?: string;
+      name?: string;
+      country?: string;
+    }
+  ): void {
+    if (!this.client) return;
+
+    this.userId = userId;
+    // Include country in the identify call for geographic analytics
+    const identifyProperties: { [key: string]: string } = {};
+
+    if (properties.email) identifyProperties.email = properties.email;
+    if (properties.name) identifyProperties.name = properties.name;
+    if (properties.country) {
+      identifyProperties.$geoip_country_code = properties.country;
+      identifyProperties.country = properties.country;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.client.identify(userId, identifyProperties as any);
+    console.log('[Analytics] User identified with country:', userId, properties.country);
   }
 
   track(

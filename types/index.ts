@@ -7,6 +7,7 @@ export interface User {
   avatarUrl?: string;
   createdAt: string;
   subscription: SubscriptionTier;
+  country?: string;
 }
 
 export type SubscriptionTier = 'free' | 'pro' | 'team';
