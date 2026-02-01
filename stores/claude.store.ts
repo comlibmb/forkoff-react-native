@@ -6,6 +6,7 @@ import { apiClient } from '@/services/api.client';
 import { unstable_batchedUpdates } from 'react-native';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
+import { useUsageStore } from './usage.store';
 
 interface ClaudeState {
   // Session state per device
@@ -219,7 +220,18 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
 
   startNewSession: async (deviceId: string, directory: string, terminalSessionId: string) => {
     try {
+      // Check session limit
+      const { canStartSession, incrementSessions } = useUsageStore.getState();
+      if (!canStartSession()) {
+        const error = new Error('SESSION_LIMIT_REACHED');
+        set({ error: error.message });
+        throw error;
+      }
+
       set({ isLoading: true, error: null });
+
+      // Increment session count
+      incrementSessions();
 
       wsService.emit('claude_start_session', {
         deviceId,

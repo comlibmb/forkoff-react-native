@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain } from 'lucide-react-native';
+import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain, Zap, Clock } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
 import { useClaudeStore } from '@/stores/claude.store';
+import { useUsageStore } from '@/stores/usage.store';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -79,6 +80,16 @@ export default function ClaudeSessionScreen() {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [showTasksPanel, setShowTasksPanel] = useState(false);
 
+  // Limit reached state (server-side enforcement)
+  const [isLimitReached, setIsLimitReached] = useState(false);
+  const [limitResetAt, setLimitResetAt] = useState<string | null>(null);
+  const [limitCurrentUsage, setLimitCurrentUsage] = useState(0);
+  const [limitMax, setLimitMax] = useState(20);
+  const [countdownText, setCountdownText] = useState('');
+
+  // Usage store for optimistic local increment (server is authoritative)
+  const { incrementMessages } = useUsageStore();
+
   // Activity state for status bar
   const [activityState, setActivityState] = useState<ActivityState>('idle');
   const [activityDetail, setActivityDetail] = useState<string | undefined>(undefined);
@@ -114,6 +125,44 @@ export default function ClaudeSessionScreen() {
 
     return () => clearInterval(interval);
   }, [isThinking]);
+
+  // Countdown timer for limit reset
+  useEffect(() => {
+    if (!isLimitReached || !limitResetAt) {
+      setCountdownText('');
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const resetTime = new Date(limitResetAt).getTime();
+      const diff = resetTime - now;
+
+      if (diff <= 0) {
+        // Reset has passed, clear the limit
+        setIsLimitReached(false);
+        setLimitResetAt(null);
+        setCountdownText('');
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      if (hours > 0) {
+        setCountdownText(`${hours}h ${minutes}m`);
+      } else if (minutes > 0) {
+        setCountdownText(`${minutes}m ${seconds}s`);
+      } else {
+        setCountdownText(`${seconds}s`);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [isLimitReached, limitResetAt]);
 
   // Track session opened
   useEffect(() => {
@@ -384,6 +433,30 @@ export default function ClaudeSessionScreen() {
       }
     });
 
+    // Listen for limit reached events (server-side enforcement)
+    const unsubLimitReached = wsService.on('limit_reached', (data) => {
+      console.log('[Session] limit_reached:', data.limitType, data.currentUsage, data.limit);
+      if (data.limitType === 'messages_daily') {
+        // Sync local state with server's authoritative count
+        useUsageStore.setState({
+          messagesUsedToday: data.currentUsage || 0,
+          messageLimitResetAt: data.resetAt || useUsageStore.getState().messageLimitResetAt,
+        });
+        // Show inline limit reached UI and stop all loading states
+        setIsLimitReached(true);
+        setLimitResetAt(data.resetAt || null);
+        setLimitCurrentUsage(data.currentUsage || 0);
+        setLimitMax(data.limit || 20);
+        setIsSending(false);
+        setIsWaitingForResponse(false);
+        setIsThinking(false);
+        setThinkingContent(null);
+        setActivityState('idle');
+        setActivityDetail(undefined);
+        sendingRef.current = false;
+      }
+    });
+
     return () => {
       unsubClaudeMessage();
       unsubThinking();
@@ -393,6 +466,7 @@ export default function ClaudeSessionScreen() {
       unsubThinkingContent();
       unsubTokenUsage();
       unsubTaskProgress();
+      unsubLimitReached();
     };
   }, [sessionKey, deviceId]);
 
@@ -713,6 +787,9 @@ export default function ClaudeSessionScreen() {
     const message = inputText.trim();
     if (!message) return;
 
+    // If limit is already reached, don't allow sending (server enforces this too)
+    if (isLimitReached) return;
+
     // Clear input immediately to prevent capturing the same message twice
     setInputText('');
 
@@ -722,6 +799,9 @@ export default function ClaudeSessionScreen() {
       return;
     }
     if (!deviceId || isSending || !isSessionReady) return;
+
+    // Increment message count (optimistically, server will enforce)
+    incrementMessages();
 
     // Set ref guard immediately (synchronous)
     sendingRef.current = true;
@@ -1280,6 +1360,39 @@ export default function ClaudeSessionScreen() {
                   <Text style={{ color: theme.textSecondary, fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
                   <AnimatedConnectDots />
                 </View>
+              </View>
+            ) : isLimitReached ? (
+              // Limit reached - show upgrade UI
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 13, fontFamily: 'monospace' }}>
+                    Daily limit reached ({limitCurrentUsage}/{limitMax} messages)
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => router.push('/settings/subscription')}
+                  style={{
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.primary[600],
+                  }}
+                >
+                  <Zap size={18} color="white" />
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>
+                    Upgrade to Pro
+                  </Text>
+                  {countdownText && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                      <Clock size={12} color="rgba(255,255,255,0.8)" />
+                      <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace' }}>
+                        {countdownText}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>

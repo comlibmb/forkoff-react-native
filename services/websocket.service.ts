@@ -287,6 +287,32 @@ export interface QueueUpdatedEvent {
   pendingCount: number;
 }
 
+// Phone session conflict event (Pro tier - single phone session)
+export interface PhoneSessionConflictEvent {
+  existingDeviceId: string;
+  existingDeviceName?: string;
+  message: string;
+}
+
+// Claim phone session event
+export interface ClaimPhoneSessionEvent {
+  success: boolean;
+  previousDeviceId?: string;
+}
+
+// Limit reached event
+export interface LimitReachedEvent {
+  limitType: 'messages_daily' | 'sessions_monthly' | 'projects_max' | 'devices_max' | 'repairs_monthly';
+  currentUsage: number;
+  limit: number;
+  resetAt?: string;
+}
+
+// Session claimed event (when another device takes over)
+export interface SessionClaimedEvent {
+  message: string;
+}
+
 interface EventCallbacks {
   device_status: EventCallback<{ deviceId: string; status: DeviceStatus; lastSeenAt?: string }>[];
   terminal_output: EventCallback<TerminalOutputEvent>[];
@@ -319,6 +345,10 @@ interface EventCallbacks {
   queue_item_executing: EventCallback<QueueItemExecutingEvent>[];
   queue_item_executed: EventCallback<QueueItemExecutedEvent>[];
   queue_updated: EventCallback<QueueUpdatedEvent>[];
+  phone_session_conflict: EventCallback<PhoneSessionConflictEvent>[];
+  claim_phone_session_result: EventCallback<ClaimPhoneSessionEvent>[];
+  limit_reached: EventCallback<LimitReachedEvent>[];
+  session_claimed: EventCallback<SessionClaimedEvent>[];
   connected: EventCallback<void>[];
   disconnected: EventCallback<void>[];
   error: EventCallback<Error>[];
@@ -362,6 +392,10 @@ class WebSocketService {
     queue_item_executing: [],
     queue_item_executed: [],
     queue_updated: [],
+    phone_session_conflict: [],
+    claim_phone_session_result: [],
+    limit_reached: [],
+    session_claimed: [],
     connected: [],
     disconnected: [],
     error: [],
@@ -598,6 +632,29 @@ class WebSocketService {
       console.log('[WS] GOT queue_updated:', data?.pendingCount);
       this.emitInternal('queue_updated', data);
     });
+
+    // Phone session conflict events (Pro tier)
+    this.socket.on('phone_session_conflict', (data) => {
+      console.log('[WS] GOT phone_session_conflict:', data?.existingDeviceId);
+      this.emitInternal('phone_session_conflict', data);
+    });
+
+    this.socket.on('claim_phone_session_result', (data) => {
+      console.log('[WS] GOT claim_phone_session_result:', data?.success);
+      this.emitInternal('claim_phone_session_result', data);
+    });
+
+    // Limit reached events
+    this.socket.on('limit_reached', (data) => {
+      console.log('[WS] GOT limit_reached:', data?.limitType);
+      this.emitInternal('limit_reached', data);
+    });
+
+    // Session claimed events (when another device takes over)
+    this.socket.on('session_claimed', (data) => {
+      console.log('[WS] GOT session_claimed:', data?.message);
+      this.emitInternal('session_claimed', data);
+    });
   }
 
   private emitInternal<K extends keyof EventCallbacks>(
@@ -776,6 +833,12 @@ class WebSocketService {
       limit: options?.limit ?? 400,
       offset: options?.offset ?? 0,
     });
+  }
+
+  // Claim phone session (take over from another device)
+  claimPhoneSession(): void {
+    console.log('[WS] Claiming phone session');
+    this.socket?.emit('claim_phone_session', {});
   }
 
   disconnect(): void {

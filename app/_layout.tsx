@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -6,12 +6,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PostHogProvider } from 'posthog-react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/auth.store';
 import { useApprovalStore } from '@/stores/approval.store';
 import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
 import { useQueueStore } from '@/stores/queue.store';
+import { useUsageStore } from '@/stores/usage.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -25,6 +27,7 @@ import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
+import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import '../global.css';
 
@@ -51,6 +54,8 @@ function ThemedApp({
   needsUpdate,
   recentUnlock,
   setRecentUnlock,
+  showOnboardingPaywall,
+  setShowOnboardingPaywall,
 }: {
   currentApproval: any;
   handleApprovalRespond: (approvalId: string, response: string) => void;
@@ -58,6 +63,8 @@ function ThemedApp({
   needsUpdate: boolean;
   recentUnlock: any;
   setRecentUnlock: (unlock: any) => void;
+  showOnboardingPaywall: boolean;
+  setShowOnboardingPaywall: (show: boolean) => void;
 }) {
   const { isDark, theme } = useTheme();
 
@@ -140,6 +147,13 @@ function ThemedApp({
         achievement={recentUnlock}
         onClose={() => setRecentUnlock(null)}
       />
+
+      {/* Onboarding paywall modal for new users */}
+      <LimitPaywallModal
+        visible={showOnboardingPaywall}
+        onClose={() => setShowOnboardingPaywall(false)}
+        limitType="onboarding"
+      />
     </>
   );
 }
@@ -157,6 +171,8 @@ export default function RootLayout() {
   const { needsUpdate, checkVersion } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
   const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
+  const { fetchUsage } = useUsageStore();
+  const [showOnboardingPaywall, setShowOnboardingPaywall] = useState(false);
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -214,11 +230,39 @@ export default function RootLayout() {
         email: user.email,
         name: user.name,
       });
+
+      // Fetch usage data
+      fetchUsage();
+
+      // Check if this is a new user who should see onboarding paywall
+      const checkOnboardingPaywall = async () => {
+        try {
+          const paywallKey = `paywall_shown_${user.id}`;
+          const hasSeenPaywall = await AsyncStorage.getItem(paywallKey);
+
+          if (hasSeenPaywall) return;
+
+          // Check if user was created within last 5 minutes
+          const createdAt = new Date(user.createdAt).getTime();
+          const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+          const isNewUser = createdAt > fiveMinutesAgo;
+
+          if (isNewUser && user.subscription === 'free') {
+            setShowOnboardingPaywall(true);
+            await AsyncStorage.setItem(paywallKey, 'true');
+            analyticsService.track('onboarding_paywall_shown');
+          }
+        } catch (error) {
+          console.error('Failed to check onboarding paywall:', error);
+        }
+      };
+
+      checkOnboardingPaywall();
     } else {
       sentryService.setUser(null);
       analyticsService.reset();
     }
-  }, [user]);
+  }, [user, fetchUsage]);
 
   // Connect/disconnect WebSocket based on auth state
   useEffect(() => {
@@ -351,6 +395,8 @@ export default function RootLayout() {
                     needsUpdate={needsUpdate}
                     recentUnlock={recentUnlock}
                     setRecentUnlock={setRecentUnlock}
+                    showOnboardingPaywall={showOnboardingPaywall}
+                    setShowOnboardingPaywall={setShowOnboardingPaywall}
                   />
                 </ScreenTracker>
                 </QueryClientProvider>
