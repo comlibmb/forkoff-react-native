@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import { colors } from '@/theme/colors';
 import { TokenUsageDaily } from '@/types';
 
@@ -10,7 +10,16 @@ interface UsageChartProps {
 
 const screenWidth = Dimensions.get('window').width;
 
-export function UsageChart({ data, height = 200 }: UsageChartProps) {
+// Layout constants
+const CONTAINER_PADDING = 16;
+const Y_AXIS_WIDTH = 40;
+const LEGEND_HEIGHT = 32;
+const X_AXIS_HEIGHT = 20;
+
+export function UsageChart({ data, height = 220 }: UsageChartProps) {
+  // Calculate available chart height
+  const chartHeight = height - CONTAINER_PADDING * 2 - LEGEND_HEIGHT - X_AXIS_HEIGHT;
+
   if (data.length === 0) {
     return (
       <View style={[styles.container, { height }]}>
@@ -42,67 +51,95 @@ export function UsageChart({ data, height = 200 }: UsageChartProps) {
   };
 
   // Calculate bar width based on data length
-  const containerPadding = 32;
-  const barGap = 4;
-  const availableWidth = screenWidth - containerPadding * 2 - 40; // Account for Y-axis labels
+  const chartWidth = screenWidth - CONTAINER_PADDING * 2 - Y_AXIS_WIDTH - 16; // 16 for scroll padding
+  const minBarWidth = 12;
+  const maxBarWidth = 28;
+  const barGap = 6;
   const barWidth = Math.min(
-    24,
-    Math.max(8, (availableWidth - barGap * data.length) / data.length),
+    maxBarWidth,
+    Math.max(minBarWidth, (chartWidth - barGap * (data.length - 1)) / data.length),
   );
+
+  // Check if we need horizontal scrolling
+  const totalBarsWidth = data.length * barWidth + (data.length - 1) * barGap;
+  const needsScroll = totalBarsWidth > chartWidth;
 
   return (
     <View style={[styles.container, { height }]}>
       {/* Y-axis labels */}
-      <View style={styles.yAxis}>
+      <View style={[styles.yAxis, { height: chartHeight }]}>
         <Text style={styles.yAxisLabel}>{formatNumber(maxValue)}</Text>
         <Text style={styles.yAxisLabel}>{formatNumber(maxValue / 2)}</Text>
         <Text style={styles.yAxisLabel}>0</Text>
       </View>
 
       {/* Chart area */}
-      <View style={styles.chartArea}>
+      <View style={styles.chartWrapper}>
         {/* Grid lines */}
-        <View style={styles.gridLines}>
+        <View style={[styles.gridLines, { height: chartHeight }]}>
           <View style={styles.gridLine} />
           <View style={styles.gridLine} />
           <View style={styles.gridLine} />
         </View>
 
-        {/* Bars */}
-        <View style={styles.barsContainer}>
-          {data.map((item, index) => {
-            const inputHeight =
-              (Number(item.inputTokens) / maxValue) * (height - 40);
-            const outputHeight =
-              (Number(item.outputTokens) / maxValue) * (height - 40);
+        {/* Scrollable bars area */}
+        <ScrollView
+          horizontal={needsScroll}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.barsScrollContent,
+            !needsScroll && styles.barsNoScroll,
+          ]}
+          style={[styles.barsScrollView, { height: chartHeight + X_AXIS_HEIGHT }]}
+        >
+          <View style={styles.barsContainer}>
+            {data.map((item, index) => {
+              const total = Number(item.inputTokens) + Number(item.outputTokens);
+              const inputRatio = total > 0 ? Number(item.inputTokens) / maxValue : 0;
+              const outputRatio = total > 0 ? Number(item.outputTokens) / maxValue : 0;
+              const inputHeight = Math.max(0, inputRatio * chartHeight);
+              const outputHeight = Math.max(0, outputRatio * chartHeight);
+              const showLabel = data.length <= 7 || index % Math.ceil(data.length / 6) === 0;
 
-            return (
-              <View key={item.date} style={styles.barGroup}>
-                <View style={styles.barStack}>
-                  {/* Output tokens (top) */}
-                  <View
-                    style={[
-                      styles.bar,
-                      styles.barOutput,
-                      { width: barWidth, height: outputHeight },
-                    ]}
-                  />
-                  {/* Input tokens (bottom) */}
-                  <View
-                    style={[
-                      styles.bar,
-                      styles.barInput,
-                      { width: barWidth, height: inputHeight },
-                    ]}
-                  />
+              return (
+                <View key={item.date} style={[styles.barGroup, { marginRight: index < data.length - 1 ? barGap : 0 }]}>
+                  <View style={[styles.barStack, { height: chartHeight }]}>
+                    <View style={styles.barStackInner}>
+                      {/* Output tokens (top) */}
+                      {outputHeight > 0 && (
+                        <View
+                          style={[
+                            styles.bar,
+                            styles.barOutput,
+                            { width: barWidth, height: outputHeight },
+                          ]}
+                        />
+                      )}
+                      {/* Input tokens (bottom) */}
+                      {inputHeight > 0 && (
+                        <View
+                          style={[
+                            styles.bar,
+                            styles.barInput,
+                            { width: barWidth, height: inputHeight },
+                          ]}
+                        />
+                      )}
+                    </View>
+                  </View>
+                  {/* X-axis label */}
+                  <View style={styles.xAxisLabelContainer}>
+                    {showLabel && (
+                      <Text style={styles.xAxisLabel} numberOfLines={1}>
+                        {formatDate(item.date)}
+                      </Text>
+                    )}
+                  </View>
                 </View>
-                {index % Math.ceil(data.length / 5) === 0 && (
-                  <Text style={styles.xAxisLabel}>{formatDate(item.date)}</Text>
-                )}
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
 
       {/* Legend */}
@@ -126,7 +163,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.dark[600],
-    padding: 16,
+    padding: CONTAINER_PADDING,
   },
   emptyState: {
     flex: 1,
@@ -145,67 +182,82 @@ const styles = StyleSheet.create({
   },
   yAxis: {
     position: 'absolute',
-    left: 8,
-    top: 16,
-    bottom: 48,
+    left: CONTAINER_PADDING,
+    top: CONTAINER_PADDING,
+    width: Y_AXIS_WIDTH - 8,
     justifyContent: 'space-between',
-    width: 32,
   },
   yAxisLabel: {
     fontSize: 10,
     color: colors.dark[400],
     textAlign: 'right',
   },
-  chartArea: {
+  chartWrapper: {
     flex: 1,
-    marginLeft: 40,
-    marginBottom: 24,
+    marginLeft: Y_AXIS_WIDTH,
   },
   gridLines: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
     justifyContent: 'space-between',
   },
   gridLine: {
     height: 1,
     backgroundColor: colors.dark[600],
   },
-  barsContainer: {
+  barsScrollView: {
+    overflow: 'hidden',
+  },
+  barsScrollContent: {
+    paddingRight: 8,
+  },
+  barsNoScroll: {
     flex: 1,
+    justifyContent: 'space-around',
+  },
+  barsContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingTop: 8,
+    height: '100%',
   },
   barGroup: {
     alignItems: 'center',
   },
   barStack: {
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barStackInner: {
     alignItems: 'center',
   },
   bar: {
-    borderRadius: 2,
+    borderRadius: 3,
   },
   barInput: {
     backgroundColor: colors.primary[500],
   },
   barOutput: {
     backgroundColor: colors.success[500],
-    marginBottom: 1,
+    marginBottom: 2,
+  },
+  xAxisLabelContainer: {
+    height: X_AXIS_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   xAxisLabel: {
     fontSize: 9,
     color: colors.dark[400],
-    marginTop: 4,
+    textAlign: 'center',
   },
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 8,
+    gap: 24,
+    height: LEGEND_HEIGHT,
+    alignItems: 'center',
   },
   legendItem: {
     flexDirection: 'row',
@@ -213,13 +265,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   legendText: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.dark[300],
+    fontWeight: '500',
   },
 });
 

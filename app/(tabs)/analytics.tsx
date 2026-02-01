@@ -121,7 +121,7 @@ export default function AnalyticsScreen() {
         {/* Usage chart */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Usage Trend</Text>
-          <UsageChart data={dailyUsage} height={200} />
+          <UsageChart data={dailyUsage} height={240} />
         </View>
 
         {/* Token breakdown */}
