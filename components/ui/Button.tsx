@@ -8,7 +8,7 @@ import {
   TouchableOpacityProps,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@/theme/colors';
+import { ThemeColors, useTheme } from '@/theme/ThemeProvider';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -23,12 +23,13 @@ interface ButtonProps extends TouchableOpacityProps {
   iconPosition?: 'left' | 'right';
   fullWidth?: boolean;
   hapticFeedback?: boolean;
+  theme?: ThemeColors;
 }
 
-const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextStyle }> = {
+const getVariantStyles = (theme: ThemeColors): Record<ButtonVariant, { container: ViewStyle; text: TextStyle }> => ({
   primary: {
     container: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: theme.primary,
     },
     text: {
       color: '#ffffff',
@@ -36,20 +37,20 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
   },
   secondary: {
     container: {
-      backgroundColor: colors.dark[700],
+      backgroundColor: theme.backgroundSecondary,
     },
     text: {
-      color: '#ffffff',
+      color: theme.text,
     },
   },
   outline: {
     container: {
       backgroundColor: 'transparent',
       borderWidth: 1,
-      borderColor: colors.primary[500],
+      borderColor: theme.primary,
     },
     text: {
-      color: colors.primary[500],
+      color: theme.primary,
     },
   },
   ghost: {
@@ -57,18 +58,18 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
       backgroundColor: 'transparent',
     },
     text: {
-      color: colors.primary[500],
+      color: theme.primary,
     },
   },
   danger: {
     container: {
-      backgroundColor: colors.error[500],
+      backgroundColor: theme.error,
     },
     text: {
       color: '#ffffff',
     },
   },
-};
+});
 
 const sizeStyles: Record<ButtonSize, { container: ViewStyle; text: TextStyle }> = {
   sm: {
@@ -113,10 +114,15 @@ export function Button({
   iconPosition = 'left',
   fullWidth = false,
   hapticFeedback = true,
+  theme: themeProp,
   style,
   onPress,
   ...props
 }: ButtonProps) {
+  const { theme: contextTheme } = useTheme();
+  const theme = themeProp || contextTheme;
+  const variantStyles = getVariantStyles(theme);
+
   const handlePress = (event: any) => {
     if (hapticFeedback) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

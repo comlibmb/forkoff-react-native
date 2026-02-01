@@ -18,6 +18,7 @@ import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, T
 import { useClaudeStore } from '@/stores/claude.store';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
+import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 import PermissionRequest, { PermissionRequestData } from '@/components/claude/PermissionRequest';
 import { ThinkingBlock, ThinkingIndicator } from '@/components/claude/ThinkingBlock';
@@ -32,6 +33,7 @@ const INITIAL_LOAD = 400;
 const LOAD_MORE_COUNT = 200;
 
 function AnimatedConnectDots() {
+  const { theme } = useTheme();
   const [dots, setDots] = useState('');
   useEffect(() => {
     const interval = setInterval(() => {
@@ -39,10 +41,11 @@ function AnimatedConnectDots() {
     }, 350);
     return () => clearInterval(interval);
   }, []);
-  return <Text style={{ color: colors.primary[400], fontFamily: 'monospace', fontSize: 13, width: 20 }}>{dots}</Text>;
+  return <Text style={{ color: theme.primaryLight, fontFamily: 'monospace', fontSize: 13, width: 20 }}>{dots}</Text>;
 }
 
 export default function ClaudeSessionScreen() {
+  const { theme } = useTheme();
   const { sessionKey, deviceId } = useLocalSearchParams<{
     sessionKey: string;
     deviceId: string;
@@ -756,20 +759,20 @@ export default function ClaudeSessionScreen() {
     const isAddition = line.startsWith('+');
     const isDeletion = line.startsWith('-');
 
-    let bgColor = '';
-    let textColor = 'text-dark-300';
+    let bgColor = 'transparent';
+    let textColor = theme.textTertiary;
 
     if (isAddition) {
-      bgColor = 'bg-green-900/30';
-      textColor = 'text-green-400';
+      bgColor = 'rgba(34, 197, 94, 0.15)';
+      textColor = colors.success[400];
     } else if (isDeletion) {
-      bgColor = 'bg-red-900/30';
-      textColor = 'text-red-400';
+      bgColor = 'rgba(239, 68, 68, 0.15)';
+      textColor = colors.error[400];
     }
 
     return (
-      <View key={index} className={`${bgColor}`}>
-        <Text className={`font-mono text-xs ${textColor}`}>
+      <View key={index} style={{ backgroundColor: bgColor }}>
+        <Text style={{ fontFamily: 'monospace', fontSize: 12, color: textColor }}>
           {line}
         </Text>
       </View>
@@ -778,15 +781,15 @@ export default function ClaudeSessionScreen() {
 
   const renderDiff = (diff: DiffHunk[]) => {
     return (
-      <View className="mt-2 rounded bg-dark-800 overflow-hidden">
+      <View style={{ marginTop: 8, borderRadius: 4, backgroundColor: theme.background, overflow: 'hidden' }}>
         {diff.map((hunk, hunkIndex) => (
           <View key={hunkIndex}>
-            <View className="bg-dark-700 px-2 py-1">
-              <Text className="font-mono text-xs text-dark-400">
+            <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: theme.textTertiary }}>
                 @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
               </Text>
             </View>
-            <View className="px-2 py-1">
+            <View style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
               {hunk.lines.map((line, lineIndex) => renderDiffLine(line, lineIndex))}
             </View>
           </View>
@@ -802,25 +805,25 @@ export default function ClaudeSessionScreen() {
     const lineCount = lines.length;
 
     return (
-      <View className="mt-2 rounded bg-dark-800 overflow-hidden">
+      <View style={{ marginTop: 8, borderRadius: 4, backgroundColor: theme.background, overflow: 'hidden' }}>
         {/* Header showing it's a new file */}
-        <View className="bg-green-900/30 px-2 py-1 border-b border-dark-700">
-          <Text className="font-mono text-xs text-green-400">
+        <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+          <Text style={{ fontFamily: 'monospace', fontSize: 12, color: colors.success[400] }}>
             +++ {fileName} (new file, {lineCount} lines)
           </Text>
         </View>
         {/* Content as additions */}
-        <View className="px-2 py-1">
+        <View style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
           {lines.slice(0, 50).map((line, index) => (
-            <View key={index} className="bg-green-900/20">
-              <Text className="font-mono text-xs text-green-400">
+            <View key={index} style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: colors.success[400] }}>
                 +{line}
               </Text>
             </View>
           ))}
           {lines.length > 50 && (
-            <View className="bg-dark-700 px-2 py-1">
-              <Text className="font-mono text-xs text-dark-400">
+            <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: theme.textTertiary }}>
                 ... and {lines.length - 50} more lines
               </Text>
             </View>
@@ -892,10 +895,10 @@ export default function ClaudeSessionScreen() {
     // User input - shown as prompt
     if (isUser) {
       return (
-        <View className="mb-4">
-          <View className="flex-row items-start">
-            <Text className="text-primary-400 font-mono mr-2">{'>'}</Text>
-            <Text className="text-dark-50 font-mono flex-1">
+        <View style={{ marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <Text style={{ color: theme.primaryLight, fontFamily: 'monospace', marginRight: 8 }}>{'>'}</Text>
+            <Text style={{ color: theme.text, fontFamily: 'monospace', flex: 1 }}>
               {item.content?.text}
             </Text>
           </View>
@@ -918,32 +921,32 @@ export default function ClaudeSessionScreen() {
       const fileName = filePath?.split(/[/\\]/).pop();
 
       return (
-        <View className="mb-2">
+        <View style={{ marginBottom: 8 }}>
           <TouchableOpacity
             onPress={() => toggleToolExpand(item.id)}
-            className="flex-row items-center py-1"
+            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
           >
             {isExpanded ? (
-              <ChevronDown size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
+              <ChevronDown size={14} color={isWrite ? theme.primaryLight : theme.textTertiary} />
             ) : (
-              <ChevronRight size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
+              <ChevronRight size={14} color={isWrite ? theme.primaryLight : theme.textTertiary} />
             )}
-            <Text className={`font-mono text-xs ml-1 ${isWrite ? 'text-primary-400' : 'text-dark-300'}`}>
+            <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 4, color: isWrite ? theme.primaryLight : theme.textTertiary }}>
               {item.content?.toolName}
             </Text>
             {fileName && (
-              <Text className="text-dark-400 font-mono text-xs ml-2">
+              <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12, marginLeft: 8 }}>
                 {fileName}
               </Text>
             )}
           </TouchableOpacity>
           {isExpanded && (
-            <View className="ml-4 pl-2 border-l border-dark-600">
+            <View style={{ marginLeft: 16, paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: theme.backgroundTertiary }}>
               {/* Show file content as diff for Write operations */}
               {isWrite && hasFileContent ? (
                 renderNewFileContent(writeData!.content!, filePath)
               ) : item.content?.text ? (
-                <Text className="text-dark-400 font-mono text-xs">
+                <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }}>
                   {item.content.text.substring(0, 500)}
                   {item.content.text.length > 500 ? '...' : ''}
                 </Text>
@@ -960,37 +963,40 @@ export default function ClaudeSessionScreen() {
       if (!hasContent) return null;
 
       return (
-        <View className="mb-2 ml-4">
+        <View style={{ marginBottom: 8, marginLeft: 16 }}>
           <TouchableOpacity
             onPress={() => toggleToolExpand(item.id)}
-            className="flex-row items-center"
+            style={{ flexDirection: 'row', alignItems: 'center' }}
           >
             {isExpanded ? (
-              <ChevronDown size={12} color={hasDiff ? colors.primary[400] : colors.dark[400]} />
+              <ChevronDown size={12} color={hasDiff ? theme.primaryLight : theme.textTertiary} />
             ) : (
-              <ChevronRight size={12} color={hasDiff ? colors.primary[400] : colors.dark[400]} />
+              <ChevronRight size={12} color={hasDiff ? theme.primaryLight : theme.textTertiary} />
             )}
-            <Text className={`font-mono text-xs ml-1 ${
-              item.content?.isError
-                ? 'text-error-300'
+            <Text style={{
+              fontFamily: 'monospace',
+              fontSize: 12,
+              marginLeft: 4,
+              color: item.content?.isError
+                ? theme.error
                 : hasDiff
-                  ? 'text-primary-400'
-                  : 'text-dark-400'
-            }`}>
+                  ? theme.primaryLight
+                  : theme.textTertiary
+            }}>
               {item.content?.isError ? 'error' : hasDiff ? item.content?.text || 'diff' : 'result'}
             </Text>
             {item.content?.filePath && (
-              <Text className="font-mono text-xs ml-2 text-dark-500">
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 8, color: theme.border }}>
                 {item.content.filePath.split(/[/\\]/).pop()}
               </Text>
             )}
           </TouchableOpacity>
           {isExpanded && (
-            <View className="ml-4 mt-1">
+            <View style={{ marginLeft: 16, marginTop: 4 }}>
               {hasDiff ? (
                 renderDiff(item.content!.diff!)
               ) : (
-                <Text className={`font-mono text-xs ${item.content?.isError ? 'text-error-200' : 'text-dark-300'}`}>
+                <Text style={{ fontFamily: 'monospace', fontSize: 12, color: item.content?.isError ? theme.error : theme.textTertiary }}>
                   {item.content?.text}
                 </Text>
               )}
@@ -1014,7 +1020,7 @@ export default function ClaudeSessionScreen() {
         ))}
         {/* Main assistant text */}
         {cleanText && (
-          <Text style={{ color: '#E5E7EB', fontFamily: 'monospace', fontSize: 14, lineHeight: 20 }}>
+          <Text style={{ color: theme.text, fontFamily: 'monospace', fontSize: 14, lineHeight: 20 }}>
             {cleanText}
           </Text>
         )}
@@ -1037,29 +1043,29 @@ export default function ClaudeSessionScreen() {
         onApprove={handlePermissionApprove}
         onDeny={handlePermissionDeny}
       />
-      <SafeAreaView className="flex-1 bg-black">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-dark-700 bg-dark-900">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="flex-row items-center"
+              style={{ flexDirection: 'row', alignItems: 'center' }}
             >
-              <ArrowLeft size={20} color={colors.dark[200]} />
-              <Text className="text-dark-200 ml-2 text-sm">Back</Text>
+              <ArrowLeft size={20} color={theme.textSecondary} />
+              <Text style={{ color: theme.textSecondary, marginLeft: 8, fontSize: 14 }}>Back</Text>
             </TouchableOpacity>
 
             {/* Center: Directory name or thinking indicator */}
-            <View className="flex-row items-center flex-1 justify-center mx-4">
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center', marginHorizontal: 16 }}>
               {isThinking ? (
                 <ThinkingIndicator isThinking={true} />
               ) : (
-                <View className="flex-row items-center">
-                  <Terminal size={14} color={colors.primary[500]} />
-                  <Text className="text-dark-100 font-mono text-sm ml-2" numberOfLines={1}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Terminal size={14} color={theme.primary} />
+                  <Text style={{ color: colors.dark[100], fontFamily: 'monospace', fontSize: 14, marginLeft: 8 }} numberOfLines={1}>
                     {directoryName}
                   </Text>
                 </View>
@@ -1075,22 +1081,22 @@ export default function ClaudeSessionScreen() {
                   style="header"
                 />
               )}
-              <Text className="text-dark-500 font-mono text-xs">
+              <Text style={{ color: theme.border, fontFamily: 'monospace', fontSize: 12 }}>
                 {entries.length}/{totalEntries}
               </Text>
             </View>
           </View>
 
           {/* Session path */}
-          <View className="px-4 py-2 bg-dark-900/50 border-b border-dark-800">
-            <Text className="text-dark-400 font-mono text-xs" numberOfLines={1}>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderBottomWidth: 1, borderBottomColor: colors.dark[800] }}>
+            <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }} numberOfLines={1}>
               {session?.directory}
             </Text>
           </View>
 
           {/* Task Progress Panel */}
           {tasks.length > 0 && (
-            <View className="px-4 py-2">
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
               <TaskProgress
                 tasks={tasks}
                 isCollapsed={!showTasksPanel}
@@ -1101,7 +1107,7 @@ export default function ClaudeSessionScreen() {
 
           {/* Streaming thinking indicator */}
           {thinkingContent?.isStreaming && (
-            <View className="px-4 py-2">
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
               <ThinkingBlock
                 content={thinkingContent.content}
                 isStreaming={true}
@@ -1115,14 +1121,14 @@ export default function ClaudeSessionScreen() {
             <TouchableOpacity
               onPress={loadMore}
               disabled={isLoadingMore}
-              className="flex-row items-center justify-center py-2 bg-dark-800/50"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, backgroundColor: 'rgba(0, 0, 0, 0.25)' }}
             >
               {isLoadingMore ? (
-                <ActivityIndicator size="small" color={colors.dark[400]} />
+                <ActivityIndicator size="small" color={theme.textTertiary} />
               ) : (
                 <>
-                  <ChevronUp size={14} color={colors.dark[400]} />
-                  <Text className="text-dark-400 text-xs ml-1">Load older messages</Text>
+                  <ChevronUp size={14} color={theme.textTertiary} />
+                  <Text style={{ color: theme.textTertiary, fontSize: 12, marginLeft: 4 }}>Load older messages</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -1136,7 +1142,7 @@ export default function ClaudeSessionScreen() {
           ) : (
             <ScrollView
               ref={scrollViewRef}
-              className="flex-1"
+              style={{ flex: 1 }}
               contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
               onScroll={handleScroll}
               scrollEventThrottle={16}
@@ -1169,46 +1175,51 @@ export default function ClaudeSessionScreen() {
           )}
 
           {/* Bottom: Take Over button OR Input field */}
-          <View className="border-t border-dark-700 bg-dark-900">
+          <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
             {!hasTakenOver ? (
-              <View className="px-4 py-3">
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
                 <TouchableOpacity
                   onPress={handleTakeOver}
                   disabled={isTakingOver || !session}
-                  className={`py-3 rounded-xl flex-row items-center justify-center ${
-                    isTakingOver || !session ? 'bg-dark-700' : 'bg-primary-600'
-                  }`}
+                  style={{
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isTakingOver || !session ? theme.backgroundSecondary : colors.primary[600]
+                  }}
                 >
                   {isTakingOver ? (
                     <>
                       <ActivityIndicator size="small" color="white" />
-                      <Text className="text-white font-bold text-base ml-2">Connecting...</Text>
+                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Connecting...</Text>
                     </>
                   ) : (
                     <>
                       <Play size={18} color="white" />
-                      <Text className="text-white font-bold text-base ml-2">Take Over Session</Text>
+                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Take Over Session</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
             ) : isTakingOver ? (
-              <View className="px-4 py-3 flex-row items-center justify-center">
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={{ color: colors.success[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '700' }}>$</Text>
-                  <Text style={{ color: colors.dark[200], fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
+                  <Text style={{ color: theme.textSecondary, fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
                   <AnimatedConnectDots />
                 </View>
               </View>
             ) : (
-              <View className="flex-row items-center px-3 py-2">
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
                 <TextInput
                   ref={inputRef}
                   value={inputText}
                   onChangeText={setInputText}
                   placeholder="Type a message to Claude..."
-                  placeholderTextColor={colors.dark[400]}
-                  className="flex-1 bg-dark-700 rounded-xl px-4 py-3 text-dark-50 font-mono text-sm"
+                  placeholderTextColor={theme.textTertiary}
+                  style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, color: theme.text, fontFamily: 'monospace', fontSize: 14 }}
                   onSubmitEditing={handleSendMessage}
                   returnKeyType="send"
                   editable={!isSending && isSessionReady}
@@ -1216,14 +1227,17 @@ export default function ClaudeSessionScreen() {
                 <TouchableOpacity
                   onPress={handleSendMessage}
                   disabled={!inputText.trim() || isSending || !isSessionReady}
-                  className={`ml-2 p-3 rounded-xl ${
-                    inputText.trim() && !isSending && isSessionReady ? 'bg-primary-600' : 'bg-dark-700'
-                  }`}
+                  style={{
+                    marginLeft: 8,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: inputText.trim() && !isSending && isSessionReady ? colors.primary[600] : theme.backgroundSecondary
+                  }}
                 >
                   {isSending ? (
                     <ActivityIndicator size="small" color="white" />
                   ) : (
-                    <Send size={20} color={inputText.trim() && isSessionReady ? 'white' : colors.dark[400]} />
+                    <Send size={20} color={inputText.trim() && isSessionReady ? 'white' : theme.textTertiary} />
                   )}
                 </TouchableOpacity>
               </View>

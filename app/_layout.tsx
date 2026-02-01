@@ -12,7 +12,6 @@ import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
 import { useQueueStore } from '@/stores/queue.store';
-import { useThemeStore } from '@/stores/theme.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -26,7 +25,7 @@ import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
-import { ThemeProvider } from '@/theme/ThemeProvider';
+import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import '../global.css';
 
 // Initialize Sentry FIRST to catch all errors
@@ -44,6 +43,107 @@ const queryClient = new QueryClient({
   },
 });
 
+// Separate component that uses theme context (must be inside ThemeProvider)
+function ThemedApp({
+  currentApproval,
+  handleApprovalRespond,
+  hideApproval,
+  needsUpdate,
+  recentUnlock,
+  setRecentUnlock,
+}: {
+  currentApproval: any;
+  handleApprovalRespond: (approvalId: string, response: string) => void;
+  hideApproval: () => void;
+  needsUpdate: boolean;
+  recentUnlock: any;
+  setRecentUnlock: (unlock: any) => void;
+}) {
+  const { isDark, theme } = useTheme();
+
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: theme.background },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="(onboarding)" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+        <Stack.Screen
+          name="device/[id]"
+          options={{
+            animation: 'slide_from_right',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="device/pair"
+          options={{
+            animation: 'slide_from_bottom',
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
+          name="chat/[sessionId]"
+          options={{
+            animation: 'slide_from_right',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="terminal/[sessionId]"
+          options={{
+            animation: 'slide_from_bottom',
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
+          name="achievements/index"
+          options={{
+            animation: 'slide_from_right',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="queue/index"
+          options={{
+            animation: 'slide_from_right',
+            presentation: 'card',
+          }}
+        />
+      </Stack>
+
+      {/* Global Claude Approval Modal */}
+      <ClaudeApproval
+        visible={!!currentApproval}
+        request={currentApproval}
+        onRespond={handleApprovalRespond}
+        onDismiss={hideApproval}
+      />
+
+      {/* Connection status components */}
+      <OfflineBanner />
+      <ConnectionToast />
+
+      {/* Version update modal */}
+      <UpdateRequiredModal visible={needsUpdate} />
+
+      {/* Achievement unlock modal */}
+      <AchievementUnlockModal
+        visible={!!recentUnlock}
+        achievement={recentUnlock}
+        onClose={() => setRecentUnlock(null)}
+      />
+    </>
+  );
+}
+
 export default function RootLayout() {
   const router = useRouter();
   const { initialize, isInitialized, isAuthenticated, user } = useAuthStore();
@@ -57,7 +157,6 @@ export default function RootLayout() {
   const { needsUpdate, checkVersion } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
   const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
-  const { isDark } = useThemeStore();
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -245,83 +344,14 @@ export default function RootLayout() {
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <QueryClientProvider client={queryClient}>
                   <ScreenTracker>
-                  <StatusBar style={isDark ? 'light' : 'dark'} />
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: isDark ? '#0d1117' : '#ffffff' },
-                      animation: 'fade',
-                    }}
-                  >
-                  <Stack.Screen name="index" />
-                  <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-                  <Stack.Screen name="(onboarding)" options={{ animation: 'slide_from_right' }} />
-                  <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-                  <Stack.Screen
-                    name="device/[id]"
-                    options={{
-                      animation: 'slide_from_right',
-                      presentation: 'card',
-                    }}
+                  <ThemedApp
+                    currentApproval={currentApproval}
+                    handleApprovalRespond={handleApprovalRespond}
+                    hideApproval={hideApproval}
+                    needsUpdate={needsUpdate}
+                    recentUnlock={recentUnlock}
+                    setRecentUnlock={setRecentUnlock}
                   />
-                  <Stack.Screen
-                    name="device/pair"
-                    options={{
-                      animation: 'slide_from_bottom',
-                      presentation: 'modal',
-                    }}
-                  />
-                  <Stack.Screen
-                    name="chat/[sessionId]"
-                    options={{
-                      animation: 'slide_from_right',
-                      presentation: 'card',
-                    }}
-                  />
-                  <Stack.Screen
-                    name="terminal/[sessionId]"
-                    options={{
-                      animation: 'slide_from_bottom',
-                      presentation: 'modal',
-                    }}
-                  />
-                  <Stack.Screen
-                    name="achievements/index"
-                    options={{
-                      animation: 'slide_from_right',
-                      presentation: 'card',
-                    }}
-                  />
-                  <Stack.Screen
-                    name="queue/index"
-                    options={{
-                      animation: 'slide_from_right',
-                      presentation: 'card',
-                    }}
-                  />
-                </Stack>
-
-                {/* Global Claude Approval Modal */}
-                <ClaudeApproval
-                  visible={!!currentApproval}
-                  request={currentApproval}
-                  onRespond={handleApprovalRespond}
-                  onDismiss={hideApproval}
-                />
-
-                {/* Connection status components */}
-                <OfflineBanner />
-                <ConnectionToast />
-
-                {/* Version update modal */}
-                <UpdateRequiredModal visible={needsUpdate} />
-
-                {/* Achievement unlock modal */}
-                <AchievementUnlockModal
-                  visible={!!recentUnlock}
-                  achievement={recentUnlock}
-                  onClose={() => setRecentUnlock(null)}
-                />
                 </ScreenTracker>
                 </QueryClientProvider>
               </GestureHandlerRootView>

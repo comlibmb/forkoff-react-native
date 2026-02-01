@@ -1,89 +1,81 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Check, Zap, Star, Users, ArrowRight } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
+import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
-
-function PlanCard({ children, popular = false, color = colors.dark[600] }: {
-  children: React.ReactNode;
-  popular?: boolean;
-  color?: string;
-}) {
-  return (
-    <View style={[styles.section, popular && { borderColor: color, borderWidth: 2 }]}>
-      <View style={styles.sectionContent}>{children}</View>
-    </View>
-  );
-}
-
-const plans = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    icon: Star,
-    color: colors.dark[300],
-    features: [
-      '1 connected device',
-      'Basic chat with AI tools',
-      'View code changes',
-      'Community support',
-    ],
-    limitations: [
-      'Limited to 100 messages/day',
-      'No priority support',
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$9.99',
-    period: 'per month',
-    icon: Zap,
-    color: colors.primary[500],
-    popular: true,
-    features: [
-      '5 connected devices',
-      'Unlimited AI chat',
-      'Code diff viewer',
-      'Terminal access',
-      'Push notifications',
-      'Priority support',
-    ],
-    limitations: [],
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    price: '$29.99',
-    period: 'per month',
-    icon: Users,
-    color: colors.warning[300],
-    features: [
-      'Unlimited devices',
-      'Everything in Pro',
-      'Team collaboration',
-      'Shared projects',
-      'Admin dashboard',
-      'SSO support',
-      'Dedicated support',
-    ],
-    limitations: [],
-  },
-];
 
 type PlanId = 'free' | 'pro' | 'team';
 
 export default function SubscriptionScreen() {
+  const { theme } = useTheme();
   const { user } = useAuthStore();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>((user?.subscription as PlanId) || 'free');
   const [isLoading, setIsLoading] = useState(false);
 
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const currentPlan = user?.subscription || 'free';
+
+  const plans = useMemo(() => [
+    {
+      id: 'free',
+      name: 'Free',
+      price: '$0',
+      period: 'forever',
+      icon: Star,
+      color: theme.textTertiary,
+      features: [
+        '1 connected device',
+        'Basic chat with AI tools',
+        'View code changes',
+        'Community support',
+      ],
+      limitations: [
+        'Limited to 100 messages/day',
+        'No priority support',
+      ],
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '$9.99',
+      period: 'per month',
+      icon: Zap,
+      color: theme.primary,
+      popular: true,
+      features: [
+        '5 connected devices',
+        'Unlimited AI chat',
+        'Code diff viewer',
+        'Terminal access',
+        'Push notifications',
+        'Priority support',
+      ],
+      limitations: [],
+    },
+    {
+      id: 'team',
+      name: 'Team',
+      price: '$29.99',
+      period: 'per month',
+      icon: Users,
+      color: theme.warning,
+      features: [
+        'Unlimited devices',
+        'Everything in Pro',
+        'Team collaboration',
+        'Shared projects',
+        'Admin dashboard',
+        'SSO support',
+        'Dedicated support',
+      ],
+      limitations: [],
+    },
+  ], [theme]);
 
   const handleSubscribe = async (planId: string) => {
     if (planId === currentPlan) return;
@@ -102,6 +94,18 @@ export default function SubscriptionScreen() {
     setIsLoading(false);
   };
 
+  function PlanCard({ children, popular = false, color = theme.cardBorder }: {
+    children: React.ReactNode;
+    popular?: boolean;
+    color?: string;
+  }) {
+    return (
+      <View style={[styles.section, popular && { borderColor: color, borderWidth: 2 }]}>
+        <View style={styles.sectionContent}>{children}</View>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -110,7 +114,7 @@ export default function SubscriptionScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
+          <ArrowLeft size={24} color={theme.textSecondary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
@@ -166,7 +170,7 @@ export default function SubscriptionScreen() {
                 <View style={styles.featuresList}>
                   {plan.features.map((feature, index) => (
                     <View key={index} style={styles.featureRow}>
-                      <Check size={16} color={colors.success[500]} />
+                      <Check size={16} color={theme.success} />
                       <Text style={styles.featureText}>{feature}</Text>
                     </View>
                   ))}
@@ -208,10 +212,10 @@ export default function SubscriptionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark[800],
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -219,14 +223,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
+    borderBottomColor: theme.backgroundTertiary,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   backText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
   },
@@ -240,19 +244,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
+    color: theme.text,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
+    color: theme.textTertiary,
     marginBottom: 20,
   },
   section: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
+    borderColor: theme.cardBorder,
     overflow: 'hidden',
     marginBottom: 16,
   },
@@ -294,30 +298,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   planName: {
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 20,
     fontWeight: '700',
   },
   currentBadge: {
-    backgroundColor: colors.success[500] + '20',
+    backgroundColor: theme.success + '20',
     borderWidth: 1,
-    borderColor: colors.success[500] + '30',
+    borderColor: theme.success + '30',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
   },
   currentBadgeText: {
-    color: colors.success[500],
+    color: theme.success,
     fontSize: 11,
     fontWeight: '700',
   },
   planPricing: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 14,
     marginTop: 2,
   },
   planPrice: {
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -338,30 +342,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   featureText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     fontSize: 14,
   },
   limitationDot: {
     width: 4,
     height: 4,
-    backgroundColor: colors.dark[400],
+    backgroundColor: theme.textTertiary,
     borderRadius: 2,
     marginLeft: 6,
   },
   limitationText: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     fontSize: 14,
   },
   // Subscribe button
   subscribeButton: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: theme.primary,
     borderRadius: 12,
     paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: colors.primary[500],
+    shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -376,7 +380,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   disclaimer: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     textAlign: 'center',
     fontSize: 12,
     marginTop: 16,

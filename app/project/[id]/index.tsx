@@ -18,9 +18,10 @@ import {
 } from 'lucide-react-native';
 import { useProjectStore } from '@/stores/project.store';
 import { useDeviceStore } from '@/stores/device.store';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function ProjectDetailScreen() {
+  const { theme } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getProject, fetchFileTree, fileTree } = useProjectStore();
   const { devices } = useDeviceStore();
@@ -35,15 +36,15 @@ export default function ProjectDetailScreen() {
 
   if (!project) {
     return (
-      <SafeAreaView className="flex-1 bg-dark-800 items-center justify-center">
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-8 items-center mx-4">
-          <FolderGit2 size={48} color={colors.dark[400]} />
-          <Text className="text-dark-200 text-lg mt-4">Project not found</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 32, alignItems: 'center', marginHorizontal: 16 }}>
+          <FolderGit2 size={48} color={theme.textTertiary} />
+          <Text style={{ color: theme.textSecondary, fontSize: 18, marginTop: 16 }}>Project not found</Text>
           <TouchableOpacity
             onPress={() => router.back()}
-            className="mt-4 bg-dark-600 border border-dark-500 px-6 py-3 rounded-full"
+            style={{ marginTop: 16, backgroundColor: theme.backgroundTertiary, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999 }}
           >
-            <Text className="text-dark-50 font-medium">Go Back</Text>
+            <Text style={{ color: theme.text, fontWeight: '500' }}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -58,66 +59,78 @@ export default function ProjectDetailScreen() {
   const isDeviceOnline = device?.status?.toLowerCase() === 'online';
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2 flex-row items-center justify-between">
+      <View style={{ backgroundColor: theme.background, borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={{ flexDirection: 'row', alignItems: 'center' }}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <ArrowLeft size={24} color={theme.textSecondary} />
+          <Text style={{ color: theme.textSecondary, marginLeft: 8, fontWeight: '500' }}>Back</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => router.push(`/project/${id}/settings`)}
-          className="w-10 h-10 bg-dark-700 border border-dark-500 rounded-lg items-center justify-center"
+          style={{ width: 40, height: 40, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Settings size={20} color={colors.dark[200]} />
+          <Settings size={20} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
+      <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} contentContainerStyle={{ paddingVertical: 16, paddingBottom: 32 }}>
         {/* Project Info Card */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-5 mb-6 overflow-hidden">
+        <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 20, marginBottom: 24, overflow: 'hidden' }}>
           {isActive && (
             <View
-              className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-              style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(30px)' }}
+              style={{ position: 'absolute', top: -48, right: -48, width: 96, height: 96, opacity: 0.1, backgroundColor: theme.primary, borderRadius: 100 }}
             />
           )}
 
-          <View className="flex-row items-start justify-between mb-4">
-            <View className="flex-row items-center gap-3">
-              <View className="w-12 h-12 bg-dark-800 border border-dark-500 rounded-xl items-center justify-center">
-                <FolderGit2 size={24} color={colors.primary[500]} />
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 48, height: 48, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <FolderGit2 size={24} color={theme.primary} />
               </View>
               <View>
-                <Text className="text-dark-50 text-xl font-bold">{project.name}</Text>
-                <Text className="text-dark-200 text-sm">
+                <Text style={{ color: theme.text, fontSize: 20, fontWeight: 'bold' }}>{project.name}</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
                   {project.language}
-                  {project.framework && ` • ${project.framework}`}
+                  {project.framework && ` \u2022 ${project.framework}`}
                 </Text>
               </View>
             </View>
 
             {/* Status Badge */}
             <View
-              className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
-                isActive
-                  ? 'bg-primary-500/10 border border-primary-500/20'
-                  : 'bg-dark-500/30 border border-dark-500'
-              }`}
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: isActive ? theme.primary + '1A' : theme.border + '4D',
+                borderWidth: 1,
+                borderColor: isActive ? theme.primary + '33' : theme.border,
+              }}
             >
               <View
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isActive ? 'bg-primary-500' : 'bg-dark-200'
-                }`}
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: isActive ? theme.primary : theme.textSecondary,
+                }}
               />
               <Text
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  isActive ? 'text-primary-500' : 'text-dark-200'
-                }`}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  color: isActive ? theme.primary : theme.textSecondary,
+                }}
               >
                 {isActive ? 'Active' : 'Idle'}
               </Text>
@@ -125,19 +138,19 @@ export default function ProjectDetailScreen() {
           </View>
 
           {/* Branch Info */}
-          <View className="bg-dark-800 border border-dark-500 rounded-lg p-3 flex-row items-center justify-between mb-4">
-            <View className="flex-row items-center gap-2">
-              <GitBranch size={14} color={colors.dark[200]} />
-              <Text className="text-dark-200 text-sm font-mono">{project.branch || 'main'}</Text>
+          <View style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <GitBranch size={14} color={theme.textSecondary} />
+              <Text style={{ color: theme.textSecondary, fontSize: 14, fontFamily: 'monospace' }}>{project.branch || 'main'}</Text>
             </View>
             {project.uncommittedChanges ? (
-              <Text className="text-warning-300 text-xs font-medium">
+              <Text style={{ color: theme.warning, fontSize: 12, fontWeight: '500' }}>
                 {project.uncommittedChanges} changes
               </Text>
             ) : (
-              <View className="flex-row items-center gap-1">
-                <Check size={12} color={colors.success[500]} />
-                <Text className="text-success-500 text-xs">Clean</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Check size={12} color={theme.success} />
+                <Text style={{ color: theme.success, fontSize: 12 }}>Clean</Text>
               </View>
             )}
           </View>
@@ -146,28 +159,37 @@ export default function ProjectDetailScreen() {
           {device && (
             <TouchableOpacity
               onPress={() => router.push(`/device/${device.id}`)}
-              className="flex-row items-center justify-between"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <View className="flex-row items-center gap-2">
-                <Laptop size={14} color={colors.dark[300]} />
-                <Text className="text-dark-300 text-sm">{device.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Laptop size={14} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, fontSize: 14 }}>{device.name}</Text>
               </View>
               <View
-                className={`px-2 py-0.5 rounded flex-row items-center gap-1 ${
-                  isDeviceOnline
-                    ? 'bg-primary-500/10'
-                    : 'bg-dark-500/30'
-                }`}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: isDeviceOnline ? theme.primary + '1A' : theme.border + '4D',
+                }}
               >
                 <View
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    isDeviceOnline ? 'bg-primary-500' : 'bg-dark-300'
-                  }`}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: isDeviceOnline ? theme.primary : theme.textTertiary,
+                  }}
                 />
                 <Text
-                  className={`text-[10px] font-medium ${
-                    isDeviceOnline ? 'text-primary-500' : 'text-dark-300'
-                  }`}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: '500',
+                    color: isDeviceOnline ? theme.primary : theme.textTertiary,
+                  }}
                 >
                   {isDeviceOnline ? 'Online' : 'Offline'}
                 </Text>
@@ -177,116 +199,135 @@ export default function ProjectDetailScreen() {
         </View>
 
         {/* Quick Actions */}
-        <View className="flex-row gap-3 mb-6">
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
           <TouchableOpacity
             onPress={() => router.push(`/project/${id}/terminals`)}
-            className="flex-1 bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+            style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16, alignItems: 'center' }}
           >
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mb-2">
-              <Terminal size={20} color={colors.success[500]} />
+            <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <Terminal size={20} color={theme.success} />
             </View>
-            <Text className="text-dark-50 font-medium text-sm">Terminal</Text>
+            <Text style={{ color: theme.text, fontWeight: '500', fontSize: 14 }}>Terminal</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.push(`/project/${id}/code`)}
-            className="flex-1 bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+            style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16, alignItems: 'center' }}
           >
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mb-2">
-              <FolderTree size={20} color={colors.warning[300]} />
+            <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <FolderTree size={20} color={theme.warning} />
             </View>
-            <Text className="text-dark-50 font-medium text-sm">Files</Text>
+            <Text style={{ color: theme.text, fontWeight: '500', fontSize: 14 }}>Files</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.push(`/project/${id}/servers`)}
-            className="flex-1 bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+            style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16, alignItems: 'center' }}
           >
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mb-2">
-              <Server size={20} color={colors.primary[500]} />
+            <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <Server size={20} color={theme.primary} />
             </View>
-            <Text className="text-dark-50 font-medium text-sm">Servers</Text>
+            <Text style={{ color: theme.text, fontWeight: '500', fontSize: 14 }}>Servers</Text>
           </TouchableOpacity>
         </View>
 
         {/* Servers */}
-        <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider">
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={{ color: theme.textTertiary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Servers ({servers.length})
             </Text>
             <TouchableOpacity
               onPress={() => router.push(`/project/${id}/servers`)}
-              className="flex-row items-center"
+              style={{ flexDirection: 'row', alignItems: 'center' }}
             >
-              <Text className="text-primary-500 text-xs mr-1">Manage</Text>
-              <ChevronRight size={14} color={colors.primary[500]} />
+              <Text style={{ color: theme.primary, fontSize: 12, marginRight: 4 }}>Manage</Text>
+              <ChevronRight size={14} color={theme.primary} />
             </TouchableOpacity>
           </View>
 
           {servers.length === 0 ? (
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
-              <Server size={36} color={colors.dark[400]} />
-              <Text className="text-dark-200 mt-3 text-center text-sm">
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+              <Server size={36} color={theme.textTertiary} />
+              <Text style={{ color: theme.textSecondary, marginTop: 12, textAlign: 'center', fontSize: 14 }}>
                 No servers configured
               </Text>
             </View>
           ) : (
-            <View className="gap-3">
+            <View style={{ gap: 12 }}>
               {servers.map((server) => {
                 const isRunning = server.status === 'running';
                 return (
                   <View
                     key={server.id}
-                    className="bg-dark-700 border border-dark-500 rounded-xl p-4 overflow-hidden"
+                    style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16, overflow: 'hidden' }}
                   >
                     {isRunning && (
                       <View
-                        className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-                        style={{ backgroundColor: colors.success[500], borderRadius: 100, filter: 'blur(30px)' }}
+                        style={{ position: 'absolute', top: -48, right: -48, width: 96, height: 96, opacity: 0.1, backgroundColor: theme.success, borderRadius: 100 }}
                       />
                     )}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center">
-                        <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
-                          <Server size={20} color={isRunning ? colors.success[500] : colors.dark[300]} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                          <Server size={20} color={isRunning ? theme.success : theme.textTertiary} />
                         </View>
                         <View>
-                          <Text className="text-dark-50 font-medium">{server.name}</Text>
-                          <Text className="text-dark-300 text-xs">Port {server.port}</Text>
+                          <Text style={{ color: theme.text, fontWeight: '500' }}>{server.name}</Text>
+                          <Text style={{ color: theme.textTertiary, fontSize: 12 }}>Port {server.port}</Text>
                         </View>
                       </View>
 
-                      <View className="flex-row items-center gap-2">
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <View
-                          className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
-                            isRunning
-                              ? 'bg-success-500/10 border border-success-500/20'
-                              : 'bg-dark-500/30 border border-dark-500'
-                          }`}
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 4,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            backgroundColor: isRunning ? theme.success + '1A' : theme.border + '4D',
+                            borderWidth: 1,
+                            borderColor: isRunning ? theme.success + '33' : theme.border,
+                          }}
                         >
                           <View
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isRunning ? 'bg-success-500' : 'bg-dark-300'
-                            }`}
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: isRunning ? theme.success : theme.textTertiary,
+                            }}
                           />
                           <Text
-                            className={`text-[10px] font-bold uppercase tracking-wider ${
-                              isRunning ? 'text-success-500' : 'text-dark-200'
-                            }`}
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                              color: isRunning ? theme.success : theme.textSecondary,
+                            }}
                           >
                             {isRunning ? 'Running' : 'Stopped'}
                           </Text>
                         </View>
                         <TouchableOpacity
-                          className={`w-8 h-8 rounded-lg items-center justify-center ${
-                            isRunning ? 'bg-error-300/10 border border-error-300/20' : 'bg-success-500/10 border border-success-500/20'
-                          }`}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isRunning ? theme.error + '1A' : theme.success + '1A',
+                            borderWidth: 1,
+                            borderColor: isRunning ? theme.error + '33' : theme.success + '33',
+                          }}
                         >
                           {isRunning ? (
-                            <Square size={14} color={colors.error[300]} />
+                            <Square size={14} color={theme.error} />
                           ) : (
-                            <Play size={14} color={colors.success[500]} />
+                            <Play size={14} color={theme.success} />
                           )}
                         </TouchableOpacity>
                       </View>
@@ -299,40 +340,40 @@ export default function ProjectDetailScreen() {
         </View>
 
         {/* AI Tools */}
-        <View className="mb-6">
-          <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider mb-3">
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ color: theme.textTertiary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
             AI Tools ({tools.length})
           </Text>
 
           {tools.length === 0 ? (
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
-              <Terminal size={36} color={colors.dark[400]} />
-              <Text className="text-dark-200 mt-3 text-center text-sm">
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+              <Terminal size={36} color={theme.textTertiary} />
+              <Text style={{ color: theme.textSecondary, marginTop: 12, textAlign: 'center', fontSize: 14 }}>
                 No AI tools configured
               </Text>
             </View>
           ) : (
-            <View className="gap-3">
+            <View style={{ gap: 12 }}>
               {tools.map((tool) => (
                 <TouchableOpacity
                   key={tool.toolType}
-                  className="bg-dark-700 border border-dark-500 rounded-xl p-4"
+                  style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}
                 >
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center">
-                      <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
-                        <Terminal size={20} color={tool.enabled ? colors.primary[500] : colors.dark[300]} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                        <Terminal size={20} color={tool.enabled ? theme.primary : theme.textTertiary} />
                       </View>
                       <View>
-                        <Text className="text-dark-50 font-medium capitalize">
+                        <Text style={{ color: theme.text, fontWeight: '500', textTransform: 'capitalize' }}>
                           {tool.toolType.replace('-', ' ')}
                         </Text>
-                        <Text className="text-dark-300 text-xs">
+                        <Text style={{ color: theme.textTertiary, fontSize: 12 }}>
                           {tool.enabled ? 'Enabled' : 'Disabled'}
                         </Text>
                       </View>
                     </View>
-                    <ChevronRight size={18} color={colors.dark[400]} />
+                    <ChevronRight size={18} color={theme.textTertiary} />
                   </View>
                 </TouchableOpacity>
               ))}
@@ -342,42 +383,41 @@ export default function ProjectDetailScreen() {
 
         {/* Files Preview */}
         <View>
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-dark-300 text-xs font-bold uppercase tracking-wider">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={{ color: theme.textTertiary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Files
             </Text>
             <TouchableOpacity
               onPress={() => router.push(`/project/${id}/code`)}
-              className="flex-row items-center"
+              style={{ flexDirection: 'row', alignItems: 'center' }}
             >
-              <Text className="text-primary-500 text-xs mr-1">Browse</Text>
-              <ChevronRight size={14} color={colors.primary[500]} />
+              <Text style={{ color: theme.primary, fontSize: 12, marginRight: 4 }}>Browse</Text>
+              <ChevronRight size={14} color={theme.primary} />
             </TouchableOpacity>
           </View>
 
-          <View className="bg-dark-700 border border-dark-500 rounded-xl p-4">
+          <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
             {projectFiles.length === 0 ? (
-              <View className="items-center py-4">
-                <FolderTree size={32} color={colors.dark[400]} />
-                <Text className="text-dark-300 mt-2 text-sm">No files loaded</Text>
+              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                <FolderTree size={32} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, marginTop: 8, fontSize: 14 }}>No files loaded</Text>
               </View>
             ) : (
-              <View className="gap-2">
+              <View style={{ gap: 8 }}>
                 {projectFiles.slice(0, 5).map((file) => (
                   <View
                     key={file.path}
-                    className="flex-row items-center py-2"
-                    style={{ paddingLeft: file.type === 'directory' ? 0 : 16 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: file.type === 'directory' ? 0 : 16 }}
                   >
                     <FolderTree
                       size={14}
-                      color={file.type === 'directory' ? colors.warning[300] : colors.dark[300]}
+                      color={file.type === 'directory' ? theme.warning : theme.textTertiary}
                     />
-                    <Text className="text-dark-200 ml-2 text-sm font-mono">{file.name}</Text>
+                    <Text style={{ color: theme.textSecondary, marginLeft: 8, fontSize: 14, fontFamily: 'monospace' }}>{file.name}</Text>
                   </View>
                 ))}
                 {projectFiles.length > 5 && (
-                  <Text className="text-dark-400 text-xs mt-2">
+                  <Text style={{ color: theme.textTertiary, fontSize: 12, marginTop: 8 }}>
                     +{projectFiles.length - 5} more files
                   </Text>
                 )}

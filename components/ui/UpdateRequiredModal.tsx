@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { ArrowUpCircle, ExternalLink } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useVersionStore } from '@/stores/version.store';
 
 interface UpdateRequiredModalProps {
@@ -19,6 +19,7 @@ interface UpdateRequiredModalProps {
 }
 
 export function UpdateRequiredModal({ visible }: UpdateRequiredModalProps) {
+  const { theme } = useTheme();
   const { updateMessage, currentVersion, versionConfig } = useVersionStore();
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -68,52 +69,54 @@ export function UpdateRequiredModal({ visible }: UpdateRequiredModalProps) {
       animationType="none"
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
         <Animated.View
           style={[
             styles.container,
             {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
               transform: [{ scale: scaleAnim }],
               opacity: opacityAnim,
             },
           ]}
         >
           {/* macOS-style title bar */}
-          <View style={styles.titleBar}>
-            <View style={[styles.dot, { backgroundColor: colors.error[400] }]} />
-            <View style={[styles.dot, { backgroundColor: colors.warning[300] }]} />
-            <View style={[styles.dot, { backgroundColor: colors.success[300] }]} />
-            <Text style={styles.titleBarText}>forkoff</Text>
+          <View style={[styles.titleBar, { backgroundColor: theme.backgroundSecondary, borderBottomColor: theme.border }]}>
+            <View style={[styles.dot, { backgroundColor: theme.error }]} />
+            <View style={[styles.dot, { backgroundColor: theme.warning }]} />
+            <View style={[styles.dot, { backgroundColor: theme.success }]} />
+            <Text style={[styles.titleBarText, { color: theme.textTertiary }]}>forkoff</Text>
           </View>
 
           {/* Content */}
           <View style={styles.content}>
             {/* Icon */}
-            <View style={styles.iconContainer}>
-              <ArrowUpCircle size={48} color={colors.primary[400]} />
+            <View style={[styles.iconContainer, { backgroundColor: theme.backgroundSecondary, borderColor: theme.primary }]}>
+              <ArrowUpCircle size={48} color={theme.primary} />
             </View>
 
             {/* Title */}
-            <Text style={styles.title}>Update Required</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Update Required</Text>
 
             {/* Message */}
-            <Text style={styles.message}>{updateMessage}</Text>
+            <Text style={[styles.message, { color: theme.textSecondary }]}>{updateMessage}</Text>
 
             {/* Version info */}
-            <View style={styles.versionInfo}>
-              <Text style={styles.versionLabel}>Current version:</Text>
-              <Text style={styles.versionValue}>{currentVersion}</Text>
+            <View style={[styles.versionInfo, { backgroundColor: theme.backgroundSecondary }]}>
+              <Text style={[styles.versionLabel, { color: theme.textTertiary }]}>Current version:</Text>
+              <Text style={[styles.versionValue, { color: theme.text }]}>{currentVersion}</Text>
             </View>
             {versionConfig && (
-              <View style={styles.versionInfo}>
-                <Text style={styles.versionLabel}>Required version:</Text>
-                <Text style={styles.versionValue}>{versionConfig.minVersion}+</Text>
+              <View style={[styles.versionInfo, { backgroundColor: theme.backgroundSecondary }]}>
+                <Text style={[styles.versionLabel, { color: theme.textTertiary }]}>Required version:</Text>
+                <Text style={[styles.versionValue, { color: theme.text }]}>{versionConfig.minVersion}+</Text>
               </View>
             )}
 
             {/* Update button */}
             <TouchableOpacity
-              style={styles.updateButton}
+              style={[styles.updateButton, { backgroundColor: theme.primary }]}
               onPress={handleOpenStore}
               activeOpacity={0.8}
             >
@@ -123,7 +126,7 @@ export function UpdateRequiredModal({ visible }: UpdateRequiredModalProps) {
           </View>
 
           {/* Bottom accent bar */}
-          <View style={styles.accentBar} />
+          <View style={[styles.accentBar, { backgroundColor: theme.primary }]} />
         </Animated.View>
       </View>
     </Modal>
@@ -135,25 +138,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
   },
   container: {
     width: '90%',
     maxWidth: 360,
-    backgroundColor: colors.dark[800],
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.dark[600],
   },
   titleBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: colors.dark[700],
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
     gap: 6,
   },
   dot: {
@@ -163,7 +161,6 @@ const styles = StyleSheet.create({
   },
   titleBarText: {
     fontSize: 12,
-    color: colors.dark[300],
     fontFamily: 'monospace',
     marginLeft: 8,
   },
@@ -175,9 +172,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.dark[700],
     borderWidth: 2,
-    borderColor: colors.primary[500],
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -185,13 +180,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.dark[50],
     textAlign: 'center',
     marginBottom: 12,
   },
   message: {
     fontSize: 15,
-    color: colors.dark[200],
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -202,18 +195,15 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: colors.dark[700],
     borderRadius: 8,
     marginBottom: 8,
   },
   versionLabel: {
     fontSize: 13,
-    color: colors.dark[300],
   },
   versionValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.dark[100],
     fontFamily: 'monospace',
   },
   updateButton: {
@@ -221,7 +211,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.primary[600],
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 10,
@@ -235,7 +224,6 @@ const styles = StyleSheet.create({
   },
   accentBar: {
     height: 4,
-    backgroundColor: colors.primary[500],
   },
 });
 

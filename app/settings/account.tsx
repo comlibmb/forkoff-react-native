@@ -1,27 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Mail, User, AtSign, Sparkles, ChevronRight, Trash2, Check, X } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
-import { colors } from '@/theme/colors';
-
-function Section({ title, children }: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      {title && <Text style={styles.sectionTitle}>{title}</Text>}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionContent}>{children}</View>
-      </View>
-    </View>
-  );
-}
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function AccountScreen() {
+  const { theme } = useTheme();
   const { user, updateProfile, deleteAccount, validateUsername, checkUsernameAvailability, isLoading } = useAuthStore();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -31,6 +18,8 @@ export default function AccountScreen() {
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleNameChange = (text: string) => {
     setName(text);
@@ -118,6 +107,20 @@ export default function AccountScreen() {
     }
   };
 
+  function Section({ title, children }: {
+    title: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <View style={styles.section}>
+        {title && <Text style={styles.sectionTitle}>{title}</Text>}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionContent}>{children}</View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -126,7 +129,7 @@ export default function AccountScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
+          <ArrowLeft size={24} color={theme.textSecondary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
@@ -165,11 +168,11 @@ export default function AccountScreen() {
             <Text style={styles.inputLabel}>Username</Text>
             <View style={styles.inputWrapper}>
               <View style={styles.inputIcon}>
-                <AtSign size={18} color={colors.dark[300]} />
+                <AtSign size={18} color={theme.textTertiary} />
               </View>
               <TextInput
                 placeholder="username"
-                placeholderTextColor={colors.dark[400]}
+                placeholderTextColor={theme.textTertiary}
                 value={username}
                 onChangeText={handleUsernameChange}
                 autoCapitalize="none"
@@ -181,11 +184,11 @@ export default function AccountScreen() {
               />
               <View style={styles.inputStatus}>
                 {isCheckingUsername ? (
-                  <ActivityIndicator size="small" color={colors.dark[300]} />
+                  <ActivityIndicator size="small" color={theme.textTertiary} />
                 ) : isUsernameAvailable === true ? (
-                  <Check size={18} color={colors.success[500]} />
+                  <Check size={18} color={theme.success} />
                 ) : isUsernameAvailable === false ? (
-                  <X size={18} color={colors.error[300]} />
+                  <X size={18} color={theme.error} />
                 ) : null}
               </View>
             </View>
@@ -203,11 +206,11 @@ export default function AccountScreen() {
             <Text style={styles.inputLabel}>Display Name</Text>
             <View style={styles.inputWrapper}>
               <View style={styles.inputIcon}>
-                <User size={18} color={colors.dark[300]} />
+                <User size={18} color={theme.textTertiary} />
               </View>
               <TextInput
                 placeholder="Your name"
-                placeholderTextColor={colors.dark[400]}
+                placeholderTextColor={theme.textTertiary}
                 value={name}
                 onChangeText={handleNameChange}
                 style={styles.textInput}
@@ -219,7 +222,7 @@ export default function AccountScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.readOnlyField}>
-              <Mail size={18} color={colors.dark[300]} />
+              <Mail size={18} color={theme.textTertiary} />
               <Text style={styles.readOnlyText}>{user?.email}</Text>
             </View>
             <Text style={styles.hintText}>Email cannot be changed</Text>
@@ -240,10 +243,10 @@ export default function AccountScreen() {
             </View>
             <View style={styles.upgradeRow}>
               <View style={styles.upgradeBadge}>
-                <Sparkles size={12} color={colors.primary[500]} />
+                <Sparkles size={12} color={theme.primary} />
                 <Text style={styles.upgradeText}>Upgrade</Text>
               </View>
-              <ChevronRight size={18} color={colors.dark[400]} />
+              <ChevronRight size={18} color={theme.textTertiary} />
             </View>
           </TouchableOpacity>
         </Section>
@@ -298,9 +301,9 @@ export default function AccountScreen() {
             style={styles.deleteButton}
           >
             {isDeleting ? (
-              <ActivityIndicator size="small" color={colors.error[300]} />
+              <ActivityIndicator size="small" color={theme.error} />
             ) : (
-              <Trash2 size={18} color={colors.error[300]} />
+              <Trash2 size={18} color={theme.error} />
             )}
             <Text style={styles.deleteButtonText}>
               {isDeleting ? 'Deleting...' : 'Delete Account'}
@@ -312,10 +315,10 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark[800],
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -324,19 +327,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
+    borderBottomColor: theme.backgroundTertiary,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   backText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
   },
   saveButton: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: theme.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -356,14 +359,14 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
+    color: theme.text,
     marginBottom: 20,
   },
   section: {
     marginBottom: 16,
   },
   sectionTitle: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -372,10 +375,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sectionCard: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
+    borderColor: theme.cardBorder,
     overflow: 'hidden',
   },
   sectionContent: {
@@ -390,7 +393,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primary[600],
+    backgroundColor: theme.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -401,7 +404,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   avatarHint: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     fontSize: 12,
   },
   // Inputs
@@ -409,7 +412,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -427,21 +430,21 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   textInput: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 10,
     paddingLeft: 44,
     paddingRight: 44,
     paddingVertical: 14,
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 15,
   },
   inputError: {
-    borderColor: colors.error[300],
+    borderColor: theme.error,
   },
   inputSuccess: {
-    borderColor: colors.success[500],
+    borderColor: theme.success,
   },
   inputStatus: {
     position: 'absolute',
@@ -450,27 +453,27 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -9 }],
   },
   errorText: {
-    color: colors.error[300],
+    color: theme.error,
     fontSize: 12,
     marginTop: 6,
   },
   hintText: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     fontSize: 12,
     marginTop: 6,
   },
   readOnlyField: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   readOnlyText: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     marginLeft: 12,
     fontSize: 15,
   },
@@ -481,12 +484,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   subscriptionTitle: {
-    color: colors.dark[50],
+    color: theme.text,
     fontWeight: '600',
     fontSize: 15,
   },
   subscriptionPlan: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 14,
     marginTop: 2,
     textTransform: 'capitalize',
@@ -499,16 +502,16 @@ const styles = StyleSheet.create({
   upgradeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary[500] + '15',
+    backgroundColor: theme.primary + '15',
     borderWidth: 1,
-    borderColor: colors.primary[500] + '30',
+    borderColor: theme.primary + '30',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
   },
   upgradeText: {
-    color: colors.primary[500],
+    color: theme.primary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -517,7 +520,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   accountInfoText: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     fontSize: 12,
     textAlign: 'center',
   },
@@ -526,15 +529,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.error[300] + '15',
+    backgroundColor: theme.error + '15',
     borderWidth: 1,
-    borderColor: colors.error[300] + '30',
+    borderColor: theme.error + '30',
     borderRadius: 10,
     paddingVertical: 14,
     gap: 8,
   },
   deleteButtonText: {
-    color: colors.error[300],
+    color: theme.error,
     fontWeight: '700',
     fontSize: 15,
   },

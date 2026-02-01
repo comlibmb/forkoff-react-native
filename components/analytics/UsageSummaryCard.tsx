@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Coins, TrendingUp, MessageSquare, Flame } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 
 interface UsageSummaryCardProps {
   title: string;
@@ -11,18 +11,13 @@ interface UsageSummaryCardProps {
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   large?: boolean;
+  theme?: ThemeColors;
 }
 
 const iconMap = {
   tokens: Coins,
   sessions: MessageSquare,
   streak: Flame,
-};
-
-const iconColors = {
-  tokens: colors.primary[400],
-  sessions: colors.success[400],
-  streak: colors.error[400],
 };
 
 export function UsageSummaryCard({
@@ -33,12 +28,23 @@ export function UsageSummaryCard({
   trend,
   trendValue,
   large,
+  theme: themeProp,
 }: UsageSummaryCardProps) {
+  const { theme: contextTheme, colors } = useTheme();
+  const theme = themeProp || contextTheme;
+
   const Icon = iconMap[icon];
+
+  const iconColors = {
+    tokens: colors.primary[400],
+    sessions: colors.success[400],
+    streak: colors.error[400],
+  };
+
   const iconColor = iconColors[icon];
 
   return (
-    <View style={[styles.card, large && styles.cardLarge]}>
+    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.backgroundTertiary }, large && styles.cardLarge]}>
       <View style={styles.header}>
         <View style={[
           styles.iconContainer,
@@ -51,15 +57,17 @@ export function UsageSummaryCard({
           <View
             style={[
               styles.trendBadge,
-              trend === 'up' && styles.trendUp,
-              trend === 'down' && styles.trendDown,
+              { backgroundColor: theme.backgroundTertiary },
+              trend === 'up' && { backgroundColor: colors.success[400] + '20' },
+              trend === 'down' && { backgroundColor: colors.error[400] + '20' },
             ]}
           >
             <Text
               style={[
                 styles.trendText,
-                trend === 'up' && styles.trendTextUp,
-                trend === 'down' && styles.trendTextDown,
+                { color: theme.textTertiary },
+                trend === 'up' && { color: colors.success[400] },
+                trend === 'down' && { color: colors.error[400] },
               ]}
             >
               {trend === 'up' ? '+' : ''}{trendValue}
@@ -68,19 +76,17 @@ export function UsageSummaryCard({
         )}
       </View>
 
-      <Text style={[styles.value, large && styles.valueLarge]}>{value}</Text>
-      <Text style={[styles.title, large && styles.titleLarge]}>{title}</Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      <Text style={[styles.value, { color: theme.text }, large && styles.valueLarge]}>{value}</Text>
+      <Text style={[styles.title, { color: theme.textTertiary }, large && styles.titleLarge]}>{title}</Text>
+      {subtitle && <Text style={[styles.subtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     padding: 16,
     flex: 1,
     minWidth: 140,
@@ -111,29 +117,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: colors.dark[600],
-  },
-  trendUp: {
-    backgroundColor: colors.success[400] + '20',
-  },
-  trendDown: {
-    backgroundColor: colors.error[400] + '20',
   },
   trendText: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.dark[300],
-  },
-  trendTextUp: {
-    color: colors.success[400],
-  },
-  trendTextDown: {
-    color: colors.error[400],
   },
   value: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.dark[50],
     marginBottom: 4,
   },
   valueLarge: {
@@ -143,14 +134,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.dark[300],
   },
   titleLarge: {
     fontSize: 15,
   },
   subtitle: {
     fontSize: 11,
-    color: colors.dark[400],
     marginTop: 2,
   },
 });

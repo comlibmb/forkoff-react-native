@@ -15,7 +15,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { AlertTriangle, Check, X, Terminal, FileText, Edit3, HelpCircle, FilePlus, Search } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export type PermissionType = 'tool_use' | 'file_write' | 'bash_command' | 'file_read';
 
@@ -167,19 +167,6 @@ interface ClaudeApprovalProps {
   onDismiss: () => void;
 }
 
-const getIcon = (type: PermissionType, toolName?: string) => {
-  if (toolName?.toLowerCase().includes('bash') || type === 'bash_command') {
-    return <Terminal size={32} color={colors.warning[400]} />;
-  }
-  if (type === 'file_write' || toolName?.toLowerCase().includes('write') || toolName?.toLowerCase().includes('edit')) {
-    return <Edit3 size={32} color={colors.warning[400]} />;
-  }
-  if (type === 'file_read' || toolName?.toLowerCase().includes('read')) {
-    return <FileText size={32} color={colors.primary[400]} />;
-  }
-  return <AlertTriangle size={32} color={colors.warning[400]} />;
-};
-
 const getTypeLabel = (type: PermissionType): string => {
   switch (type) {
     case 'bash_command':
@@ -201,6 +188,20 @@ export default function PermissionRequest({
   onDeny,
 }: PermissionRequestProps) {
   const [rememberChoice, setRememberChoice] = useState(false);
+  const { theme, colors } = useTheme();
+
+  const getIcon = (type: PermissionType, toolName?: string) => {
+    if (toolName?.toLowerCase().includes('bash') || type === 'bash_command') {
+      return <Terminal size={32} color={colors.warning[400]} />;
+    }
+    if (type === 'file_write' || toolName?.toLowerCase().includes('write') || toolName?.toLowerCase().includes('edit')) {
+      return <Edit3 size={32} color={colors.warning[400]} />;
+    }
+    if (type === 'file_read' || toolName?.toLowerCase().includes('read')) {
+      return <FileText size={32} color={colors.primary[400]} />;
+    }
+    return <AlertTriangle size={32} color={colors.warning[400]} />;
+  };
 
   if (!request) return null;
 
@@ -225,26 +226,26 @@ export default function PermissionRequest({
         <View
           className="w-full max-w-sm overflow-hidden"
           style={{
-            backgroundColor: colors.dark[800],
+            backgroundColor: theme.background,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: colors.dark[600],
+            borderColor: theme.backgroundTertiary,
           }}
         >
           {/* macOS-style title bar */}
           <View
             className="flex-row items-center px-3 py-2.5"
             style={{
-              backgroundColor: colors.dark[700],
+              backgroundColor: theme.backgroundSecondary,
               borderBottomWidth: 1,
-              borderBottomColor: colors.dark[600],
+              borderBottomColor: theme.backgroundTertiary,
               gap: 6,
             }}
           >
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error[400] }} />
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning[300] }} />
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.success[300] }} />
-            <Text style={{ fontSize: 12, color: colors.dark[300], fontFamily: 'monospace', marginLeft: 8 }}>
+            <Text style={{ fontSize: 12, color: theme.textTertiary, fontFamily: 'monospace', marginLeft: 8 }}>
               permission-request
             </Text>
           </View>
@@ -254,17 +255,17 @@ export default function PermissionRequest({
             <View
               className="w-14 h-14 rounded-full items-center justify-center mb-4"
               style={{
-                backgroundColor: colors.dark[700],
+                backgroundColor: theme.backgroundSecondary,
                 borderWidth: 2,
                 borderColor: colors.warning[500],
               }}
             >
               {getIcon(request.type, request.toolName)}
             </View>
-            <Text className="text-dark-50 text-lg font-bold text-center mb-1">
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 }}>
               Permission Required
             </Text>
-            <Text className="text-dark-400 text-sm mb-3">
+            <Text style={{ color: theme.textTertiary, fontSize: 14, marginBottom: 12 }}>
               {getTypeLabel(request.type)}
             </Text>
           </View>
@@ -273,17 +274,17 @@ export default function PermissionRequest({
           <View className="px-5">
             {request.toolName && (
               <View className="mb-3">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+                <Text style={{ color: theme.textTertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
                   Tool
                 </Text>
                 <View
                   className="p-2.5"
                   style={{
-                    backgroundColor: colors.dark[700],
+                    backgroundColor: theme.backgroundSecondary,
                     borderRadius: 6,
                   }}
                 >
-                  <Text className="text-dark-100 font-mono text-sm text-center">
+                  <Text style={{ color: theme.text, fontFamily: 'monospace', fontSize: 14, textAlign: 'center' }}>
                     {request.toolName}
                   </Text>
                 </View>
@@ -291,17 +292,17 @@ export default function PermissionRequest({
             )}
 
             <View className="mb-4">
-              <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+              <Text style={{ color: theme.textTertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
                 Description
               </Text>
               <View
                 className="p-3"
                 style={{
-                  backgroundColor: colors.dark[700],
+                  backgroundColor: theme.backgroundSecondary,
                   borderRadius: 6,
                 }}
               >
-                <Text className="text-dark-200 text-sm leading-5 text-center">
+                <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20, textAlign: 'center' }}>
                   {request.description}
                 </Text>
               </View>
@@ -311,14 +312,16 @@ export default function PermissionRequest({
               <View
                 className="p-3 mb-4"
                 style={{
-                  backgroundColor: colors.dark[900],
+                  backgroundColor: theme.background,
                   borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: theme.border,
                 }}
               >
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-2">
+                <Text style={{ color: theme.textTertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
                   Details
                 </Text>
-                <Text className="text-dark-300 font-mono text-xs" numberOfLines={10}>
+                <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }} numberOfLines={10}>
                   {typeof request.details === 'string'
                     ? request.details
                     : JSON.stringify(request.details, null, 2)}
@@ -328,14 +331,14 @@ export default function PermissionRequest({
 
             {/* Remember choice */}
             <View className="flex-row items-center justify-between py-3 mb-2">
-              <Text className="text-dark-300 text-sm">
+              <Text style={{ color: theme.textTertiary, fontSize: 14 }}>
                 Remember this choice
               </Text>
               <Switch
                 value={rememberChoice}
                 onValueChange={setRememberChoice}
-                trackColor={{ false: colors.dark[600], true: colors.primary[600] }}
-                thumbColor={rememberChoice ? colors.primary[400] : colors.dark[400]}
+                trackColor={{ false: theme.switchTrackOff, true: colors.primary[600] }}
+                thumbColor={rememberChoice ? colors.primary[400] : theme.switchThumb}
               />
             </View>
           </View>
@@ -346,13 +349,13 @@ export default function PermissionRequest({
               onPress={handleDeny}
               className="flex-1 py-3 rounded-lg flex-row items-center justify-center"
               style={{
-                backgroundColor: colors.dark[600],
+                backgroundColor: theme.backgroundTertiary,
                 borderWidth: 1,
-                borderColor: colors.dark[500],
+                borderColor: theme.border,
               }}
             >
-              <X size={18} color={colors.dark[200]} />
-              <Text className="text-dark-200 font-semibold ml-2">Deny</Text>
+              <X size={18} color={theme.textSecondary} />
+              <Text style={{ color: theme.textSecondary, fontWeight: '600', marginLeft: 8 }}>Deny</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleApprove}
@@ -360,7 +363,7 @@ export default function PermissionRequest({
               style={{ backgroundColor: colors.primary[600] }}
             >
               <Check size={18} color="#fff" />
-              <Text className="text-white font-semibold ml-2">Allow</Text>
+              <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>Allow</Text>
             </TouchableOpacity>
           </View>
 
@@ -408,22 +411,6 @@ function getOptionColor(key: string): { bg: string; text: string; border: string
   }
 }
 
-// Get icon component based on formatted approval type
-function getApprovalIcon(iconType: FormattedApproval['icon']) {
-  switch (iconType) {
-    case 'file':
-      return <FilePlus size={32} color={colors.primary[400]} />;
-    case 'terminal':
-      return <Terminal size={32} color={colors.warning[400]} />;
-    case 'edit':
-      return <Edit3 size={32} color={colors.primary[400]} />;
-    case 'search':
-      return <Search size={32} color={colors.dark[300]} />;
-    default:
-      return <HelpCircle size={32} color={colors.warning[400]} />;
-  }
-}
-
 /**
  * ClaudeApproval - Claude approval request UI with macOS styling
  *
@@ -436,6 +423,24 @@ export function ClaudeApproval({
   onRespond,
   onDismiss,
 }: ClaudeApprovalProps) {
+  const { theme, colors } = useTheme();
+
+  // Get icon component based on formatted approval type
+  const getApprovalIcon = (iconType: FormattedApproval['icon']) => {
+    switch (iconType) {
+      case 'file':
+        return <FilePlus size={32} color={colors.primary[400]} />;
+      case 'terminal':
+        return <Terminal size={32} color={colors.warning[400]} />;
+      case 'edit':
+        return <Edit3 size={32} color={colors.primary[400]} />;
+      case 'search':
+        return <Search size={32} color={theme.textTertiary} />;
+      default:
+        return <HelpCircle size={32} color={colors.warning[400]} />;
+    }
+  };
+
   if (!request) return null;
 
   const formatted = formatApprovalRequest(request);
@@ -454,7 +459,7 @@ export function ClaudeApproval({
       case 'edit':
         return colors.primary[500];
       case 'search':
-        return colors.dark[400];
+        return theme.textTertiary;
       default:
         return colors.warning[500];
     }
@@ -471,26 +476,26 @@ export function ClaudeApproval({
         <View
           className="w-full max-w-sm overflow-hidden"
           style={{
-            backgroundColor: colors.dark[800],
+            backgroundColor: theme.background,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: colors.dark[600],
+            borderColor: theme.backgroundTertiary,
           }}
         >
           {/* macOS-style title bar */}
           <View
             className="flex-row items-center px-3 py-2.5"
             style={{
-              backgroundColor: colors.dark[700],
+              backgroundColor: theme.backgroundSecondary,
               borderBottomWidth: 1,
-              borderBottomColor: colors.dark[600],
+              borderBottomColor: theme.backgroundTertiary,
               gap: 6,
             }}
           >
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error[400] }} />
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning[300] }} />
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.success[300] }} />
-            <Text style={{ fontSize: 12, color: colors.dark[300], fontFamily: 'monospace', marginLeft: 8 }}>
+            <Text style={{ fontSize: 12, color: theme.textTertiary, fontFamily: 'monospace', marginLeft: 8 }}>
               claude-approval
             </Text>
           </View>
@@ -500,18 +505,18 @@ export function ClaudeApproval({
             <View
               className="w-14 h-14 rounded-full items-center justify-center mb-4"
               style={{
-                backgroundColor: colors.dark[700],
+                backgroundColor: theme.backgroundSecondary,
                 borderWidth: 2,
                 borderColor: getAccentColor(),
               }}
             >
               {getApprovalIcon(formatted.icon)}
             </View>
-            <Text className="text-dark-50 text-lg font-bold text-center mb-1">
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 }}>
               {formatted.title}
             </Text>
             {formatted.toolName && (
-              <Text className="text-dark-400 text-sm mb-3">
+              <Text style={{ color: theme.textTertiary, fontSize: 14, marginBottom: 12 }}>
                 Tool: {formatted.toolName}
               </Text>
             )}
@@ -523,11 +528,11 @@ export function ClaudeApproval({
             <View
               className="p-3 mb-3"
               style={{
-                backgroundColor: colors.dark[700],
+                backgroundColor: theme.backgroundSecondary,
                 borderRadius: 8,
               }}
             >
-              <Text className="text-dark-200 text-sm leading-5 text-center">
+              <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20, textAlign: 'center' }}>
                 {formatted.description}
               </Text>
             </View>
@@ -535,17 +540,19 @@ export function ClaudeApproval({
             {/* File path if available */}
             {formatted.filePath && (
               <View className="mb-3">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+                <Text style={{ color: theme.textTertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
                   Path
                 </Text>
                 <View
                   className="p-2.5"
                   style={{
-                    backgroundColor: colors.dark[900],
+                    backgroundColor: theme.background,
                     borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: theme.border,
                   }}
                 >
-                  <Text className="text-dark-300 font-mono text-xs text-center" numberOfLines={2}>
+                  <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12, textAlign: 'center' }} numberOfLines={2}>
                     {formatted.filePath}
                   </Text>
                 </View>
@@ -555,17 +562,19 @@ export function ClaudeApproval({
             {/* Command if available (for Bash) */}
             {formatted.command && formatted.command.length > 100 && (
               <View className="mb-3">
-                <Text className="text-dark-400 text-xs uppercase tracking-wide mb-1.5 text-center">
+                <Text style={{ color: theme.textTertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
                   Command
                 </Text>
                 <View
                   className="p-2.5"
                   style={{
-                    backgroundColor: colors.dark[900],
+                    backgroundColor: theme.background,
                     borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: theme.border,
                   }}
                 >
-                  <Text className="text-dark-300 font-mono text-xs">
+                  <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }}>
                     {formatted.command}
                   </Text>
                 </View>
@@ -577,7 +586,6 @@ export function ClaudeApproval({
           <View className="px-5 py-5">
             <View className="flex-row justify-center gap-2.5">
               {parsedOptions.map((option) => {
-                const optionColor = getOptionColor(option.key);
                 const isYes = option.key.toLowerCase() === 'y';
                 const isNo = option.key.toLowerCase() === 'n';
 
@@ -587,15 +595,15 @@ export function ClaudeApproval({
                     onPress={() => handleRespond(option.key)}
                     className="flex-1 py-3 rounded-lg items-center"
                     style={{
-                      backgroundColor: isYes ? colors.primary[600] : isNo ? colors.dark[600] : colors.warning[600],
+                      backgroundColor: isYes ? colors.primary[600] : isNo ? theme.backgroundTertiary : colors.warning[600],
                       borderWidth: isNo ? 1 : 0,
-                      borderColor: colors.dark[500],
+                      borderColor: theme.border,
                       maxWidth: 100,
                     }}
                   >
                     <Text
                       className="font-bold text-sm uppercase"
-                      style={{ color: isNo ? colors.dark[200] : '#fff' }}
+                      style={{ color: isNo ? theme.textSecondary : '#fff' }}
                     >
                       {option.label}
                     </Text>
@@ -609,7 +617,7 @@ export function ClaudeApproval({
               onPress={onDismiss}
               className="mt-3 py-2 items-center"
             >
-              <Text className="text-dark-500 text-xs">Tap outside to dismiss</Text>
+              <Text style={{ color: theme.border, fontSize: 12 }}>Tap outside to dismiss</Text>
             </TouchableOpacity>
           </View>
 

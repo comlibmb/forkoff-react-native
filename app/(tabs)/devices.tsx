@@ -15,7 +15,7 @@ import {
 import { useDevices } from '@/hooks/useDevices';
 import { useClaudeStore } from '@/stores/claude.store';
 import { Device, ConnectedTool } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const deviceTypeIcons: Record<string, typeof Laptop> = {
   laptop: Laptop,
@@ -32,23 +32,32 @@ type FilterType = 'all' | 'online' | 'offline';
 const ToolBadge = memo(({
   tool,
   hasActiveClaudeSession,
+  theme,
 }: {
   tool: ConnectedTool;
   hasActiveClaudeSession: boolean;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const isClaudeTool = ['claude_code', 'claude-code', 'claude_terminal'].includes(tool.type.toLowerCase());
   const isToolActive = isClaudeTool ? hasActiveClaudeSession : tool.status === 'active';
 
   return (
     <View
-      className={`px-2.5 py-1 rounded flex-row items-center gap-1.5 ${
-        isToolActive
-          ? 'bg-primary-500/10 border border-primary-500/30'
-          : 'bg-dark-800 border border-dark-500'
-      }`}
+      style={[
+        styles.toolBadge,
+        {
+          backgroundColor: isToolActive ? theme.primary + '15' : theme.background,
+          borderColor: isToolActive ? theme.primary + '4D' : theme.border,
+        },
+      ]}
     >
-      <Activity size={10} color={isToolActive ? colors.primary[500] : colors.dark[400]} />
-      <Text className={`text-xs capitalize ${isToolActive ? 'text-primary-400' : 'text-dark-200'}`}>
+      <Activity size={10} color={isToolActive ? theme.primary : theme.textTertiary} />
+      <Text
+        style={[
+          styles.toolBadgeText,
+          { color: isToolActive ? theme.primaryLight : theme.textSecondary },
+        ]}
+      >
         {tool.name}
       </Text>
     </View>
@@ -60,10 +69,12 @@ const DeviceCard = memo(({
   device,
   hasActiveClaudeSession,
   onPress,
+  theme,
 }: {
   device: Device;
   hasActiveClaudeSession: boolean;
   onPress: (id: string) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const Icon = deviceTypeIcons[device.type] || Laptop;
   const connectedTools = device.connectedTools || [];
@@ -77,64 +88,90 @@ const DeviceCard = memo(({
   return (
     <TouchableOpacity
       onPress={handlePress}
-      style={styles.deviceCard}
+      style={[
+        styles.deviceCard,
+        {
+          backgroundColor: theme.background,
+          borderColor: theme.backgroundTertiary,
+        },
+      ]}
     >
-      {isOnline && <View style={styles.glowEffect} />}
+      {isOnline && (
+        <View style={[styles.glowEffect, { backgroundColor: theme.primary }]} />
+      )}
 
-      <View className="flex-row items-start">
-        <View style={styles.deviceIcon}>
-          <Icon size={24} color={isOnline ? colors.primary[500] : colors.dark[300]} />
+      <View style={styles.deviceRow}>
+        <View
+          style={[
+            styles.deviceIcon,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Icon size={24} color={isOnline ? theme.primary : theme.textTertiary} />
         </View>
 
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-1">
-            <Text className="text-dark-50 font-bold text-base">
+        <View style={styles.deviceInfo}>
+          <View style={styles.deviceTitleRow}>
+            <Text style={[styles.deviceName, { color: theme.text }]}>
               {device.name}
             </Text>
             <View
-              className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
-                isOnline
-                  ? 'bg-primary-500/10 border border-primary-500/20'
-                  : 'bg-dark-500/30 border border-dark-500'
-              }`}
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: isOnline ? theme.primary + '15' : theme.border + '4D',
+                  borderColor: isOnline ? theme.primary + '33' : theme.border,
+                },
+              ]}
             >
               <View
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isOnline ? 'bg-primary-500' : 'bg-dark-300'
-                }`}
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: isOnline ? theme.primary : theme.textTertiary },
+                ]}
               />
               <Text
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  isOnline ? 'text-primary-500' : 'text-dark-200'
-                }`}
+                style={[
+                  styles.statusText,
+                  { color: isOnline ? theme.primary : theme.textSecondary },
+                ]}
               >
                 {isSyncing ? 'Syncing' : isOnline ? 'Online' : 'Offline'}
               </Text>
             </View>
           </View>
 
-          <Text className="text-dark-200 text-xs mb-3">
+          <Text style={[styles.deviceMeta, { color: theme.textSecondary }]}>
             {device.platform || 'Unknown'} {'\u2022'} {device.type?.toLowerCase() || 'device'}
           </Text>
 
           {connectedTools.length > 0 && (
-            <View className="flex-row flex-wrap gap-2">
+            <View style={styles.toolsContainer}>
               {connectedTools.map((tool) => (
                 <ToolBadge
                   key={tool.id}
                   tool={tool}
                   hasActiveClaudeSession={hasActiveClaudeSession}
+                  theme={theme}
                 />
               ))}
             </View>
           )}
         </View>
 
-        <ChevronRight size={20} color={colors.dark[400]} className="ml-2" />
+        <ChevronRight size={20} color={theme.textTertiary} style={styles.chevron} />
       </View>
 
       {/* Accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: isOnline ? colors.primary[500] : colors.dark[600] }]} />
+      <View
+        style={[
+          styles.accentBar,
+          { backgroundColor: isOnline ? theme.primary : theme.backgroundTertiary },
+        ]}
+      />
     </TouchableOpacity>
   );
 });
@@ -146,12 +183,14 @@ const FilterPill = memo(({
   icon: FilterIcon,
   isActive,
   onPress,
+  theme,
 }: {
   filterKey: FilterType;
   label: string;
   icon?: typeof Wifi;
   isActive: boolean;
   onPress: (key: FilterType) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const handlePress = useCallback(() => {
     onPress(filterKey);
@@ -162,19 +201,22 @@ const FilterPill = memo(({
       onPress={handlePress}
       style={[
         styles.filterPill,
-        isActive && styles.filterPillActive,
+        {
+          backgroundColor: isActive ? theme.primary + '15' : theme.backgroundSecondary,
+          borderColor: isActive ? theme.primary : theme.border,
+        },
       ]}
     >
       {FilterIcon && (
         <FilterIcon
           size={12}
-          color={isActive ? colors.primary[500] : colors.dark[200]}
+          color={isActive ? theme.primary : theme.textSecondary}
         />
       )}
       <Text
         style={[
           styles.filterPillText,
-          isActive && styles.filterPillTextActive,
+          { color: isActive ? theme.primary : theme.textSecondary },
         ]}
       >
         {label}
@@ -187,13 +229,23 @@ const FilterPill = memo(({
 const EmptyState = memo(({
   filter,
   onAddDevice,
+  theme,
 }: {
   filter: FilterType;
   onAddDevice: () => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => (
-  <View style={styles.emptyState}>
-    <Laptop size={48} color={colors.dark[400]} />
-    <Text style={styles.emptyStateText}>
+  <View
+    style={[
+      styles.emptyState,
+      {
+        backgroundColor: theme.background,
+        borderColor: theme.backgroundTertiary,
+      },
+    ]}
+  >
+    <Laptop size={48} color={theme.textTertiary} />
+    <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
       {filter === 'all'
         ? 'No devices connected.\nAdd a device to get started.'
         : `No ${filter} devices`}
@@ -201,7 +253,7 @@ const EmptyState = memo(({
     {filter === 'all' && (
       <TouchableOpacity
         onPress={onAddDevice}
-        style={styles.addDeviceButton}
+        style={[styles.addDeviceButton, { backgroundColor: theme.primary }]}
       >
         <Plus size={18} color="#fff" />
         <Text style={styles.addDeviceButtonText}>Add Device</Text>
@@ -217,6 +269,7 @@ const filters: { key: FilterType; label: string; icon?: typeof Wifi }[] = [
 ];
 
 export default function DevicesScreen() {
+  const { theme } = useTheme();
   const { devices, fetchDevices, isLoading } = useDevices();
   const sessions = useClaudeStore((state) => state.sessions);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -268,20 +321,21 @@ export default function DevicesScreen() {
       device={item}
       hasActiveClaudeSession={activeSessionsByDevice.get(item.id) || false}
       onPress={handleDevicePress}
+      theme={theme}
     />
-  ), [activeSessionsByDevice, handleDevicePress]);
+  ), [activeSessionsByDevice, handleDevicePress, theme]);
 
   const keyExtractor = useCallback((item: Device) => item.id, []);
 
   const ListEmptyComponent = useMemo(() => (
-    <EmptyState filter={filter} onAddDevice={handleAddDevice} />
-  ), [filter, handleAddDevice]);
+    <EmptyState filter={filter} onAddDevice={handleAddDevice} theme={theme} />
+  ), [filter, handleAddDevice, theme]);
 
   // Add device button for header
   const addButton = (
     <TouchableOpacity
       onPress={handleAddDevice}
-      style={styles.addButton}
+      style={[styles.addButton, { backgroundColor: theme.primary }]}
     >
       <Plus size={16} color="#fff" />
       <Text style={styles.addButtonText}>Add</Text>
@@ -289,20 +343,22 @@ export default function DevicesScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: theme.backgroundTertiary }]}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerTitle}>Devices</Text>
-            <Text style={styles.headerSubtitle}>{onlineCount} of {devices.length} online</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Devices</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>
+              {onlineCount} of {devices.length} online
+            </Text>
           </View>
           {addButton}
         </View>
       </View>
 
       {/* Filter Pills */}
-      <View style={styles.filterContainer}>
+      <View style={[styles.filterContainer, { borderBottomColor: theme.backgroundTertiary }]}>
         {filters.map((f) => (
           <FilterPill
             key={f.key}
@@ -311,6 +367,7 @@ export default function DevicesScreen() {
             icon={f.icon}
             isActive={filter === f.key}
             onPress={handleFilterChange}
+            theme={theme}
           />
         ))}
       </View>
@@ -326,7 +383,7 @@ export default function DevicesScreen() {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={fetchDevices}
-            tintColor={colors.primary[500]}
+            tintColor={theme.primary}
           />
         }
         // Performance optimizations
@@ -340,12 +397,14 @@ export default function DevicesScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
   },
   headerRow: {
     flexDirection: 'row',
@@ -355,18 +414,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
   },
   headerSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
     marginTop: 4,
   },
   deviceCard: {
-    backgroundColor: colors.dark[800],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     padding: 20,
     paddingBottom: 0,
     overflow: 'hidden',
@@ -378,20 +433,79 @@ const styles = StyleSheet.create({
     right: -48,
     width: 96,
     height: 96,
-    backgroundColor: colors.primary[500],
     borderRadius: 48,
     opacity: 0.1,
+  },
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   deviceIcon: {
     width: 48,
     height: 48,
-    backgroundColor: colors.dark[700],
     borderWidth: 1,
-    borderColor: colors.dark[500],
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+  },
+  deviceInfo: {
+    flex: 1,
+  },
+  deviceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  deviceName: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  deviceMeta: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  toolsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  toolBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+  },
+  toolBadgeText: {
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  chevron: {
+    marginLeft: 8,
   },
   accentBar: {
     height: 3,
@@ -404,7 +518,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
   },
   filterPill: {
     flexDirection: 'row',
@@ -412,40 +525,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: colors.dark[700],
     borderWidth: 1,
-    borderColor: colors.dark[500],
     gap: 6,
-  },
-  filterPillActive: {
-    backgroundColor: colors.primary[500] + '15',
-    borderColor: colors.primary[500],
   },
   filterPillText: {
     fontSize: 12,
     fontWeight: '500',
-    color: colors.dark[200],
-  },
-  filterPillTextActive: {
-    color: colors.primary[500],
   },
   emptyState: {
-    backgroundColor: colors.dark[800],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     padding: 24,
     alignItems: 'center',
   },
   emptyStateText: {
-    color: colors.dark[200],
     marginTop: 16,
     textAlign: 'center',
     lineHeight: 20,
   },
   addDeviceButton: {
     marginTop: 16,
-    backgroundColor: colors.primary[500],
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
@@ -458,7 +557,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addButton: {
-    backgroundColor: colors.primary[500],
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,

@@ -12,11 +12,12 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, ArrowRight } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const OTP_LENGTH = 6;
 
 export default function VerifyOtpScreen() {
+  const { theme } = useTheme();
   const {
     pendingEmail,
     pendingName,
@@ -123,42 +124,59 @@ export default function VerifyOtpScreen() {
   const isComplete = otp.join('').length === OTP_LENGTH;
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
-        <View className="flex-1 px-6 pt-4 pb-8">
+        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
           {/* Back Button */}
           <TouchableOpacity
             onPress={handleBack}
-            className="w-10 h-10 items-center justify-center rounded-lg bg-dark-700 border border-dark-500 mb-8"
+            style={{
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: theme.backgroundSecondary,
+              borderWidth: 1,
+              borderColor: theme.border,
+              marginBottom: 32,
+            }}
           >
-            <ArrowLeft size={20} color={colors.dark[200]} />
+            <ArrowLeft size={20} color={theme.textSecondary} />
           </TouchableOpacity>
 
           {/* Header */}
-          <View className="mb-10">
-            <Text className="text-3xl font-bold text-dark-50 mb-2">
+          <View style={{ marginBottom: 40 }}>
+            <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
               Enter verification code
             </Text>
-            <Text className="text-base text-dark-200">
+            <Text style={{ fontSize: 16, color: theme.textSecondary }}>
               We've sent a 6-digit code to{'\n'}
-              <Text className="text-primary-500">{pendingEmail}</Text>
+              <Text style={{ color: theme.primary }}>{pendingEmail}</Text>
             </Text>
           </View>
 
           {/* OTP Input */}
-          <View className="flex-row justify-between mb-8">
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 }}>
             {otp.map((digit, index) => (
               <TextInput
                 key={index}
                 ref={(ref) => { inputRefs.current[index] = ref; }}
-                className={`w-12 h-14 rounded-xl text-center text-2xl font-bold ${
-                  digit
-                    ? 'bg-primary-500/10 border-2 border-primary-500 text-dark-50'
-                    : 'bg-dark-700 border-2 border-dark-500 text-dark-50'
-                }`}
+                style={{
+                  width: 48,
+                  height: 56,
+                  borderRadius: 12,
+                  textAlign: 'center',
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                  color: theme.text,
+                  backgroundColor: digit ? theme.primaryBackground : theme.backgroundSecondary,
+                  borderWidth: 2,
+                  borderColor: digit ? theme.primary : theme.border,
+                }}
                 value={digit}
                 onChangeText={(value) => handleOtpChange(value.replace(/[^0-9]/g, ''), index)}
                 onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
@@ -171,8 +189,8 @@ export default function VerifyOtpScreen() {
 
           {/* Error Message */}
           {error && (
-            <View className="bg-error-300/10 border border-error-300/20 rounded-xl p-4 mb-4">
-              <Text className="text-error-300 text-center">{error}</Text>
+            <View style={{ backgroundColor: theme.error + '1A', borderWidth: 1, borderColor: theme.error + '33', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <Text style={{ color: theme.error, textAlign: 'center' }}>{error}</Text>
             </View>
           )}
 
@@ -180,9 +198,15 @@ export default function VerifyOtpScreen() {
           <TouchableOpacity
             onPress={handleVerify}
             disabled={!isComplete || isLoading}
-            className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-2"
             style={{
-              shadowColor: colors.primary[500],
+              backgroundColor: theme.primary,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.2,
               shadowRadius: 12,
@@ -190,30 +214,30 @@ export default function VerifyOtpScreen() {
               opacity: !isComplete || isLoading ? 0.5 : 1,
             }}
           >
-            <Text className="text-white font-bold text-base">
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
               {isLoading ? 'Verifying...' : 'Verify'}
             </Text>
             {!isLoading && <ArrowRight size={18} color="#fff" />}
           </TouchableOpacity>
 
           {/* Resend Code */}
-          <View className="flex-row justify-center items-center mt-6">
-            <Text className="text-dark-300">Didn't receive the code? </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 }}>
+            <Text style={{ color: theme.textTertiary }}>Didn't receive the code? </Text>
             {resendTimer > 0 ? (
-              <Text className="text-dark-400">
+              <Text style={{ color: theme.textSecondary }}>
                 Resend in {resendTimer}s
               </Text>
             ) : (
               <TouchableOpacity onPress={handleResend} disabled={isLoading}>
-                <Text className="text-primary-500 font-bold">Resend</Text>
+                <Text style={{ color: theme.primary, fontWeight: 'bold' }}>Resend</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Mock mode hint */}
           {__DEV__ && (
-            <View className="mt-8 bg-dark-700 border border-dark-500 rounded-xl p-4">
-              <Text className="text-dark-300 text-center text-sm">
+            <View style={{ marginTop: 32, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
+              <Text style={{ color: theme.textTertiary, textAlign: 'center', fontSize: 14 }}>
                 Development mode: Use code "123456"
               </Text>
             </View>

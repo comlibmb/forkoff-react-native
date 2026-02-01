@@ -9,7 +9,7 @@ import {
   AlertCircle,
   Loader,
 } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 import { PromptQueueItem, QueueItemStatus } from '@/types';
 
 interface QueueItemCardProps {
@@ -18,19 +18,23 @@ interface QueueItemCardProps {
   onCancel?: () => void;
 }
 
-const statusConfig: Record<
+const getStatusConfig = (
+  theme: ThemeColors
+): Record<
   QueueItemStatus,
   { icon: React.ComponentType<any>; color: string; label: string }
-> = {
-  PENDING: { icon: Clock, color: colors.warning[400], label: 'Pending' },
-  SCHEDULED: { icon: Clock, color: colors.primary[400], label: 'Scheduled' },
-  EXECUTING: { icon: Loader, color: colors.primary[500], label: 'Executing' },
-  COMPLETED: { icon: CheckCircle, color: colors.success[400], label: 'Completed' },
-  FAILED: { icon: XCircle, color: colors.error[400], label: 'Failed' },
-  CANCELLED: { icon: AlertCircle, color: colors.dark[400], label: 'Cancelled' },
-};
+> => ({
+  PENDING: { icon: Clock, color: theme.warning, label: 'Pending' },
+  SCHEDULED: { icon: Clock, color: theme.primaryLight, label: 'Scheduled' },
+  EXECUTING: { icon: Loader, color: theme.primary, label: 'Executing' },
+  COMPLETED: { icon: CheckCircle, color: theme.success, label: 'Completed' },
+  FAILED: { icon: XCircle, color: theme.error, label: 'Failed' },
+  CANCELLED: { icon: AlertCircle, color: theme.textTertiary, label: 'Cancelled' },
+});
 
 export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps) {
+  const { theme } = useTheme();
+  const statusConfig = getStatusConfig(theme);
   const status = statusConfig[item.status];
   const StatusIcon = status.icon;
 
@@ -53,6 +57,8 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
     });
   };
 
+  const styles = createStyles(theme);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -74,7 +80,7 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
       {/* Rate limit info */}
       {item.rateLimitReason && (
         <View style={styles.rateLimitBadge}>
-          <AlertCircle size={12} color={colors.warning[400]} />
+          <AlertCircle size={12} color={theme.warning} />
           <Text style={styles.rateLimitText}>{item.rateLimitReason}</Text>
         </View>
       )}
@@ -82,7 +88,7 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
       {/* Scheduled time */}
       {item.scheduledFor && (
         <View style={styles.scheduledBadge}>
-          <Clock size={12} color={colors.primary[400]} />
+          <Clock size={12} color={theme.primaryLight} />
           <Text style={styles.scheduledText}>
             Scheduled for {formatTime(item.scheduledFor)}
           </Text>
@@ -92,7 +98,7 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
       {/* Error message */}
       {item.errorMessage && (
         <View style={styles.errorBadge}>
-          <XCircle size={12} color={colors.error[400]} />
+          <XCircle size={12} color={theme.error} />
           <Text style={styles.errorText}>{item.errorMessage}</Text>
         </View>
       )}
@@ -108,7 +114,7 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
           )}
           {canCancel && onCancel && (
             <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-              <X size={14} color={colors.error[400]} />
+              <X size={14} color={theme.error} />
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           )}
@@ -118,111 +124,112 @@ export function QueueItemCard({ item, onExecute, onCancel }: QueueItemCardProps)
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.dark[700],
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.dark[600],
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.dark[600],
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timestamp: {
-    fontSize: 11,
-    color: colors.dark[400],
-  },
-  prompt: {
-    fontSize: 14,
-    color: colors.dark[200],
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  rateLimitBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  rateLimitText: {
-    fontSize: 12,
-    color: colors.warning[400],
-  },
-  scheduledBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  scheduledText: {
-    fontSize: 12,
-    color: colors.primary[400],
-  },
-  errorBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 12,
-    color: colors.error[400],
-    flex: 1,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  executeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.primary[500],
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  executeButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.error[400] + '40',
-    backgroundColor: colors.error[400] + '10',
-  },
-  cancelButtonText: {
-    color: colors.error[400],
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      backgroundColor: theme.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      padding: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    statusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+      backgroundColor: theme.backgroundTertiary,
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    timestamp: {
+      fontSize: 11,
+      color: theme.textTertiary,
+    },
+    prompt: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      lineHeight: 20,
+      marginBottom: 12,
+    },
+    rateLimitBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+    },
+    rateLimitText: {
+      fontSize: 12,
+      color: theme.warning,
+    },
+    scheduledBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+    },
+    scheduledText: {
+      fontSize: 12,
+      color: theme.primaryLight,
+    },
+    errorBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+    },
+    errorText: {
+      fontSize: 12,
+      color: theme.error,
+      flex: 1,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 8,
+    },
+    executeButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: theme.primary,
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+    executeButtonText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    cancelButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.error + '40',
+      backgroundColor: theme.error + '10',
+    },
+    cancelButtonText: {
+      color: theme.error,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+  });
 
 export default QueueItemCard;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 import { useThemeStore } from '@/stores/theme.store';
 import { colors, ColorScheme } from './colors';
@@ -124,23 +124,38 @@ interface ThemeContextValue {
   colors: typeof colors;
   toggleTheme: () => void;
   setTheme: (scheme: ColorScheme) => void;
+  resetToSystem: () => void;
+  hasUserOverride: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { colorScheme, isDark, toggleColorScheme, setColorScheme } = useThemeStore();
+  const systemColorScheme = useSystemColorScheme();
+  const { colorScheme: storedColorScheme, hasUserOverride, setColorScheme, resetToSystem } = useThemeStore();
+
+  // Determine effective color scheme: use stored if user has overridden, otherwise use system
+  const effectiveColorScheme: ColorScheme = storedColorScheme ?? systemColorScheme ?? 'dark';
+  const isDark = effectiveColorScheme === 'dark';
+
+  // Custom toggle that's aware of current effective theme
+  const toggleTheme = useCallback(() => {
+    const newScheme = effectiveColorScheme === 'dark' ? 'light' : 'dark';
+    setColorScheme(newScheme);
+  }, [effectiveColorScheme, setColorScheme]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      colorScheme,
+      colorScheme: effectiveColorScheme,
       isDark,
       theme: isDark ? darkTheme : lightTheme,
       colors,
-      toggleTheme: toggleColorScheme,
+      toggleTheme,
       setTheme: setColorScheme,
+      resetToSystem,
+      hasUserOverride,
     }),
-    [colorScheme, isDark, toggleColorScheme, setColorScheme]
+    [effectiveColorScheme, isDark, toggleTheme, setColorScheme, resetToSystem, hasUserOverride]
   );
 
   return (

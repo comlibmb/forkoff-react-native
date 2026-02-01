@@ -14,11 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, ArrowLeft, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { Button, Input } from '@/components/ui';
 import { authService } from '@/services/auth.service';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type Step = 'email' | 'otp' | 'password' | 'success';
 
 export default function ForgotPasswordScreen() {
+  const { theme } = useTheme();
   const [step, setStep] = useState<Step>('email');
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -163,17 +164,17 @@ export default function ForgotPasswordScreen() {
   // Success Screen
   if (step === 'success') {
     return (
-      <SafeAreaView className="flex-1 bg-dark-900">
-        <View className="flex-1 px-6 pt-12 pb-8 items-center justify-center">
-          <View className="bg-success-500/20 w-20 h-20 rounded-full items-center justify-center mb-6">
-            <CheckCircle size={48} color={colors.success[500]} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: theme.success + '33', width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+            <CheckCircle size={48} color={theme.success} />
           </View>
 
-          <Text className="text-2xl font-bold text-white text-center mb-4">
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 16 }}>
             Password Updated!
           </Text>
 
-          <Text className="text-dark-400 text-center text-lg mb-8 px-4">
+          <Text style={{ color: theme.textSecondary, textAlign: 'center', fontSize: 18, marginBottom: 32, paddingHorizontal: 16 }}>
             Your password has been successfully updated. You can now sign in with your new password.
           </Text>
 
@@ -181,6 +182,7 @@ export default function ForgotPasswordScreen() {
             title="Back to Login"
             onPress={() => router.replace('/(auth)/login')}
             fullWidth
+            theme={theme}
           />
         </View>
       </SafeAreaView>
@@ -190,55 +192,64 @@ export default function ForgotPasswordScreen() {
   // OTP Verification Screen
   if (step === 'otp') {
     return (
-      <SafeAreaView className="flex-1 bg-dark-900">
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           <ScrollView
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 px-6 pt-4 pb-8">
+            <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
               <TouchableOpacity
                 onPress={() => setStep('email')}
-                className="flex-row items-center mb-8"
+                style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 32 }}
               >
-                <ArrowLeft size={24} color={colors.dark[300]} />
-                <Text className="text-dark-300 ml-2">Back</Text>
+                <ArrowLeft size={24} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, marginLeft: 8 }}>Back</Text>
               </TouchableOpacity>
 
-              <View className="mb-10">
-                <Text className="text-4xl font-bold text-white mb-2">
+              <View style={{ marginBottom: 40 }}>
+                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
                   Enter code
                 </Text>
-                <Text className="text-lg text-dark-400">
+                <Text style={{ fontSize: 18, color: theme.textSecondary }}>
                   We sent a 6-digit code to{'\n'}
-                  <Text className="text-white">{email}</Text>
+                  <Text style={{ color: theme.text }}>{email}</Text>
                 </Text>
               </View>
 
               {/* OTP Input */}
-              <View className="flex-row justify-between mb-4">
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
                 {otp.map((digit, index) => (
                   <TextInput
                     key={index}
-                    ref={(ref) => (otpRefs.current[index] = ref)}
+                    ref={(ref) => { otpRefs.current[index] = ref; }}
                     value={digit}
                     onChangeText={(value) => handleOtpChange(value, index)}
                     onKeyPress={({ nativeEvent }) => handleOtpKeyPress(nativeEvent.key, index)}
                     keyboardType="number-pad"
                     maxLength={6}
-                    className={`w-12 h-14 bg-dark-800 border ${
-                      otpError ? 'border-error-500' : 'border-dark-700'
-                    } rounded-xl text-white text-2xl text-center font-bold`}
-                    selectionColor={colors.primary[500]}
+                    style={{
+                      width: 48,
+                      height: 56,
+                      backgroundColor: theme.backgroundSecondary,
+                      borderWidth: 1,
+                      borderColor: otpError ? theme.error : theme.border,
+                      borderRadius: 12,
+                      color: theme.text,
+                      fontSize: 24,
+                      textAlign: 'center',
+                      fontWeight: 'bold',
+                    }}
+                    selectionColor={theme.primary}
                   />
                 ))}
               </View>
 
               {otpError ? (
-                <Text className="text-error-500 text-sm mb-4">{otpError}</Text>
+                <Text style={{ color: theme.error, fontSize: 14, marginBottom: 16 }}>{otpError}</Text>
               ) : null}
 
               <Button
@@ -246,14 +257,15 @@ export default function ForgotPasswordScreen() {
                 onPress={handleVerifyOtp}
                 loading={isLoading}
                 fullWidth
+                theme={theme}
               />
 
               <TouchableOpacity
                 onPress={handleResendOtp}
                 disabled={resendCooldown > 0}
-                className="mt-6 items-center"
+                style={{ marginTop: 24, alignItems: 'center' }}
               >
-                <Text className={resendCooldown > 0 ? 'text-dark-500' : 'text-primary-400'}>
+                <Text style={{ color: resendCooldown > 0 ? theme.textTertiary : theme.primary }}>
                   {resendCooldown > 0
                     ? `Resend code in ${resendCooldown}s`
                     : "Didn't receive code? Resend"}
@@ -269,26 +281,26 @@ export default function ForgotPasswordScreen() {
   // New Password Screen
   if (step === 'password') {
     return (
-      <SafeAreaView className="flex-1 bg-dark-900">
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
           <ScrollView
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 px-6 pt-4 pb-8">
-              <View className="mb-10 mt-8">
-                <Text className="text-4xl font-bold text-white mb-2">
+            <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
+              <View style={{ marginBottom: 40, marginTop: 32 }}>
+                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
                   New password
                 </Text>
-                <Text className="text-lg text-dark-400">
+                <Text style={{ fontSize: 18, color: theme.textSecondary }}>
                   Create a new password for your account
                 </Text>
               </View>
 
-              <View className="mb-8">
+              <View style={{ marginBottom: 32 }}>
                 <Input
                   label="New Password"
                   placeholder="Enter new password"
@@ -298,16 +310,17 @@ export default function ForgotPasswordScreen() {
                     setPassword(text);
                     if (passwordError) setPasswordError('');
                   }}
-                  leftIcon={<Lock size={20} color={colors.dark[400]} />}
+                  leftIcon={<Lock size={20} color={theme.textSecondary} />}
                   rightIcon={
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                       {showPassword ? (
-                        <EyeOff size={20} color={colors.dark[400]} />
+                        <EyeOff size={20} color={theme.textSecondary} />
                       ) : (
-                        <Eye size={20} color={colors.dark[400]} />
+                        <Eye size={20} color={theme.textSecondary} />
                       )}
                     </TouchableOpacity>
                   }
+                  theme={theme}
                 />
 
                 <Input
@@ -320,7 +333,8 @@ export default function ForgotPasswordScreen() {
                     if (passwordError) setPasswordError('');
                   }}
                   error={passwordError}
-                  leftIcon={<Lock size={20} color={colors.dark[400]} />}
+                  leftIcon={<Lock size={20} color={theme.textSecondary} />}
+                  theme={theme}
                 />
 
                 <Button
@@ -328,6 +342,7 @@ export default function ForgotPasswordScreen() {
                   onPress={handleSetPassword}
                   loading={isLoading}
                   fullWidth
+                  theme={theme}
                 />
               </View>
             </View>
@@ -339,34 +354,34 @@ export default function ForgotPasswordScreen() {
 
   // Email Input Screen (default)
   return (
-    <SafeAreaView className="flex-1 bg-dark-900">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex-1 px-6 pt-4 pb-8">
+          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              className="flex-row items-center mb-8"
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 32 }}
             >
-              <ArrowLeft size={24} color={colors.dark[300]} />
-              <Text className="text-dark-300 ml-2">Back</Text>
+              <ArrowLeft size={24} color={theme.textTertiary} />
+              <Text style={{ color: theme.textTertiary, marginLeft: 8 }}>Back</Text>
             </TouchableOpacity>
 
-            <View className="mb-10">
-              <Text className="text-4xl font-bold text-white mb-2">
+            <View style={{ marginBottom: 40 }}>
+              <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
                 Reset password
               </Text>
-              <Text className="text-lg text-dark-400">
+              <Text style={{ fontSize: 18, color: theme.textSecondary }}>
                 Enter your email and we'll send you a 6-digit code to verify your identity
               </Text>
             </View>
 
-            <View className="mb-8">
+            <View style={{ marginBottom: 32 }}>
               <Input
                 label="Email"
                 placeholder="Enter your email"
@@ -379,7 +394,8 @@ export default function ForgotPasswordScreen() {
                   if (emailError) setEmailError('');
                 }}
                 error={emailError}
-                leftIcon={<Mail size={20} color={colors.dark[400]} />}
+                leftIcon={<Mail size={20} color={theme.textSecondary} />}
+                theme={theme}
               />
 
               <Button
@@ -387,6 +403,7 @@ export default function ForgotPasswordScreen() {
                 onPress={handleSendOtp}
                 loading={isLoading}
                 fullWidth
+                theme={theme}
               />
             </View>
           </View>

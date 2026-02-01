@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 
 export interface TerminalLine {
   id: string;
@@ -16,13 +16,13 @@ interface TerminalOutputProps {
   maxLines?: number;
 }
 
-const lineColors: Record<TerminalLine['type'], string> = {
-  input: colors.primary[400],
-  output: colors.dark[200],
-  error: colors.error[400],
-  info: colors.info[400],
-  success: colors.success[400],
-};
+const getLineColors = (theme: ThemeColors): Record<TerminalLine['type'], string> => ({
+  input: theme.primaryLight,
+  output: theme.textSecondary,
+  error: theme.error,
+  info: theme.info,
+  success: theme.success,
+});
 
 const linePrefix: Record<TerminalLine['type'], string> = {
   input: '$ ',
@@ -38,7 +38,9 @@ export function TerminalOutput({
   showTimestamps = false,
   maxLines = 1000,
 }: TerminalOutputProps) {
+  const { theme } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
+  const lineColors = getLineColors(theme);
 
   useEffect(() => {
     if (autoScroll && scrollViewRef.current) {
@@ -54,6 +56,8 @@ export function TerminalOutput({
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
+
+  const styles = createStyles(theme);
 
   return (
     <ScrollView
@@ -93,46 +97,47 @@ export function TerminalOutput({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.dark[900],
-  },
-  content: {
-    padding: 12,
-    paddingBottom: 24,
-  },
-  lineContainer: {
-    flexDirection: 'row',
-    paddingVertical: 2,
-  },
-  timestamp: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    color: colors.dark[600],
-    marginRight: 8,
-    minWidth: 70,
-  },
-  lineText: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-    lineHeight: 20,
-    flex: 1,
-  },
-  prefix: {
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-    color: colors.dark[500],
-  },
-});
+const createStyles = (theme: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    content: {
+      padding: 12,
+      paddingBottom: 24,
+    },
+    lineContainer: {
+      flexDirection: 'row',
+      paddingVertical: 2,
+    },
+    timestamp: {
+      fontFamily: 'monospace',
+      fontSize: 10,
+      color: theme.backgroundTertiary,
+      marginRight: 8,
+      minWidth: 70,
+    },
+    lineText: {
+      fontFamily: 'monospace',
+      fontSize: 13,
+      lineHeight: 20,
+      flex: 1,
+    },
+    prefix: {
+      fontWeight: '600',
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+    },
+    emptyText: {
+      fontFamily: 'monospace',
+      fontSize: 13,
+      color: theme.border,
+    },
+  });
 
 export default TerminalOutput;

@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions, ScrollView } from 'react-native';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 import { TokenUsageDaily } from '@/types';
 
 interface UsageChartProps {
   data: TokenUsageDaily[];
   height?: number;
+  theme?: ThemeColors;
 }
 
 const screenWidth = Dimensions.get('window').width;
@@ -16,16 +17,19 @@ const Y_AXIS_WIDTH = 40;
 const LEGEND_HEIGHT = 32;
 const X_AXIS_HEIGHT = 20;
 
-export function UsageChart({ data, height = 220 }: UsageChartProps) {
+export function UsageChart({ data, height = 220, theme: themeProp }: UsageChartProps) {
+  const { theme: contextTheme } = useTheme();
+  const theme = themeProp || contextTheme;
+
   // Calculate available chart height
   const chartHeight = height - CONTAINER_PADDING * 2 - LEGEND_HEIGHT - X_AXIS_HEIGHT;
 
   if (data.length === 0) {
     return (
-      <View style={[styles.container, { height }]}>
+      <View style={[styles.container, { height, backgroundColor: theme.card, borderColor: theme.backgroundTertiary }]}>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No usage data yet</Text>
-          <Text style={styles.emptySubtext}>Start using Claude to see your usage trends</Text>
+          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>No usage data yet</Text>
+          <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>Start using Claude to see your usage trends</Text>
         </View>
       </View>
     );
@@ -65,21 +69,21 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
   const needsScroll = totalBarsWidth > chartWidth;
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[styles.container, { height, backgroundColor: theme.card, borderColor: theme.backgroundTertiary }]}>
       {/* Y-axis labels */}
       <View style={[styles.yAxis, { height: chartHeight }]}>
-        <Text style={styles.yAxisLabel}>{formatNumber(maxValue)}</Text>
-        <Text style={styles.yAxisLabel}>{formatNumber(maxValue / 2)}</Text>
-        <Text style={styles.yAxisLabel}>0</Text>
+        <Text style={[styles.yAxisLabel, { color: theme.textSecondary }]}>{formatNumber(maxValue)}</Text>
+        <Text style={[styles.yAxisLabel, { color: theme.textSecondary }]}>{formatNumber(maxValue / 2)}</Text>
+        <Text style={[styles.yAxisLabel, { color: theme.textSecondary }]}>0</Text>
       </View>
 
       {/* Chart area */}
       <View style={styles.chartWrapper}>
         {/* Grid lines */}
         <View style={[styles.gridLines, { height: chartHeight }]}>
-          <View style={styles.gridLine} />
-          <View style={styles.gridLine} />
-          <View style={styles.gridLine} />
+          <View style={[styles.gridLine, { backgroundColor: theme.backgroundTertiary }]} />
+          <View style={[styles.gridLine, { backgroundColor: theme.backgroundTertiary }]} />
+          <View style={[styles.gridLine, { backgroundColor: theme.backgroundTertiary }]} />
         </View>
 
         {/* Scrollable bars area */}
@@ -111,7 +115,7 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
                           style={[
                             styles.bar,
                             styles.barOutput,
-                            { width: barWidth, height: outputHeight },
+                            { width: barWidth, height: outputHeight, backgroundColor: theme.success },
                           ]}
                         />
                       )}
@@ -121,7 +125,7 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
                           style={[
                             styles.bar,
                             styles.barInput,
-                            { width: barWidth, height: inputHeight },
+                            { width: barWidth, height: inputHeight, backgroundColor: theme.primary },
                           ]}
                         />
                       )}
@@ -130,7 +134,7 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
                   {/* X-axis label */}
                   <View style={styles.xAxisLabelContainer}>
                     {showLabel && (
-                      <Text style={styles.xAxisLabel} numberOfLines={1}>
+                      <Text style={[styles.xAxisLabel, { color: theme.textSecondary }]} numberOfLines={1}>
                         {formatDate(item.date)}
                       </Text>
                     )}
@@ -145,12 +149,12 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
       {/* Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: colors.primary[500] }]} />
-          <Text style={styles.legendText}>Input</Text>
+          <View style={[styles.legendDot, { backgroundColor: theme.primary }]} />
+          <Text style={[styles.legendText, { color: theme.textTertiary }]}>Input</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
-          <Text style={styles.legendText}>Output</Text>
+          <View style={[styles.legendDot, { backgroundColor: theme.success }]} />
+          <Text style={[styles.legendText, { color: theme.textTertiary }]}>Output</Text>
         </View>
       </View>
     </View>
@@ -159,10 +163,8 @@ export function UsageChart({ data, height = 220 }: UsageChartProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     padding: CONTAINER_PADDING,
   },
   emptyState: {
@@ -173,12 +175,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.dark[300],
     marginBottom: 4,
   },
   emptySubtext: {
     fontSize: 13,
-    color: colors.dark[400],
   },
   yAxis: {
     position: 'absolute',
@@ -189,7 +189,6 @@ const styles = StyleSheet.create({
   },
   yAxisLabel: {
     fontSize: 10,
-    color: colors.dark[400],
     textAlign: 'right',
   },
   chartWrapper: {
@@ -205,7 +204,6 @@ const styles = StyleSheet.create({
   },
   gridLine: {
     height: 1,
-    backgroundColor: colors.dark[600],
   },
   barsScrollView: {
     overflow: 'hidden',
@@ -235,11 +233,8 @@ const styles = StyleSheet.create({
   bar: {
     borderRadius: 3,
   },
-  barInput: {
-    backgroundColor: colors.primary[500],
-  },
+  barInput: {},
   barOutput: {
-    backgroundColor: colors.success[500],
     marginBottom: 2,
   },
   xAxisLabelContainer: {
@@ -249,7 +244,6 @@ const styles = StyleSheet.create({
   },
   xAxisLabel: {
     fontSize: 9,
-    color: colors.dark[400],
     textAlign: 'center',
   },
   legend: {
@@ -271,7 +265,6 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 12,
-    color: colors.dark[300],
     fontWeight: '500',
   },
 });

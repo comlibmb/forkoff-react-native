@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
@@ -16,23 +16,10 @@ import {
   EyeOff,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
-import { colors } from '@/theme/colors';
-
-function Section({ title, children }: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      {title && <Text style={styles.sectionTitle}>{title}</Text>}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionContent}>{children}</View>
-      </View>
-    </View>
-  );
-}
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SecurityScreen() {
+  const { theme } = useTheme();
   const { user, changePassword, resetPassword, isLoading } = useAuthStore();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -44,6 +31,8 @@ export default function SecurityScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleChangePassword = () => {
     setShowChangePasswordModal(true);
@@ -137,6 +126,20 @@ export default function SecurityScreen() {
     }
   };
 
+  function Section({ title, children }: {
+    title: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <View style={styles.section}>
+        {title && <Text style={styles.sectionTitle}>{title}</Text>}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionContent}>{children}</View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -145,7 +148,7 @@ export default function SecurityScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
+          <ArrowLeft size={24} color={theme.textSecondary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
@@ -161,13 +164,13 @@ export default function SecurityScreen() {
             style={styles.settingRow}
           >
             <View style={styles.settingIcon}>
-              <Key size={20} color={colors.dark[200]} />
+              <Key size={20} color={theme.textSecondary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Change Password</Text>
               <Text style={styles.settingSubtitle}>Update your password</Text>
             </View>
-            <ChevronRight size={20} color={colors.dark[400]} />
+            <ChevronRight size={20} color={theme.textTertiary} />
           </TouchableOpacity>
 
           <View style={styles.divider} />
@@ -176,14 +179,14 @@ export default function SecurityScreen() {
             onPress={handleSendResetLink}
             style={styles.settingRow}
           >
-            <View style={[styles.settingIcon, { backgroundColor: colors.primary[500] + '20' }]}>
-              <Key size={20} color={colors.primary[400]} />
+            <View style={[styles.settingIcon, { backgroundColor: theme.primary + '20' }]}>
+              <Key size={20} color={theme.primaryLight} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Reset via Email</Text>
               <Text style={styles.settingSubtitle}>Send reset link to {user?.email}</Text>
             </View>
-            <ChevronRight size={20} color={colors.dark[400]} />
+            <ChevronRight size={20} color={theme.textTertiary} />
           </TouchableOpacity>
         </Section>
 
@@ -191,7 +194,7 @@ export default function SecurityScreen() {
         <Section title="Two-Factor Auth">
           <View style={styles.settingRow}>
             <View style={styles.settingIcon}>
-              <Smartphone size={20} color={colors.dark[200]} />
+              <Smartphone size={20} color={theme.textSecondary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Two-Factor Authentication</Text>
@@ -202,8 +205,8 @@ export default function SecurityScreen() {
             <Switch
               value={twoFactorEnabled}
               onValueChange={handleToggle2FA}
-              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
-              thumbColor={twoFactorEnabled ? '#fff' : colors.dark[200]}
+              trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
+              thumbColor={twoFactorEnabled ? '#fff' : theme.switchThumb}
             />
           </View>
         </Section>
@@ -212,7 +215,7 @@ export default function SecurityScreen() {
         <Section title="Biometrics">
           <View style={styles.settingRow}>
             <View style={styles.settingIcon}>
-              <Fingerprint size={20} color={colors.dark[200]} />
+              <Fingerprint size={20} color={theme.textSecondary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Biometric Authentication</Text>
@@ -223,8 +226,8 @@ export default function SecurityScreen() {
             <Switch
               value={biometricEnabled}
               onValueChange={handleToggleBiometric}
-              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
-              thumbColor={biometricEnabled ? '#fff' : colors.dark[200]}
+              trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
+              thumbColor={biometricEnabled ? '#fff' : theme.switchThumb}
             />
           </View>
         </Section>
@@ -232,12 +235,12 @@ export default function SecurityScreen() {
         {/* Active Sessions */}
         <Section title="Active Sessions">
           <View style={styles.sessionRow}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.success[500] + '20', borderColor: colors.success[500] + '30' }]}>
-              <Shield size={20} color={colors.success[500]} />
+            <View style={[styles.settingIcon, { backgroundColor: theme.success + '20', borderColor: theme.success + '30' }]}>
+              <Shield size={20} color={theme.success} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Current Device</Text>
-              <Text style={styles.settingSubtitle}>iPhone 15 Pro • Active now</Text>
+              <Text style={styles.settingSubtitle}>iPhone 15 Pro - Active now</Text>
             </View>
             <View style={styles.currentBadge}>
               <Text style={styles.currentBadgeText}>Current</Text>
@@ -248,7 +251,7 @@ export default function SecurityScreen() {
 
           <View style={styles.sessionRow}>
             <View style={styles.settingIcon}>
-              <Smartphone size={20} color={colors.dark[300]} />
+              <Smartphone size={20} color={theme.textTertiary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>MacBook Pro</Text>
@@ -281,7 +284,7 @@ export default function SecurityScreen() {
 
         {/* Security Tips */}
         <View style={styles.tipCard}>
-          <AlertTriangle size={20} color={colors.warning[300]} />
+          <AlertTriangle size={20} color={theme.warning} />
           <View style={styles.tipContent}>
             <Text style={styles.tipTitle}>Security Tip</Text>
             <Text style={styles.tipText}>
@@ -301,7 +304,7 @@ export default function SecurityScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowChangePasswordModal(false)}>
-              <X size={24} color={colors.dark[300]} />
+              <X size={24} color={theme.textTertiary} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Change Password</Text>
             <View style={{ width: 24 }} />
@@ -316,7 +319,7 @@ export default function SecurityScreen() {
                   onChangeText={setCurrentPassword}
                   secureTextEntry={!showCurrentPassword}
                   placeholder="Enter current password"
-                  placeholderTextColor={colors.dark[400]}
+                  placeholderTextColor={theme.textTertiary}
                   style={styles.passwordInput}
                 />
                 <TouchableOpacity
@@ -324,9 +327,9 @@ export default function SecurityScreen() {
                   style={styles.eyeButton}
                 >
                   {showCurrentPassword ? (
-                    <EyeOff size={20} color={colors.dark[400]} />
+                    <EyeOff size={20} color={theme.textTertiary} />
                   ) : (
-                    <Eye size={20} color={colors.dark[400]} />
+                    <Eye size={20} color={theme.textTertiary} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -340,7 +343,7 @@ export default function SecurityScreen() {
                   onChangeText={setNewPassword}
                   secureTextEntry={!showNewPassword}
                   placeholder="Enter new password (min 6 characters)"
-                  placeholderTextColor={colors.dark[400]}
+                  placeholderTextColor={theme.textTertiary}
                   style={styles.passwordInput}
                 />
                 <TouchableOpacity
@@ -348,9 +351,9 @@ export default function SecurityScreen() {
                   style={styles.eyeButton}
                 >
                   {showNewPassword ? (
-                    <EyeOff size={20} color={colors.dark[400]} />
+                    <EyeOff size={20} color={theme.textTertiary} />
                   ) : (
-                    <Eye size={20} color={colors.dark[400]} />
+                    <Eye size={20} color={theme.textTertiary} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -363,7 +366,7 @@ export default function SecurityScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showNewPassword}
                 placeholder="Confirm new password"
-                placeholderTextColor={colors.dark[400]}
+                placeholderTextColor={theme.textTertiary}
                 style={styles.confirmInput}
               />
             </View>
@@ -392,10 +395,10 @@ export default function SecurityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark[800],
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -403,14 +406,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
+    borderBottomColor: theme.backgroundTertiary,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   backText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
   },
@@ -424,19 +427,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
+    color: theme.text,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
+    color: theme.textTertiary,
     marginBottom: 20,
   },
   section: {
     marginBottom: 16,
   },
   sectionTitle: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -445,10 +448,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sectionCard: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
+    borderColor: theme.cardBorder,
     overflow: 'hidden',
   },
   sectionContent: {
@@ -466,9 +469,9 @@ const styles = StyleSheet.create({
   settingIcon: {
     width: 40,
     height: 40,
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,36 +481,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingTitle: {
-    color: colors.dark[50],
+    color: theme.text,
     fontWeight: '600',
     fontSize: 15,
   },
   settingSubtitle: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 13,
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark[600],
+    backgroundColor: theme.divider,
     marginVertical: 12,
     marginLeft: 52,
   },
   currentBadge: {
-    backgroundColor: colors.success[500] + '20',
+    backgroundColor: theme.success + '20',
     borderWidth: 1,
-    borderColor: colors.success[500] + '30',
+    borderColor: theme.success + '30',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   currentBadgeText: {
-    color: colors.success[500],
+    color: theme.success,
     fontSize: 11,
     fontWeight: '700',
   },
   revokeText: {
-    color: colors.error[300],
+    color: theme.error,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -516,16 +519,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   signOutButtonText: {
-    color: colors.dark[50],
+    color: theme.text,
     fontWeight: '600',
     fontSize: 15,
   },
   // Tip card
   tipCard: {
     flexDirection: 'row',
-    backgroundColor: colors.warning[300] + '15',
+    backgroundColor: theme.warning + '15',
     borderWidth: 1,
-    borderColor: colors.warning[300] + '30',
+    borderColor: theme.warning + '30',
     borderRadius: 12,
     padding: 16,
     marginTop: 8,
@@ -535,19 +538,19 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   tipTitle: {
-    color: colors.warning[300],
+    color: theme.warning,
     fontWeight: '700',
     marginBottom: 4,
   },
   tipText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.dark[800],
+    backgroundColor: theme.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -556,10 +559,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
+    borderBottomColor: theme.backgroundTertiary,
   },
   modalTitle: {
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -571,7 +574,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 8,
@@ -580,24 +583,24 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   passwordInput: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     paddingRight: 48,
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 15,
   },
   confirmInput: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: colors.dark[50],
+    color: theme.text,
     fontSize: 15,
   },
   eyeButton: {
@@ -607,19 +610,19 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -10 }],
   },
   errorBox: {
-    backgroundColor: colors.error[300] + '15',
+    backgroundColor: theme.error + '15',
     borderWidth: 1,
-    borderColor: colors.error[300] + '30',
+    borderColor: theme.error + '30',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
   },
   errorText: {
-    color: colors.error[300],
+    color: theme.error,
     fontSize: 14,
   },
   submitButton: {
-    backgroundColor: colors.primary[600],
+    backgroundColor: theme.primaryDark,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

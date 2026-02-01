@@ -5,11 +5,12 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, QrCode, Keyboard, CheckCircle, ArrowRight } from 'lucide-react-native';
 import { useDeviceStore } from '@/stores/device.store';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type AddMethod = 'qr' | 'code';
 
 export default function AddDeviceScreen() {
+  const { theme } = useTheme();
   const { pairDevice, isLoading } = useDeviceStore();
   const [method, setMethod] = useState<AddMethod>('qr');
   const [pairingCode, setPairingCode] = useState('');
@@ -31,54 +32,72 @@ export default function AddDeviceScreen() {
 
   if (isPaired) {
     return (
-      <SafeAreaView className="flex-1 bg-dark-800">
-        <View className="flex-1 px-6 items-center justify-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+        <View style={{ flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
           <View
-            className="w-24 h-24 rounded-full items-center justify-center mb-6"
             style={{
-              backgroundColor: colors.success[500] + '20',
-              shadowColor: colors.success[500],
+              width: 96,
+              height: 96,
+              borderRadius: 48,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 24,
+              backgroundColor: theme.success + '20',
+              shadowColor: theme.success,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.3,
               shadowRadius: 20,
               elevation: 10,
             }}
           >
-            <CheckCircle size={56} color={colors.success[500]} />
+            <CheckCircle size={56} color={theme.success} />
           </View>
 
-          <Text className="text-2xl font-bold text-dark-50 text-center mb-4">
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 16 }}>
             Device Paired!
           </Text>
 
-          <Text className="text-dark-200 text-center text-base mb-8">
+          <Text style={{ color: theme.textSecondary, textAlign: 'center', fontSize: 16, marginBottom: 32 }}>
             Your device has been successfully connected to ForkOff
           </Text>
 
-          <View className="w-full gap-4">
+          <View style={{ width: '100%', gap: 16 }}>
             <TouchableOpacity
               onPress={() => {
                 setIsPaired(false);
                 setPairingCode('');
               }}
-              className="bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+              style={{
+                backgroundColor: theme.backgroundSecondary,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 12,
+                padding: 16,
+                alignItems: 'center',
+              }}
             >
-              <Text className="text-dark-50 font-medium">Add Another Device</Text>
+              <Text style={{ color: theme.text, fontWeight: '500' }}>Add Another Device</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => router.push('/(onboarding)/connect-github')}
-              className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-2"
               style={{
-                shadowColor: colors.primary[500],
+                backgroundColor: theme.primary,
+                borderRadius: 12,
+                padding: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                shadowColor: theme.primary,
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.2,
                 shadowRadius: 12,
                 elevation: 5,
               }}
             >
-              <Text className="text-white font-bold text-base">Continue</Text>
-              <ArrowRight size={18} color="#fff" />
+              <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>Continue</Text>
+              <ArrowRight size={18} color={theme.textInverse} />
             </TouchableOpacity>
           </View>
         </View>
@@ -87,40 +106,45 @@ export default function AddDeviceScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800">
-      <View className="flex-1 px-6 pt-4 pb-8">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
         {/* Header */}
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center mb-6"
+          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <ArrowLeft size={24} color={theme.textSecondary} />
+          <Text style={{ color: theme.textSecondary, marginLeft: 8, fontWeight: '500' }}>Back</Text>
         </TouchableOpacity>
 
-        <Text className="text-3xl font-bold text-dark-50 mb-2">Add Device</Text>
-        <Text className="text-base text-dark-200 mb-8">
+        <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>Add Device</Text>
+        <Text style={{ fontSize: 16, color: theme.textSecondary, marginBottom: 32 }}>
           Connect your computer to control it remotely
         </Text>
 
         {/* Method Selector */}
-        <View className="flex-row gap-3 mb-8">
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 32 }}>
           <TouchableOpacity
             onPress={() => setMethod('qr')}
-            className={`flex-1 p-4 rounded-xl border ${
-              method === 'qr'
-                ? 'bg-primary-500/10 border-primary-500'
-                : 'bg-dark-700 border-dark-500'
-            }`}
+            style={{
+              flex: 1,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              backgroundColor: method === 'qr' ? theme.primaryBackground : theme.backgroundSecondary,
+              borderColor: method === 'qr' ? theme.primary : theme.border,
+            }}
           >
             <QrCode
               size={32}
-              color={method === 'qr' ? colors.primary[500] : colors.dark[300]}
+              color={method === 'qr' ? theme.primary : theme.textTertiary}
             />
             <Text
-              className={`mt-2 font-bold ${
-                method === 'qr' ? 'text-primary-500' : 'text-dark-200'
-              }`}
+              style={{
+                marginTop: 8,
+                fontWeight: 'bold',
+                color: method === 'qr' ? theme.primary : theme.textSecondary,
+              }}
             >
               Scan QR Code
             </Text>
@@ -128,20 +152,25 @@ export default function AddDeviceScreen() {
 
           <TouchableOpacity
             onPress={() => setMethod('code')}
-            className={`flex-1 p-4 rounded-xl border ${
-              method === 'code'
-                ? 'bg-primary-500/10 border-primary-500'
-                : 'bg-dark-700 border-dark-500'
-            }`}
+            style={{
+              flex: 1,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              backgroundColor: method === 'code' ? theme.primaryBackground : theme.backgroundSecondary,
+              borderColor: method === 'code' ? theme.primary : theme.border,
+            }}
           >
             <Keyboard
               size={32}
-              color={method === 'code' ? colors.primary[500] : colors.dark[300]}
+              color={method === 'code' ? theme.primary : theme.textTertiary}
             />
             <Text
-              className={`mt-2 font-bold ${
-                method === 'code' ? 'text-primary-500' : 'text-dark-200'
-              }`}
+              style={{
+                marginTop: 8,
+                fontWeight: 'bold',
+                color: method === 'code' ? theme.primary : theme.textSecondary,
+              }}
             >
               Enter Code
             </Text>
@@ -150,61 +179,89 @@ export default function AddDeviceScreen() {
 
         {/* Content based on method */}
         {method === 'qr' ? (
-          <View className="flex-1">
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6">
-              <View className="items-center">
-                <View className="w-48 h-48 bg-dark-800 border border-dark-500 rounded-xl items-center justify-center mb-4">
-                  <QrCode size={64} color={colors.dark[400]} />
-                  <Text className="text-dark-300 mt-4 text-center text-sm">
+          <View style={{ flex: 1 }}>
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24 }}>
+              <View style={{ alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 192,
+                    height: 192,
+                    backgroundColor: theme.background,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 16,
+                  }}
+                >
+                  <QrCode size={64} color={theme.textTertiary} />
+                  <Text style={{ color: theme.textTertiary, marginTop: 16, textAlign: 'center', fontSize: 14 }}>
                     Camera access required
                   </Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => router.push('/device/pair')}
-                  className="bg-primary-500 rounded-xl p-4 w-full items-center"
                   style={{
-                    shadowColor: colors.primary[500],
+                    backgroundColor: theme.primary,
+                    borderRadius: 12,
+                    padding: 16,
+                    width: '100%',
+                    alignItems: 'center',
+                    shadowColor: theme.primary,
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.2,
                     shadowRadius: 12,
                     elevation: 5,
                   }}
                 >
-                  <Text className="text-white font-bold">Open Camera</Text>
+                  <Text style={{ color: theme.textInverse, fontWeight: 'bold' }}>Open Camera</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View className="mt-6 bg-dark-700 border border-dark-500 rounded-xl p-4">
-              <Text className="text-dark-200 text-sm text-center">
+            <View style={{ marginTop: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
                 On your computer, run:{'\n'}
-                <Text className="text-primary-500 font-mono">
+                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
                   npx forkoff pair
                 </Text>
               </Text>
             </View>
           </View>
         ) : (
-          <View className="flex-1">
-            <View className="mb-4">
-              <Text className="text-dark-200 text-xs font-bold uppercase tracking-wider mb-2">
+          <View style={{ flex: 1 }}>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
                 Pairing Code
               </Text>
               <TextInput
                 placeholder="e.g., ABC12345"
-                placeholderTextColor={colors.dark[400]}
+                placeholderTextColor={theme.textTertiary}
                 value={pairingCode}
                 onChangeText={(text) => setPairingCode(text.toUpperCase())}
                 autoCapitalize="characters"
                 maxLength={8}
-                className="bg-dark-700 border border-dark-500 rounded-xl px-4 py-4 text-dark-50 text-lg font-mono text-center tracking-widest"
+                style={{
+                  backgroundColor: theme.backgroundSecondary,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  color: theme.text,
+                  fontSize: 18,
+                  fontFamily: 'monospace',
+                  textAlign: 'center',
+                  letterSpacing: 4,
+                }}
               />
             </View>
 
-            <View className="mb-6 bg-dark-700 border border-dark-500 rounded-xl p-4">
-              <Text className="text-dark-200 text-sm text-center">
+            <View style={{ marginBottom: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
                 On your computer, run:{'\n'}
-                <Text className="text-primary-500 font-mono">
+                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
                   forkoff pair
                 </Text>
                 {'\n'}and enter the code shown
@@ -214,9 +271,12 @@ export default function AddDeviceScreen() {
             <TouchableOpacity
               onPress={handlePairWithCode}
               disabled={pairingCode.length !== 8 || isLoading}
-              className="bg-primary-500 rounded-xl p-4 items-center"
               style={{
-                shadowColor: colors.primary[500],
+                backgroundColor: theme.primary,
+                borderRadius: 12,
+                padding: 16,
+                alignItems: 'center',
+                shadowColor: theme.primary,
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.2,
                 shadowRadius: 12,
@@ -224,7 +284,7 @@ export default function AddDeviceScreen() {
                 opacity: pairingCode.length !== 8 || isLoading ? 0.5 : 1,
               }}
             >
-              <Text className="text-white font-bold">
+              <Text style={{ color: theme.textInverse, fontWeight: 'bold' }}>
                 {isLoading ? 'Pairing...' : 'Pair Device'}
               </Text>
             </TouchableOpacity>
@@ -234,9 +294,9 @@ export default function AddDeviceScreen() {
         {/* Skip */}
         <TouchableOpacity
           onPress={() => router.push('/(onboarding)/connect-github')}
-          className="mt-4 p-4 items-center"
+          style={{ marginTop: 16, padding: 16, alignItems: 'center' }}
         >
-          <Text className="text-dark-300 font-medium">Skip for now</Text>
+          <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

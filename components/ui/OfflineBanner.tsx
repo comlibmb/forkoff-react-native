@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { WifiOff, CloudOff } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useConnectionStore } from '@/stores/connection.store';
 
 export function OfflineBanner() {
+  const { theme } = useTheme();
   const { isPhoneOnline, isServerConnected } = useConnectionStore();
   const slideAnim = useRef(new Animated.Value(-60)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -56,14 +57,16 @@ export function OfflineBanner() {
       style={[
         styles.container,
         {
+          backgroundColor: theme.backgroundSecondary,
+          borderBottomColor: theme.warning,
           transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
         },
       ]}
     >
       <View style={styles.content}>
-        <Icon size={16} color={colors.warning[300]} />
-        <Text style={styles.text}>{message}</Text>
+        <Icon size={16} color={theme.warning} />
+        <Text style={[styles.text, { color: theme.warning }]}>{message}</Text>
       </View>
     </Animated.View>
   );
@@ -76,9 +79,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    backgroundColor: colors.dark[700],
     borderBottomWidth: 1,
-    borderBottomColor: colors.warning[400],
     paddingTop: 50, // Account for status bar
     paddingBottom: 8,
   },
@@ -92,7 +93,6 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.warning[300],
   },
 });
 
