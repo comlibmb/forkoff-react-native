@@ -54,9 +54,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       set({ isLoading: true });
+      console.log('[AuthStore] Starting initialization...');
 
       // Check for existing session
+      console.log('[AuthStore] Getting session...');
       const session = await authService.getSession();
+      console.log('[AuthStore] Session result:', !!session);
       if (session) {
         const user = await authService.getCurrentUser();
         set({

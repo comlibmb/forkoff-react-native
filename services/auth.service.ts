@@ -301,11 +301,14 @@ class AuthService {
   }
 
   async getSession(): Promise<Session | null> {
+    console.log('[AuthService] getSession called, useMocks:', this.useMocks);
     if (this.useMocks) {
       return this.mockSession ? ({ user: MOCK_USER } as unknown as Session) : null;
     }
 
+    console.log('[AuthService] Calling supabase.auth.getSession...');
     const { data, error } = await this.supabase!.auth.getSession();
+    console.log('[AuthService] getSession result:', !!data?.session, error?.message);
     if (error) {
       throw this.formatError(error);
     }
