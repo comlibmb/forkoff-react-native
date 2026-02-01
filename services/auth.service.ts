@@ -6,7 +6,11 @@ import { useVersionStore } from '@/stores/version.store';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-const USE_MOCKS = process.env.EXPO_PUBLIC_USE_MOCKS === 'true';
+
+// SECURITY: Mock mode should only be enabled in development builds AND when explicitly requested
+// __DEV__ is a React Native global that is true in development builds only
+const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV === 'development';
+const USE_MOCKS = IS_DEV_BUILD && process.env.EXPO_PUBLIC_USE_MOCKS === 'true';
 
 // Check if Supabase is properly configured
 const isSupabaseConfigured = () => {
@@ -43,7 +47,15 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Mock user for development/testing
+// SECURITY: Generate cryptographically random OTP for mock mode
+// This ensures mock mode can't be exploited with a known OTP
+function generateSecureOtp(): string {
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return String(array[0] % 1000000).padStart(6, '0');
+}
+
+// Mock user for development/testing - only used in dev builds with USE_MOCKS=true
 const MOCK_USER: User = {
   id: 'mock-user-id',
   email: 'demo@forkoff.dev',
@@ -70,7 +82,8 @@ class AuthService {
   private mockSession: boolean = false;
   private authListeners: Array<(user: User | null) => void> = [];
   private pendingRegistration: PendingRegistration | null = null;
-  private mockOtpCode: string = '123456'; // Mock OTP for testing
+  // SECURITY: Generate random OTP for each request instead of using hardcoded value
+  private pendingMockOtp: Map<string, { code: string; expiresAt: number }> = new Map();
 
   constructor() {
     this.useMocks = USE_MOCKS || !isSupabaseConfigured();
@@ -103,6 +116,27 @@ class AuthService {
 
   // ==================== OTP-BASED AUTHENTICATION ====================
 
+  // SECURITY: Generate and store a mock OTP with expiration (10 minutes)
+  private generateMockOtp(email: string): string {
+    const code = generateSecureOtp();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    this.pendingMockOtp.set(email.toLowerCase(), { code, expiresAt });
+    return code;
+  }
+
+  // SECURITY: Verify mock OTP and check expiration
+  private verifyMockOtp(email: string, code: string): boolean {
+    const stored = this.pendingMockOtp.get(email.toLowerCase());
+    if (!stored) return false;
+    if (Date.now() > stored.expiresAt) {
+      this.pendingMockOtp.delete(email.toLowerCase());
+      return false;
+    }
+    if (stored.code !== code) return false;
+    this.pendingMockOtp.delete(email.toLowerCase());
+    return true;
+  }
+
   // Start signup with email OTP (6-digit code sent to email)
   async signUpWithOtp(email: string, name?: string): Promise<{ message: string }> {
     // Store registration data for verification step
@@ -110,7 +144,11 @@ class AuthService {
 
     if (this.useMocks) {
       await new Promise((resolve) => setTimeout(resolve, 500));
-      console.log(`Mock OTP for ${email}: ${this.mockOtpCode}`);
+      const otp = this.generateMockOtp(email);
+      // SECURITY: Only log OTP in development console, never in production logs
+      if (IS_DEV_BUILD) {
+        console.log(`[DEV ONLY] Mock OTP for ${email}: ${otp}`);
+      }
       return { message: 'Verification code sent to your email' };
     }
 
@@ -137,7 +175,11 @@ class AuthService {
 
     if (this.useMocks) {
       await new Promise((resolve) => setTimeout(resolve, 500));
-      console.log(`Mock OTP for ${email}: ${this.mockOtpCode}`);
+      const otp = this.generateMockOtp(email);
+      // SECURITY: Only log OTP in development console, never in production logs
+      if (IS_DEV_BUILD) {
+        console.log(`[DEV ONLY] Mock OTP for ${email}: ${otp}`);
+      }
       return { message: 'Verification code sent to your email' };
     }
 
@@ -161,8 +203,9 @@ class AuthService {
     if (this.useMocks) {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      if (code !== this.mockOtpCode) {
-        throw new Error('Invalid verification code');
+      // SECURITY: Use secure OTP verification with expiration check
+      if (!this.verifyMockOtp(email, code)) {
+        throw new Error('Invalid or expired verification code');
       }
 
       this.mockSession = true;
@@ -240,7 +283,11 @@ class AuthService {
   async resendOtp(email: string): Promise<{ message: string }> {
     if (this.useMocks) {
       await new Promise((resolve) => setTimeout(resolve, 500));
-      console.log(`Mock OTP resent for ${email}: ${this.mockOtpCode}`);
+      const otp = this.generateMockOtp(email);
+      // SECURITY: Only log OTP in development console, never in production logs
+      if (IS_DEV_BUILD) {
+        console.log(`[DEV ONLY] Mock OTP resent for ${email}: ${otp}`);
+      }
       return { message: 'Verification code resent' };
     }
 
