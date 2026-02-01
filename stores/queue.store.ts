@@ -136,17 +136,26 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
   executeItem: async (itemId) => {
     try {
-      // Emit WebSocket event to trigger execution
-      wsService.emit('execute_queue_item', { queueItemId: itemId });
-
       // Optimistically update local state
       set((state) => ({
         queueItems: state.queueItems.map((i) =>
           i.id === itemId ? { ...i, status: 'EXECUTING' as const } : i,
         ),
       }));
+
+      // Emit WebSocket event with acknowledgment to get server response
+      await wsService.emitWithAck('execute_queue_item', { queueItemId: itemId });
     } catch (error) {
       console.error('Failed to execute item:', error);
+      // Revert optimistic update on error
+      set((state) => ({
+        queueItems: state.queueItems.map((i) =>
+          i.id === itemId ? { ...i, status: 'PENDING' as const } : i,
+        ),
+        error: error instanceof Error ? error.message : 'Failed to execute queue item',
+      }));
+      // Re-fetch to ensure consistent state
+      get().fetchQueue();
     }
   },
 
