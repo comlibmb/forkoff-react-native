@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 interface DiffLine {
   type: 'unchanged' | 'added' | 'removed';
@@ -82,6 +82,7 @@ function computeDiff(oldLines: string[], newLines: string[]): DiffLine[] {
 }
 
 export function DiffViewer({ oldContent, newContent, fileName }: DiffViewerProps) {
+  const { theme, colors } = useTheme();
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
   const diffLines = computeDiff(oldLines, newLines);
@@ -90,14 +91,14 @@ export function DiffViewer({ oldContent, newContent, fileName }: DiffViewerProps
   const removedCount = diffLines.filter((l) => l.type === 'removed').length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       {fileName && (
-        <View style={styles.header}>
-          <Text style={styles.fileName}>{fileName}</Text>
+        <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.card }]}>
+          <Text style={[styles.fileName, { color: theme.textSecondary }]}>{fileName}</Text>
           <View style={styles.stats}>
-            <Text style={styles.addedStat}>+{addedCount}</Text>
-            <Text style={styles.removedStat}>-{removedCount}</Text>
+            <Text style={[styles.addedStat, { color: theme.success }]}>+{addedCount}</Text>
+            <Text style={[styles.removedStat, { color: theme.error }]}>-{removedCount}</Text>
           </View>
         </View>
       )}
@@ -110,30 +111,34 @@ export function DiffViewer({ oldContent, newContent, fileName }: DiffViewerProps
               key={index}
               style={[
                 styles.line,
-                line.type === 'added' && styles.addedLine,
-                line.type === 'removed' && styles.removedLine,
+                line.type === 'added' && { backgroundColor: theme.success + '15' },
+                line.type === 'removed' && { backgroundColor: theme.error + '15' },
               ]}
             >
               {/* Line numbers */}
-              <Text style={styles.lineNumber}>
+              <Text style={[styles.lineNumber, { color: theme.border }]}>
                 {line.oldLineNumber ?? ' '}
               </Text>
-              <Text style={styles.lineNumber}>
+              <Text style={[styles.lineNumber, { color: theme.border }]}>
                 {line.newLineNumber ?? ' '}
               </Text>
 
               {/* Change indicator */}
-              <Text style={[styles.indicator,
-                line.type === 'added' && styles.addedIndicator,
-                line.type === 'removed' && styles.removedIndicator,
+              <Text style={[
+                styles.indicator,
+                { color: theme.border },
+                line.type === 'added' && { color: theme.success },
+                line.type === 'removed' && { color: theme.error },
               ]}>
                 {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
               </Text>
 
               {/* Content */}
-              <Text style={[styles.code,
-                line.type === 'added' && styles.addedText,
-                line.type === 'removed' && styles.removedText,
+              <Text style={[
+                styles.code,
+                { color: theme.textSecondary },
+                line.type === 'added' && { color: colors.success[400] },
+                line.type === 'removed' && { color: colors.error[400] },
               ]}>
                 {line.content || ' '}
               </Text>
@@ -149,19 +154,15 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: colors.dark[900],
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: colors.dark[800],
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[700],
   },
   fileName: {
-    color: colors.dark[200],
     fontFamily: 'monospace',
     fontSize: 13,
   },
@@ -170,12 +171,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   addedStat: {
-    color: colors.success[500],
     fontWeight: '600',
     fontSize: 13,
   },
   removedStat: {
-    color: colors.error[500],
     fontWeight: '600',
     fontSize: 13,
   },
@@ -187,15 +186,8 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     minHeight: 22,
   },
-  addedLine: {
-    backgroundColor: colors.success[500] + '15',
-  },
-  removedLine: {
-    backgroundColor: colors.error[500] + '15',
-  },
   lineNumber: {
     width: 40,
-    color: colors.dark[500],
     fontSize: 12,
     fontFamily: 'monospace',
     textAlign: 'right',
@@ -203,29 +195,15 @@ const styles = StyleSheet.create({
   },
   indicator: {
     width: 20,
-    color: colors.dark[500],
     fontSize: 12,
     fontFamily: 'monospace',
     textAlign: 'center',
   },
-  addedIndicator: {
-    color: colors.success[500],
-  },
-  removedIndicator: {
-    color: colors.error[500],
-  },
   code: {
     flex: 1,
-    color: colors.dark[200],
     fontSize: 12,
     fontFamily: 'monospace',
     paddingRight: 16,
-  },
-  addedText: {
-    color: colors.success[400],
-  },
-  removedText: {
-    color: colors.error[400],
   },
 });
 

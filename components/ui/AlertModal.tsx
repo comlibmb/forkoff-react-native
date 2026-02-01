@@ -19,7 +19,7 @@ import {
   Platform,
 } from 'react-native';
 import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 
 export interface AlertButton {
   text: string;
@@ -60,6 +60,7 @@ export function AlertModal({
   promptDefaultValue = '',
   secureTextEntry = false,
 }: AlertModalProps) {
+  const { theme } = useTheme();
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const [inputValue, setInputValue] = React.useState(promptDefaultValue);
@@ -91,28 +92,28 @@ export function AlertModal({
     const iconProps = { size: 28 };
     switch (variant) {
       case 'success':
-        return <CheckCircle {...iconProps} color={colors.success[400]} />;
+        return <CheckCircle {...iconProps} color={theme.success} />;
       case 'warning':
-        return <AlertTriangle {...iconProps} color={colors.warning[400]} />;
+        return <AlertTriangle {...iconProps} color={theme.warning} />;
       case 'error':
-        return <XCircle {...iconProps} color={colors.error[400]} />;
+        return <XCircle {...iconProps} color={theme.error} />;
       case 'confirm':
-        return <HelpCircle {...iconProps} color={colors.primary[400]} />;
+        return <HelpCircle {...iconProps} color={theme.primary} />;
       default:
-        return <Info {...iconProps} color={colors.primary[400]} />;
+        return <Info {...iconProps} color={theme.primary} />;
     }
   };
 
   const getAccentColor = () => {
     switch (variant) {
       case 'success':
-        return colors.success[500];
+        return theme.success;
       case 'warning':
-        return colors.warning[500];
+        return theme.warning;
       case 'error':
-        return colors.error[500];
+        return theme.error;
       default:
-        return colors.primary[500];
+        return theme.primary;
     }
   };
 
@@ -135,7 +136,7 @@ export function AlertModal({
         style={styles.overlay}
       >
         <TouchableOpacity
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.overlay }]}
           activeOpacity={1}
           onPress={onDismiss}
         />
@@ -143,40 +144,42 @@ export function AlertModal({
           style={[
             styles.container,
             {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
               transform: [{ scale: scaleAnim }],
               opacity: opacityAnim,
             },
           ]}
         >
           {/* macOS-style title bar */}
-          <View style={styles.titleBar}>
-            <View style={[styles.dot, { backgroundColor: colors.error[400] }]} />
-            <View style={[styles.dot, { backgroundColor: colors.warning[300] }]} />
-            <View style={[styles.dot, { backgroundColor: colors.success[300] }]} />
-            <Text style={styles.titleBarText}>forkoff</Text>
+          <View style={[styles.titleBar, { backgroundColor: theme.backgroundSecondary, borderBottomColor: theme.border }]}>
+            <View style={[styles.dot, { backgroundColor: theme.error }]} />
+            <View style={[styles.dot, { backgroundColor: theme.warning }]} />
+            <View style={[styles.dot, { backgroundColor: theme.success }]} />
+            <Text style={[styles.titleBarText, { color: theme.textTertiary }]}>forkoff</Text>
           </View>
 
           {/* Content */}
           <View style={styles.content}>
             {/* Icon */}
-            <View style={[styles.iconContainer, { borderColor: getAccentColor() }]}>
+            <View style={[styles.iconContainer, { backgroundColor: theme.backgroundSecondary, borderColor: getAccentColor() }]}>
               {getIcon()}
             </View>
 
             {/* Title */}
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
 
             {/* Message */}
-            {message && <Text style={styles.message}>{message}</Text>}
+            {message && <Text style={[styles.message, { color: theme.textTertiary }]}>{message}</Text>}
 
             {/* Prompt Input */}
             {prompt && (
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, color: theme.text }]}
                 value={inputValue}
                 onChangeText={setInputValue}
                 placeholder={promptPlaceholder}
-                placeholderTextColor={colors.dark[400]}
+                placeholderTextColor={theme.textTertiary}
                 secureTextEntry={secureTextEntry}
                 autoFocus
               />
@@ -193,9 +196,9 @@ export function AlertModal({
                     key={index}
                     style={[
                       styles.button,
-                      isDestructive && styles.buttonDestructive,
-                      isCancel && styles.buttonCancel,
-                      !isDestructive && !isCancel && styles.buttonPrimary,
+                      isDestructive && { backgroundColor: theme.error },
+                      isCancel && { backgroundColor: theme.backgroundTertiary, borderWidth: 1, borderColor: theme.border },
+                      !isDestructive && !isCancel && { backgroundColor: theme.primary },
                       buttons.length === 1 && styles.buttonFull,
                     ]}
                     onPress={() => handleButtonPress(button)}
@@ -205,7 +208,7 @@ export function AlertModal({
                       style={[
                         styles.buttonText,
                         isDestructive && styles.buttonTextDestructive,
-                        isCancel && styles.buttonTextCancel,
+                        isCancel && { color: theme.textSecondary },
                         !isDestructive && !isCancel && styles.buttonTextPrimary,
                       ]}
                     >
@@ -387,25 +390,20 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   container: {
     width: '85%',
     maxWidth: 340,
-    backgroundColor: colors.dark[800],
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.dark[600],
   },
   titleBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: colors.dark[700],
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
     gap: 6,
   },
   dot: {
@@ -415,7 +413,6 @@ const styles = StyleSheet.create({
   },
   titleBarText: {
     fontSize: 12,
-    color: colors.dark[300],
     fontFamily: 'monospace',
     marginLeft: 8,
   },
@@ -427,7 +424,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.dark[700],
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -436,27 +432,22 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.dark[50],
     textAlign: 'center',
     marginBottom: 8,
   },
   message: {
     fontSize: 14,
-    color: colors.dark[300],
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
   },
   input: {
     width: '100%',
-    backgroundColor: colors.dark[700],
     borderWidth: 1,
-    borderColor: colors.dark[500],
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: colors.dark[50],
     marginBottom: 20,
   },
   buttonContainer: {
@@ -475,26 +466,12 @@ const styles = StyleSheet.create({
   buttonFull: {
     flex: 1,
   },
-  buttonPrimary: {
-    backgroundColor: colors.primary[600],
-  },
-  buttonCancel: {
-    backgroundColor: colors.dark[600],
-    borderWidth: 1,
-    borderColor: colors.dark[500],
-  },
-  buttonDestructive: {
-    backgroundColor: colors.error[500],
-  },
   buttonText: {
     fontSize: 15,
     fontWeight: '600',
   },
   buttonTextPrimary: {
     color: '#fff',
-  },
-  buttonTextCancel: {
-    color: colors.dark[200],
   },
   buttonTextDestructive: {
     color: '#fff',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
+import { ThemeColors, useTheme } from '@/theme/ThemeProvider';
 import { DeviceStatus } from '@/types';
 
 // Internal status types (lowercase)
@@ -16,18 +17,19 @@ interface StatusBadgeProps {
   showDot?: boolean;
   animated?: boolean;
   style?: ViewStyle;
+  theme?: ThemeColors;
 }
 
-const statusConfig: Record<InternalStatusType, { color: string; label: string }> = {
+const getStatusConfig = (theme: ThemeColors): Record<InternalStatusType, { color: string; label: string }> => ({
   online: { color: colors.status.online, label: 'Online' },
-  offline: { color: colors.status.offline, label: 'Offline' },
+  offline: { color: theme.textTertiary, label: 'Offline' },
   syncing: { color: colors.status.syncing, label: 'Syncing' },
-  error: { color: colors.status.error, label: 'Error' },
-  warning: { color: colors.status.warning, label: 'Warning' },
-  success: { color: colors.success[500], label: 'Success' },
-  info: { color: colors.primary[500], label: 'Info' },
-  default: { color: colors.dark[400], label: '' },
-};
+  error: { color: theme.error, label: 'Error' },
+  warning: { color: theme.warning, label: 'Warning' },
+  success: { color: theme.success, label: 'Success' },
+  info: { color: theme.primary, label: 'Info' },
+  default: { color: theme.textTertiary, label: '' },
+});
 
 const sizeConfig: Record<BadgeSize, { dot: number; fontSize: number; padding: { h: number; v: number } }> = {
   sm: { dot: 6, fontSize: 10, padding: { h: 6, v: 2 } },
@@ -42,7 +44,12 @@ export function StatusBadge({
   showDot = true,
   animated = false,
   style,
+  theme: themeProp,
 }: StatusBadgeProps) {
+  const { theme: contextTheme } = useTheme();
+  const theme = themeProp || contextTheme;
+  const statusConfig = getStatusConfig(theme);
+
   // Normalize status to lowercase to handle backend enum values (ONLINE -> online)
   const normalizedStatus = (status?.toLowerCase() || 'default') as InternalStatusType;
   const config = statusConfig[normalizedStatus] || statusConfig.default;
@@ -97,7 +104,12 @@ export function StatusDot({
   size = 'md',
   animated = false,
   style,
+  theme: themeProp,
 }: Omit<StatusBadgeProps, 'label' | 'showDot'>) {
+  const { theme: contextTheme } = useTheme();
+  const theme = themeProp || contextTheme;
+  const statusConfig = getStatusConfig(theme);
+
   // Normalize status to lowercase to handle backend enum values (ONLINE -> online)
   const normalizedStatus = (status?.toLowerCase() || 'default') as InternalStatusType;
   const config = statusConfig[normalizedStatus] || statusConfig.default;

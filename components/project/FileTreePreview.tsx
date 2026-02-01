@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Folder, File, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { FileNode } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme, ThemeColors } from '@/theme/ThemeProvider';
 
 interface FileTreePreviewProps {
   files: FileNode[];
@@ -17,6 +17,7 @@ interface FileNodeItemProps {
   maxDepth: number;
   expandedPaths: Set<string>;
   toggleExpanded: (path: string) => void;
+  theme: ThemeColors;
 }
 
 const fileExtensionColors: Record<string, string> = {
@@ -35,9 +36,9 @@ const fileExtensionColors: Record<string, string> = {
   scss: '#c6538c',
 };
 
-function getFileColor(name: string): string {
+function getFileColor(name: string, fallbackColor: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
-  return fileExtensionColors[ext] || colors.dark[400];
+  return fileExtensionColors[ext] || fallbackColor;
 }
 
 function FileNodeItem({
@@ -47,6 +48,7 @@ function FileNodeItem({
   maxDepth,
   expandedPaths,
   toggleExpanded,
+  theme,
 }: FileNodeItemProps) {
   const isExpanded = expandedPaths.has(node.path);
   const isDirectory = node.type === 'directory';
@@ -72,16 +74,16 @@ function FileNodeItem({
           <>
             {hasChildren ? (
               isExpanded ? (
-                <ChevronDown size={14} color={colors.dark[400]} />
+                <ChevronDown size={14} color={theme.textTertiary} />
               ) : (
-                <ChevronRight size={14} color={colors.dark[400]} />
+                <ChevronRight size={14} color={theme.textTertiary} />
               )
             ) : (
               <View style={{ width: 14 }} />
             )}
             <Folder
               size={16}
-              color={colors.warning[500]}
+              color={theme.warning}
               style={{ marginLeft: 4 }}
             />
           </>
@@ -90,13 +92,14 @@ function FileNodeItem({
             <View style={{ width: 14 }} />
             <File
               size={16}
-              color={getFileColor(node.name)}
+              color={getFileColor(node.name, theme.textTertiary)}
               style={{ marginLeft: 4 }}
             />
           </>
         )}
         <Text
-          className="text-dark-200 ml-2 flex-1"
+          className="ml-2 flex-1"
+          style={{ color: theme.textSecondary }}
           numberOfLines={1}
         >
           {node.name}
@@ -113,6 +116,7 @@ function FileNodeItem({
             maxDepth={maxDepth}
             expandedPaths={expandedPaths}
             toggleExpanded={toggleExpanded}
+            theme={theme}
           />
         ))}
     </View>
@@ -124,6 +128,7 @@ export function FileTreePreview({
   onFileSelect,
   maxDepth = 3,
 }: FileTreePreviewProps) {
+  const { theme } = useTheme();
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(
     new Set()
   );
@@ -143,8 +148,8 @@ export function FileTreePreview({
   if (files.length === 0) {
     return (
       <View className="items-center py-8">
-        <Folder size={48} color={colors.dark[600]} />
-        <Text className="text-dark-400 mt-4">No files to display</Text>
+        <Folder size={48} color={theme.backgroundTertiary} />
+        <Text className="mt-4" style={{ color: theme.textTertiary }}>No files to display</Text>
       </View>
     );
   }
@@ -160,6 +165,7 @@ export function FileTreePreview({
           maxDepth={maxDepth}
           expandedPaths={expandedPaths}
           toggleExpanded={toggleExpanded}
+          theme={theme}
         />
       ))}
     </View>

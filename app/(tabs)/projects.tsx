@@ -15,8 +15,9 @@ import {
 import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
 import { ClaudeSession } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
+import { colors } from '@/theme/colors';
 
 // Memoized utility function (outside component to avoid recreation)
 const formatTimeAgo = (dateString: string): string => {
@@ -38,12 +39,14 @@ const SessionItem = memo(({
   session,
   deviceId,
   isLast,
-  onPress
+  onPress,
+  theme,
 }: {
   session: ClaudeSession;
   deviceId: string;
   isLast: boolean;
   onPress: (deviceId: string, session: ClaudeSession) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const isActive = session.state?.toUpperCase() === 'ACTIVE';
 
@@ -54,41 +57,55 @@ const SessionItem = memo(({
   return (
     <TouchableOpacity
       onPress={handlePress}
-      className={`px-4 py-3 flex-row items-center justify-between ${
-        !isLast ? 'border-b border-dark-700' : ''
-      }`}
+      style={[
+        styles.sessionItem,
+        !isLast && { borderBottomWidth: 1, borderBottomColor: theme.backgroundSecondary },
+      ]}
     >
-      <View className="flex-row items-center flex-1">
-        <View className="w-8 h-8 bg-dark-700 border border-dark-600 rounded-lg items-center justify-center mr-3">
+      <View style={styles.sessionContent}>
+        <View
+          style={[
+            styles.sessionIcon,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.backgroundTertiary,
+            },
+          ]}
+        >
           <MessageSquare
             size={14}
-            color={isActive ? colors.primary[500] : colors.dark[400]}
+            color={isActive ? theme.primary : theme.textTertiary}
           />
         </View>
-        <View className="flex-1">
-          <View className="flex-row items-center">
+        <View style={styles.sessionInfo}>
+          <View style={styles.sessionTitleRow}>
             {isActive && (
-              <View className="w-1.5 h-1.5 rounded-full bg-primary-500 mr-2" />
+              <View style={[styles.activeDotSmall, { backgroundColor: theme.primary }]} />
             )}
-            <Text className="text-dark-200 text-sm font-mono" numberOfLines={1}>
+            <Text
+              style={[styles.sessionKey, { color: theme.textSecondary }]}
+              numberOfLines={1}
+            >
               {session.sessionKey}
             </Text>
           </View>
-          <View className="flex-row items-center mt-0.5">
-            <Clock size={10} color={colors.dark[500]} />
-            <Text className="text-dark-500 text-xs ml-1">
+          <View style={styles.sessionMeta}>
+            <Clock size={10} color={theme.border} />
+            <Text style={[styles.sessionTime, { color: theme.border }]}>
               {formatTimeAgo(session.lastUsedAt)}
             </Text>
             {isActive && (
               <>
-                <Text className="text-dark-600 mx-2">•</Text>
-                <Text className="text-primary-500 text-xs font-medium">Active</Text>
+                <Text style={[styles.metaDot, { color: theme.backgroundTertiary }]}>
+                  {'\u2022'}
+                </Text>
+                <Text style={[styles.activeLabel, { color: theme.primary }]}>Active</Text>
               </>
             )}
           </View>
         </View>
       </View>
-      <ChevronRight size={16} color={colors.dark[500]} />
+      <ChevronRight size={16} color={theme.border} />
     </TouchableOpacity>
   );
 });
@@ -100,6 +117,7 @@ const ProjectCard = memo(({
   isExpanded,
   onToggle,
   onSessionPress,
+  theme,
 }: {
   project: {
     directory: string;
@@ -111,6 +129,7 @@ const ProjectCard = memo(({
   isExpanded: boolean;
   onToggle: (key: string) => void;
   onSessionPress: (deviceId: string, session: ClaudeSession) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const projectKey = `${deviceId}:${project.directory}`;
   const directoryName = useMemo(() =>
@@ -126,55 +145,68 @@ const ProjectCard = memo(({
   }, [onToggle, projectKey]);
 
   return (
-    <View style={styles.projectCard}>
+    <View style={[styles.projectCard, { backgroundColor: theme.backgroundSecondary }]}>
       {project.hasActive && (
-        <View style={styles.glowEffect} />
+        <View style={[styles.glowEffect, { backgroundColor: theme.primary }]} />
       )}
 
       <TouchableOpacity onPress={handleToggle} style={styles.projectHeader}>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center flex-1 mr-3">
-            <View style={styles.folderIcon}>
+        <View style={styles.projectHeaderRow}>
+          <View style={styles.projectHeaderLeft}>
+            <View style={[styles.folderIcon, { backgroundColor: theme.backgroundTertiary }]}>
               <Folder
                 size={20}
-                color={project.hasActive ? colors.primary[500] : colors.dark[300]}
+                color={project.hasActive ? theme.primary : theme.textTertiary}
               />
             </View>
-            <View className="flex-1">
-              <View className="flex-row items-center mb-1">
+            <View style={styles.projectTitleContainer}>
+              <View style={styles.projectTitleRow}>
                 {project.hasActive && (
-                  <View className="w-2 h-2 rounded-full bg-primary-500 mr-2" />
+                  <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />
                 )}
-                <Text className="text-dark-50 font-bold" numberOfLines={1}>
+                <Text style={[styles.projectName, { color: theme.text }]} numberOfLines={1}>
                   {directoryName}
                 </Text>
               </View>
-              <Text className="text-dark-400 text-xs font-mono" numberOfLines={1}>
+              <Text
+                style={[styles.projectPath, { color: theme.textTertiary }]}
+                numberOfLines={1}
+              >
                 {project.directory}
               </Text>
-              <View className="flex-row items-center mt-1">
-                <Terminal size={10} color={colors.dark[400]} />
-                <Text className="text-dark-300 text-xs ml-1">
+              <View style={styles.projectMeta}>
+                <Terminal size={10} color={theme.textTertiary} />
+                <Text style={[styles.projectMetaText, { color: theme.textTertiary }]}>
                   {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                 </Text>
-                <Text className="text-dark-500 mx-2">•</Text>
-                <Clock size={10} color={colors.dark[400]} />
-                <Text className="text-dark-400 text-xs ml-1">
+                <Text style={[styles.projectMetaDot, { color: theme.border }]}>
+                  {'\u2022'}
+                </Text>
+                <Clock size={10} color={theme.textTertiary} />
+                <Text style={[styles.projectMetaText, { color: theme.textTertiary }]}>
                   {formatTimeAgo(project.lastUsedAt)}
                 </Text>
               </View>
             </View>
           </View>
           {isExpanded ? (
-            <ChevronDown size={20} color={colors.dark[400]} />
+            <ChevronDown size={20} color={theme.textTertiary} />
           ) : (
-            <ChevronRight size={20} color={colors.dark[400]} />
+            <ChevronRight size={20} color={theme.textTertiary} />
           )}
         </View>
       </TouchableOpacity>
 
       {isExpanded && (
-        <View style={styles.sessionList}>
+        <View
+          style={[
+            styles.sessionList,
+            {
+              borderTopColor: theme.backgroundTertiary,
+              backgroundColor: theme.backgroundTertiary,
+            },
+          ]}
+        >
           {project.sessions.map((session, index) => (
             <SessionItem
               key={session.sessionKey}
@@ -182,6 +214,7 @@ const ProjectCard = memo(({
               deviceId={deviceId}
               isLast={index === project.sessions.length - 1}
               onPress={onSessionPress}
+              theme={theme}
             />
           ))}
         </View>
@@ -196,6 +229,7 @@ const DeviceGroup = memo(({
   expandedProjects,
   onToggleProject,
   onSessionPress,
+  theme,
 }: {
   deviceGroup: {
     device: { id: string; name: string };
@@ -209,24 +243,43 @@ const DeviceGroup = memo(({
   expandedProjects: Set<string>;
   onToggleProject: (key: string) => void;
   onSessionPress: (deviceId: string, session: ClaudeSession) => void;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const hasActiveProject = deviceGroup.projects.some(p => p.hasActive);
 
   return (
-    <View style={styles.deviceWindow}>
+    <View
+      style={[
+        styles.deviceWindow,
+        {
+          backgroundColor: theme.background,
+          borderColor: theme.backgroundTertiary,
+        },
+      ]}
+    >
       {/* macOS Title Bar */}
-      <View style={styles.deviceTitleBar}>
+      <View
+        style={[
+          styles.deviceTitleBar,
+          {
+            backgroundColor: theme.backgroundSecondary,
+            borderBottomColor: theme.backgroundTertiary,
+          },
+        ]}
+      >
         <View style={styles.trafficLights}>
-          <View style={[styles.trafficDot, styles.dotRed]} />
-          <View style={[styles.trafficDot, styles.dotYellow]} />
-          <View style={[styles.trafficDot, styles.dotGreen]} />
+          <View style={[styles.trafficDot, { backgroundColor: theme.error }]} />
+          <View style={[styles.trafficDot, { backgroundColor: theme.warning }]} />
+          <View style={[styles.trafficDot, { backgroundColor: theme.success }]} />
         </View>
         <View style={styles.deviceTitleContent}>
-          <Laptop size={14} color={colors.dark[300]} />
-          <Text style={styles.deviceTitleText}>{deviceGroup.device.name}</Text>
+          <Laptop size={14} color={theme.textTertiary} />
+          <Text style={[styles.deviceTitleText, { color: theme.textSecondary }]}>
+            {deviceGroup.device.name}
+          </Text>
         </View>
         <View style={styles.deviceTitleRight}>
-          <Text style={styles.projectCount}>
+          <Text style={[styles.projectCount, { color: theme.textTertiary }]}>
             {deviceGroup.projects.length} project{deviceGroup.projects.length !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -242,42 +295,49 @@ const DeviceGroup = memo(({
             isExpanded={expandedProjects.has(`${deviceGroup.device.id}:${project.directory}`)}
             onToggle={onToggleProject}
             onSessionPress={onSessionPress}
+            theme={theme}
           />
         ))}
       </View>
 
       {/* Accent bar */}
-      <View style={[styles.deviceAccentBar, { backgroundColor: hasActiveProject ? colors.primary[500] : colors.dark[600] }]} />
+      <View
+        style={[
+          styles.deviceAccentBar,
+          { backgroundColor: hasActiveProject ? theme.primary : theme.backgroundTertiary },
+        ]}
+      />
     </View>
   );
 });
 
 // Empty states as memoized components
-const NoDevicesState = memo(() => (
-  <View className="items-center py-12">
-    <Laptop size={64} color={colors.dark[600]} />
-    <Text className="text-dark-400 mt-4 text-center text-lg">
+const NoDevicesState = memo(({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }) => (
+  <View style={styles.emptyStateContainer}>
+    <Laptop size={64} color={theme.backgroundTertiary} />
+    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
       No devices connected
     </Text>
-    <Text className="text-dark-500 text-center mt-2">
+    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
       Connect a device to see Claude projects
     </Text>
   </View>
 ));
 
-const NoSessionsState = memo(() => (
-  <View className="items-center py-12">
-    <FolderOpen size={64} color={colors.dark[600]} />
-    <Text className="text-dark-400 mt-4 text-center text-lg">
+const NoSessionsState = memo(({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }) => (
+  <View style={styles.emptyStateContainer}>
+    <FolderOpen size={64} color={theme.backgroundTertiary} />
+    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
       No Claude sessions yet
     </Text>
-    <Text className="text-dark-500 text-center mt-2">
+    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
       Start a Claude session on any device to see it here
     </Text>
   </View>
 ));
 
 export default function ProjectsScreen() {
+  const { theme } = useTheme();
   // Use specific selectors to minimize re-renders
   const sessions = useClaudeStore((state) => state.sessions);
   const fetchSessions = useClaudeStore((state) => state.fetchSessions);
@@ -299,21 +359,21 @@ export default function ProjectsScreen() {
   const scanLines = useMemo(() => [
     {
       text: 'Looking for devices',
-      color: colors.dark[200],
+      color: theme.textSecondary,
       done: scanStep > 0,
     },
     {
       text: scanDeviceCount > 0
         ? `Found ${scanDeviceCount} device${scanDeviceCount !== 1 ? 's' : ''}`
         : 'Discovering devices',
-      color: scanDeviceCount > 0 ? colors.success[100] : colors.dark[300],
+      color: scanDeviceCount > 0 ? colors.success[100] : theme.textTertiary,
       done: scanStep > 1,
     },
     {
       text: scanProjectCount > 0
         ? `Scanned ${scanProjectCount} project${scanProjectCount !== 1 ? 's' : ''}`
         : 'Scanning for projects',
-      color: scanProjectCount > 0 ? colors.success[100] : colors.dark[300],
+      color: scanProjectCount > 0 ? colors.success[100] : theme.textTertiary,
       done: scanStep > 2,
     },
     {
@@ -321,7 +381,7 @@ export default function ProjectsScreen() {
       color: colors.success[100],
       done: scanStep > 3,
     },
-  ], [scanStep, scanDeviceCount, scanProjectCount]);
+  ], [scanStep, scanDeviceCount, scanProjectCount, theme]);
 
   // Auto-scan on mount
   useEffect(() => {
@@ -509,15 +569,24 @@ export default function ProjectsScreen() {
       expandedProjects={expandedProjects}
       onToggleProject={toggleProject}
       onSessionPress={handleOpenSession}
+      theme={theme}
     />
-  ), [expandedProjects, toggleProject, handleOpenSession]);
+  ), [expandedProjects, toggleProject, handleOpenSession, theme]);
 
   const keyExtractor = useCallback((item: typeof deviceProjects[0]) => item.device.id, []);
 
   // Project count badge
   const projectBadge = (
-    <View style={styles.badge}>
-      <Text style={styles.badgeText}>
+    <View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: theme.backgroundSecondary,
+          borderColor: theme.border,
+        },
+      ]}
+    >
+      <Text style={[styles.badgeText, { color: theme.textTertiary }]}>
         {totalProjects} project{totalProjects !== 1 ? 's' : ''}
       </Text>
     </View>
@@ -535,10 +604,10 @@ export default function ProjectsScreen() {
       );
     }
     if (devices.length === 0) {
-      return <NoDevicesState />;
+      return <NoDevicesState theme={theme} />;
     }
     if (deviceProjects.length === 0) {
-      return <NoSessionsState />;
+      return <NoSessionsState theme={theme} />;
     }
     return (
       <FlatList
@@ -550,7 +619,7 @@ export default function ProjectsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary[500]}
+            tintColor={theme.primary}
           />
         }
         // Performance optimizations
@@ -563,20 +632,22 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-900" edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: theme.backgroundTertiary }]}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerTitle}>Projects</Text>
-            <Text style={styles.headerSubtitle}>Claude sessions grouped by directory</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Projects</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>
+              Claude sessions grouped by directory
+            </Text>
           </View>
           {projectBadge}
         </View>
       </View>
 
       {/* Project List */}
-      <View className="flex-1 px-4 pt-4">
+      <View style={[styles.contentContainer, { backgroundColor: theme.background }]}>
         {renderContent()}
       </View>
     </SafeAreaView>
@@ -584,12 +655,14 @@ export default function ProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
   },
   headerRow: {
     flexDirection: 'row',
@@ -599,19 +672,20 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
   },
   headerSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
     marginTop: 4,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   // Device Window (macOS style)
   deviceWindow: {
-    backgroundColor: colors.dark[800],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     overflow: 'hidden',
     marginBottom: 20,
   },
@@ -620,9 +694,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: colors.dark[700],
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
   },
   trafficLights: {
     flexDirection: 'row',
@@ -634,15 +706,6 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  dotRed: {
-    backgroundColor: colors.error[300],
-  },
-  dotYellow: {
-    backgroundColor: colors.warning[300],
-  },
-  dotGreen: {
-    backgroundColor: colors.success[200],
-  },
   deviceTitleContent: {
     flex: 1,
     flexDirection: 'row',
@@ -653,7 +716,6 @@ const styles = StyleSheet.create({
   deviceTitleText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.dark[200],
     fontFamily: 'monospace',
   },
   deviceTitleRight: {
@@ -661,7 +723,6 @@ const styles = StyleSheet.create({
   },
   projectCount: {
     fontSize: 11,
-    color: colors.dark[400],
   },
   deviceContent: {
     padding: 12,
@@ -670,7 +731,6 @@ const styles = StyleSheet.create({
     height: 3,
   },
   projectCard: {
-    backgroundColor: colors.dark[700],
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 8,
@@ -681,38 +741,142 @@ const styles = StyleSheet.create({
     right: -48,
     width: 96,
     height: 96,
-    backgroundColor: colors.primary[500],
     borderRadius: 48,
     opacity: 0.1,
   },
   projectHeader: {
     padding: 12,
   },
+  projectHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  projectHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
   folderIcon: {
     width: 36,
     height: 36,
-    backgroundColor: colors.dark[600],
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
+  projectTitleContainer: {
+    flex: 1,
+  },
+  projectTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  activeDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  projectName: {
+    fontWeight: 'bold',
+  },
+  projectPath: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  projectMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  projectMetaText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  projectMetaDot: {
+    marginHorizontal: 8,
+  },
   sessionList: {
     borderTopWidth: 1,
-    borderTopColor: colors.dark[600],
-    backgroundColor: colors.dark[600],
+  },
+  sessionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sessionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sessionIcon: {
+    width: 32,
+    height: 32,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sessionInfo: {
+    flex: 1,
+  },
+  sessionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sessionKey: {
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  sessionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  sessionTime: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  metaDot: {
+    marginHorizontal: 8,
+  },
+  activeLabel: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   badge: {
-    backgroundColor: colors.dark[700],
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.dark[500],
   },
   badgeText: {
-    color: colors.dark[300],
     fontSize: 13,
     fontWeight: '500',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateTitle: {
+    marginTop: 16,
+    textAlign: 'center',
+    fontSize: 18,
+  },
+  emptyStateSubtitle: {
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

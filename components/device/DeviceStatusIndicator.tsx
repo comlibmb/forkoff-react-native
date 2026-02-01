@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import { DeviceStatus } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 interface DeviceStatusIndicatorProps {
   status: DeviceStatus;
@@ -17,21 +17,23 @@ const sizeMap = {
 
 // Use lowercase keys for consistency
 type NormalizedStatus = 'online' | 'offline' | 'syncing';
-const statusColors: Record<NormalizedStatus, string> = {
-  online: colors.status.online,
-  offline: colors.status.offline,
-  syncing: colors.status.syncing,
-};
 
 export function DeviceStatusIndicator({
   status,
   size = 'md',
   pulse = true,
 }: DeviceStatusIndicatorProps) {
+  const { colors } = useTheme();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dotSize = sizeMap[size];
   // Normalize status to lowercase to handle backend enum values
   const normalizedStatus = (status?.toLowerCase() || 'offline') as NormalizedStatus;
+
+  const statusColors: Record<NormalizedStatus, string> = {
+    online: colors.status.online,
+    offline: colors.status.offline,
+    syncing: colors.status.syncing,
+  };
 
   useEffect(() => {
     if (pulse && normalizedStatus === 'syncing') {

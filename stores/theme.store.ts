@@ -4,30 +4,45 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ColorScheme } from '@/theme/colors';
 
 interface ThemeState {
-  colorScheme: ColorScheme;
+  colorScheme: ColorScheme | null;  // null = use system theme
+  hasUserOverride: boolean;
   setColorScheme: (scheme: ColorScheme) => void;
   toggleColorScheme: () => void;
-  isDark: boolean;
+  resetToSystem: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      colorScheme: 'dark',
-      isDark: true,
+      colorScheme: null,  // Default to null (system theme)
+      hasUserOverride: false,
 
       setColorScheme: (scheme) => {
-        set({ colorScheme: scheme, isDark: scheme === 'dark' });
+        set({ colorScheme: scheme, hasUserOverride: true });
       },
 
       toggleColorScheme: () => {
-        const newScheme = get().colorScheme === 'dark' ? 'light' : 'dark';
-        set({ colorScheme: newScheme, isDark: newScheme === 'dark' });
+        // When toggling, we need to know the current effective scheme
+        // This will be handled by the ThemeProvider which knows the system theme
+        const current = get().colorScheme;
+        // If null (system), we'll toggle based on what the provider tells us
+        // For now, just flip between light and dark
+        const newScheme = current === 'dark' ? 'light' : 'dark';
+        set({ colorScheme: newScheme, hasUserOverride: true });
+      },
+
+      resetToSystem: () => {
+        set({ colorScheme: null, hasUserOverride: false });
       },
     }),
     {
       name: 'theme-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) =>
+        // Only persist if user has explicitly overridden
+        state.hasUserOverride
+          ? { colorScheme: state.colorScheme, hasUserOverride: state.hasUserOverride }
+          : { colorScheme: null, hasUserOverride: false },
     }
   )
 );

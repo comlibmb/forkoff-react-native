@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { ThemeColors, useTheme } from '@/theme/ThemeProvider';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -18,6 +18,7 @@ interface InputProps extends TextInputProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   containerStyle?: ViewStyle;
+  theme?: ThemeColors;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(
@@ -31,10 +32,14 @@ export const Input = forwardRef<TextInput, InputProps>(
       containerStyle,
       secureTextEntry,
       style,
+      theme: themeProp,
       ...props
     },
     ref
   ) => {
+    const { theme: contextTheme } = useTheme();
+    const theme = themeProp || contextTheme;
+
     const [isFocused, setIsFocused] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
@@ -42,21 +47,21 @@ export const Input = forwardRef<TextInput, InputProps>(
     const actualSecureTextEntry = secureTextEntry && !isPasswordVisible;
 
     const getBorderColor = () => {
-      if (error) return colors.error[500];
-      if (isFocused) return colors.primary[500];
-      return colors.dark[600];
+      if (error) return theme.error;
+      if (isFocused) return theme.primary;
+      return theme.border;
     };
 
     return (
       <View style={[styles.container, containerStyle]}>
-        {label && <Text style={styles.label}>{label}</Text>}
+        {label && <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>}
 
         <View
           style={[
             styles.inputContainer,
             {
               borderColor: getBorderColor(),
-              backgroundColor: colors.dark[800],
+              backgroundColor: theme.backgroundSecondary,
             },
           ]}
         >
@@ -66,11 +71,12 @@ export const Input = forwardRef<TextInput, InputProps>(
             ref={ref}
             style={[
               styles.input,
+              { color: theme.text },
               leftIcon ? styles.inputWithLeftIcon : undefined,
               (rightIcon || showPasswordToggle) ? styles.inputWithRightIcon : undefined,
               style,
             ]}
-            placeholderTextColor={colors.dark[400]}
+            placeholderTextColor={theme.textTertiary}
             onFocus={(e) => {
               setIsFocused(true);
               props.onFocus?.(e);
@@ -90,9 +96,9 @@ export const Input = forwardRef<TextInput, InputProps>(
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {isPasswordVisible ? (
-                <EyeOff size={20} color={colors.dark[400]} />
+                <EyeOff size={20} color={theme.textTertiary} />
               ) : (
-                <Eye size={20} color={colors.dark[400]} />
+                <Eye size={20} color={theme.textTertiary} />
               )}
             </TouchableOpacity>
           )}
@@ -102,8 +108,8 @@ export const Input = forwardRef<TextInput, InputProps>(
           )}
         </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
-        {hint && !error && <Text style={styles.hint}>{hint}</Text>}
+        {error && <Text style={[styles.error, { color: theme.error }]}>{error}</Text>}
+        {hint && !error && <Text style={[styles.hint, { color: theme.textTertiary }]}>{hint}</Text>}
       </View>
     );
   }
@@ -118,7 +124,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.dark[200],
     marginBottom: 8,
   },
   inputContainer: {
@@ -131,7 +136,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: colors.dark[100],
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -149,12 +153,10 @@ const styles = StyleSheet.create({
   },
   error: {
     fontSize: 12,
-    color: colors.error[500],
     marginTop: 4,
   },
   hint: {
     fontSize: 12,
-    color: colors.dark[400],
     marginTop: 4,
   },
 });

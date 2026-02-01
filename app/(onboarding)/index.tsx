@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Smartphone, Cpu, GitBranch, Terminal, ArrowRight } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const features = [
   {
@@ -28,74 +28,115 @@ const features = [
 ];
 
 export default function WelcomeScreen() {
+  const { theme } = useTheme();
+
   return (
-    <SafeAreaView className="flex-1 bg-dark-800">
-      <View className="flex-1 px-6 pt-8 pb-8">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 }}>
         {/* Logo & Title */}
-        <View className="items-center mb-12">
+        <View style={{ alignItems: 'center', marginBottom: 48 }}>
           <View
-            className="w-20 h-20 rounded-2xl items-center justify-center mb-6"
             style={{
-              backgroundColor: colors.primary[500],
-              shadowColor: colors.primary[500],
+              width: 80,
+              height: 80,
+              borderRadius: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 24,
+              backgroundColor: theme.primary,
+              shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.3,
               shadowRadius: 20,
               elevation: 10,
             }}
           >
-            <Text className="text-white text-4xl font-bold">F</Text>
+            <Text style={{ color: theme.textInverse, fontSize: 36, fontWeight: 'bold' }}>F</Text>
           </View>
-          <Text className="text-3xl font-bold text-dark-50 text-center mb-2">
+          <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 8 }}>
             Welcome to ForkOff
           </Text>
-          <Text className="text-base text-dark-200 text-center">
+          <Text style={{ fontSize: 16, color: theme.textSecondary, textAlign: 'center' }}>
             Your AI coding companion in your pocket
           </Text>
         </View>
 
         {/* Features */}
-        <View className="flex-1">
+        <View style={{ flex: 1 }}>
           {features.map((feature, index) => (
             <View
               key={index}
-              className="flex-row items-center mb-4 bg-dark-700 border border-dark-500 rounded-xl p-4"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor: theme.backgroundSecondary,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 12,
+                padding: 16,
+              }}
             >
-              <View className="w-12 h-12 bg-dark-800 border border-dark-500 rounded-xl items-center justify-center mr-4">
-                <feature.icon size={24} color={colors.primary[500]} />
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  backgroundColor: theme.background,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 16,
+                }}
+              >
+                <feature.icon size={24} color={theme.primary} />
               </View>
-              <View className="flex-1">
-                <Text className="text-dark-50 font-bold text-base">
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16 }}>
                   {feature.title}
                 </Text>
-                <Text className="text-dark-200 text-sm">{feature.description}</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{feature.description}</Text>
               </View>
             </View>
           ))}
         </View>
 
         {/* Actions */}
-        <View className="gap-4">
+        <View style={{ gap: 16 }}>
           <TouchableOpacity
             onPress={() => router.push('/(onboarding)/add-device')}
-            className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-2"
             style={{
-              shadowColor: colors.primary[500],
+              backgroundColor: theme.primary,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.2,
               shadowRadius: 12,
               elevation: 5,
             }}
           >
-            <Text className="text-white font-bold text-base">Add Your First Device</Text>
-            <ArrowRight size={18} color="#fff" />
+            <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>Add Your First Device</Text>
+            <ArrowRight size={18} color={theme.textInverse} />
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
-            className="bg-dark-700 border border-dark-500 rounded-xl p-4 items-center"
+            style={{
+              backgroundColor: theme.backgroundSecondary,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 12,
+              padding: 16,
+              alignItems: 'center',
+            }}
           >
-            <Text className="text-dark-200 font-medium">Skip for now</Text>
+            <Text style={{ color: theme.textSecondary, fontWeight: '500' }}>Skip for now</Text>
           </TouchableOpacity>
         </View>
       </View>

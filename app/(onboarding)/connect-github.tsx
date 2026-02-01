@@ -6,9 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Github, CheckCircle, ExternalLink, ArrowRight } from 'lucide-react-native';
 import { authService } from '@/services/auth.service';
 import * as WebBrowser from 'expo-web-browser';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function ConnectGitHubScreen() {
+  const { theme } = useTheme();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -32,43 +33,55 @@ export default function ConnectGitHubScreen() {
 
   if (isConnected) {
     return (
-      <SafeAreaView className="flex-1 bg-dark-800">
-        <View className="flex-1 px-6 items-center justify-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+        <View style={{ flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
           <View
-            className="w-24 h-24 rounded-full items-center justify-center mb-6"
             style={{
-              backgroundColor: colors.success[500] + '20',
-              shadowColor: colors.success[500],
+              width: 96,
+              height: 96,
+              borderRadius: 48,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 24,
+              backgroundColor: theme.success + '20',
+              shadowColor: theme.success,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.3,
               shadowRadius: 20,
               elevation: 10,
             }}
           >
-            <CheckCircle size={56} color={colors.success[500]} />
+            <CheckCircle size={56} color={theme.success} />
           </View>
 
-          <Text className="text-2xl font-bold text-dark-50 text-center mb-4">
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 16 }}>
             GitHub Connected!
           </Text>
 
-          <Text className="text-dark-200 text-center text-base mb-8">
+          <Text style={{ color: theme.textSecondary, textAlign: 'center', fontSize: 16, marginBottom: 32 }}>
             You can now access your repositories and manage your code from ForkOff
           </Text>
 
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
-            className="bg-primary-500 rounded-xl p-4 w-full flex-row items-center justify-center gap-2"
             style={{
-              shadowColor: colors.primary[500],
+              backgroundColor: theme.primary,
+              borderRadius: 12,
+              padding: 16,
+              width: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.2,
               shadowRadius: 12,
               elevation: 5,
             }}
           >
-            <Text className="text-white font-bold text-base">Get Started</Text>
-            <ArrowRight size={18} color="#fff" />
+            <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>Get Started</Text>
+            <ArrowRight size={18} color={theme.textInverse} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -76,67 +89,96 @@ export default function ConnectGitHubScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800">
-      <View className="flex-1 px-6 pt-4 pb-8">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}>
         {/* Header */}
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center mb-6"
+          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <ArrowLeft size={24} color={theme.textSecondary} />
+          <Text style={{ color: theme.textSecondary, marginLeft: 8, fontWeight: '500' }}>Back</Text>
         </TouchableOpacity>
 
-        <Text className="text-3xl font-bold text-dark-50 mb-2">
+        <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
           Connect GitHub
         </Text>
-        <Text className="text-base text-dark-200 mb-8">
+        <Text style={{ fontSize: 16, color: theme.textSecondary, marginBottom: 32 }}>
           Link your GitHub account to access repositories
         </Text>
 
         {/* Benefits */}
-        <View className="flex-1">
-          <View className="bg-dark-700 border border-dark-500 rounded-xl p-6">
-            <View className="items-center mb-6">
-              <View className="w-16 h-16 bg-dark-800 border border-dark-500 rounded-full items-center justify-center mb-4">
-                <Github size={32} color={colors.dark[200]} />
+        <View style={{ flex: 1 }}>
+          <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24 }}>
+            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  backgroundColor: theme.background,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                }}
+              >
+                <Github size={32} color={theme.textSecondary} />
               </View>
-              <Text className="text-dark-50 text-xl font-bold text-center">
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>
                 GitHub Integration
               </Text>
             </View>
 
-            <View className="gap-4">
+            <View style={{ gap: 16 }}>
               {[
                 'Browse and clone your repositories',
                 'Create new repos from mobile',
                 'View commit history and branches',
                 'Manage pull requests on the go',
               ].map((benefit, index) => (
-                <View key={index} className="flex-row items-center">
-                  <CheckCircle size={20} color={colors.success[500]} />
-                  <Text className="text-dark-200 ml-3">{benefit}</Text>
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <CheckCircle size={20} color={theme.success} />
+                  <Text style={{ color: theme.textSecondary, marginLeft: 12 }}>{benefit}</Text>
                 </View>
               ))}
             </View>
           </View>
 
-          <View className="mt-6 bg-dark-700 border border-dark-500 rounded-xl p-4 flex-row items-center">
-            <ExternalLink size={20} color={colors.dark[300]} />
-            <Text className="text-dark-300 ml-3 flex-1 text-sm">
+          <View
+            style={{
+              marginTop: 24,
+              backgroundColor: theme.backgroundSecondary,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <ExternalLink size={20} color={theme.textTertiary} />
+            <Text style={{ color: theme.textTertiary, marginLeft: 12, flex: 1, fontSize: 14 }}>
               You'll be redirected to GitHub to authorize ForkOff
             </Text>
           </View>
         </View>
 
         {/* Actions */}
-        <View className="gap-4">
+        <View style={{ gap: 16 }}>
           <TouchableOpacity
             onPress={handleConnectGitHub}
             disabled={isConnecting}
-            className="bg-primary-500 rounded-xl p-4 flex-row items-center justify-center gap-3"
             style={{
-              shadowColor: colors.primary[500],
+              backgroundColor: theme.primary,
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.2,
               shadowRadius: 12,
@@ -144,17 +186,17 @@ export default function ConnectGitHubScreen() {
               opacity: isConnecting ? 0.7 : 1,
             }}
           >
-            <Github size={20} color="#fff" />
-            <Text className="text-white font-bold text-base">
+            <Github size={20} color={theme.textInverse} />
+            <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>
               {isConnecting ? 'Connecting...' : 'Connect GitHub'}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
-            className="p-4 items-center"
+            style={{ padding: 16, alignItems: 'center' }}
           >
-            <Text className="text-dark-300 font-medium">Skip for now</Text>
+            <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>
           </TouchableOpacity>
         </View>
       </View>

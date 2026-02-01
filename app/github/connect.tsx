@@ -11,11 +11,12 @@ import { GitHubUser } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as Linking from 'expo-linking';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function GitHubConnectScreen() {
+  const { theme } = useTheme();
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -90,37 +91,37 @@ export default function GitHubConnectScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-900" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
       {/* Header */}
-      <View className="px-6 pt-4 pb-4 flex-row items-center">
+      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={{ flexDirection: 'row', alignItems: 'center' }}
         >
-          <ArrowLeft size={24} color={colors.dark[300]} />
-          <Text className="text-dark-300 ml-2">Back</Text>
+          <ArrowLeft size={24} color={theme.textTertiary} />
+          <Text style={{ color: theme.textTertiary, marginLeft: 8 }}>Back</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-6" contentContainerClassName="pb-8">
-        <Text className="text-white text-2xl font-bold mb-2">GitHub</Text>
-        <Text className="text-dark-400 mb-6">
+      <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ paddingBottom: 32 }}>
+        <Text style={{ color: theme.text, fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>GitHub</Text>
+        <Text style={{ color: theme.textTertiary, marginBottom: 24 }}>
           Connect your GitHub account to access repositories
         </Text>
 
         {isLoading ? (
           <Card padding="lg">
-            <View className="items-center py-8">
-              <RefreshCw size={32} color={colors.dark[400]} />
-              <Text className="text-dark-400 mt-4">Checking connection...</Text>
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <RefreshCw size={32} color={theme.textTertiary} />
+              <Text style={{ color: theme.textTertiary, marginTop: 16 }}>Checking connection...</Text>
             </View>
           </Card>
         ) : isConnected && githubUser ? (
           <>
             {/* Connected Account */}
-            <Card padding="lg" variant="elevated" className="mb-6">
-              <View className="items-center">
-                <View className="w-24 h-24 bg-dark-700 rounded-full items-center justify-center mb-4 overflow-hidden border-2 border-dark-600">
+            <Card padding="lg" variant="elevated" style={{ marginBottom: 24 }}>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ width: 96, height: 96, backgroundColor: theme.backgroundSecondary, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 16, overflow: 'hidden', borderWidth: 2, borderColor: theme.backgroundTertiary }}>
                   {githubUser.avatarUrl ? (
                     <Image
                       source={{ uri: githubUser.avatarUrl }}
@@ -128,50 +129,50 @@ export default function GitHubConnectScreen() {
                       resizeMode="cover"
                     />
                   ) : (
-                    <Github size={40} color={colors.dark[300]} />
+                    <Github size={40} color={theme.textTertiary} />
                   )}
                 </View>
 
-                <Text className="text-white text-xl font-bold">
+                <Text style={{ color: theme.text, fontSize: 20, fontWeight: 'bold' }}>
                   {githubUser.name || githubUser.login}
                 </Text>
-                <Text className="text-dark-400">@{githubUser.login}</Text>
+                <Text style={{ color: theme.textTertiary }}>@{githubUser.login}</Text>
 
                 {githubUser.bio && (
-                  <Text className="text-dark-300 text-center mt-2 px-4">
+                  <Text style={{ color: theme.textTertiary, textAlign: 'center', marginTop: 8, paddingHorizontal: 16 }}>
                     {githubUser.bio}
                   </Text>
                 )}
 
-                <View className="flex-row items-center mt-4 bg-success-500/20 px-4 py-2 rounded-full">
-                  <Check size={16} color={colors.success[500]} />
-                  <Text className="text-success-500 ml-2 font-medium">
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, backgroundColor: theme.success + '33', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 }}>
+                  <Check size={16} color={theme.success} />
+                  <Text style={{ color: theme.success, marginLeft: 8, fontWeight: '500' }}>
                     Connected
                   </Text>
                 </View>
 
                 <TouchableOpacity
                   onPress={() => Linking.openURL(`https://github.com/${githubUser.login}`)}
-                  className="flex-row items-center mt-3"
+                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}
                 >
-                  <ExternalLink size={14} color={colors.dark[400]} />
-                  <Text className="text-dark-400 ml-1 text-sm">View on GitHub</Text>
+                  <ExternalLink size={14} color={theme.textTertiary} />
+                  <Text style={{ color: theme.textTertiary, marginLeft: 4, fontSize: 14 }}>View on GitHub</Text>
                 </TouchableOpacity>
               </View>
             </Card>
 
             {/* Quick Actions */}
-            <View className="gap-3 mb-6">
+            <View style={{ gap: 12, marginBottom: 24 }}>
               <Card
                 padding="md"
                 onPress={() => router.push('/github/repos')}
               >
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 bg-dark-700 rounded-lg items-center justify-center mr-3">
-                      <Github size={20} color={colors.dark[300]} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 40, height: 40, backgroundColor: theme.backgroundSecondary, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Github size={20} color={theme.textTertiary} />
                     </View>
-                    <Text className="text-white font-medium">
+                    <Text style={{ color: theme.text, fontWeight: '500' }}>
                       Browse Repositories
                     </Text>
                   </View>
@@ -182,12 +183,12 @@ export default function GitHubConnectScreen() {
                 padding="md"
                 onPress={() => router.push('/github/create-repo')}
               >
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 bg-dark-700 rounded-lg items-center justify-center mr-3">
-                      <Github size={20} color={colors.dark[300]} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 40, height: 40, backgroundColor: theme.backgroundSecondary, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Github size={20} color={theme.textTertiary} />
                     </View>
-                    <Text className="text-white font-medium">
+                    <Text style={{ color: theme.text, fontWeight: '500' }}>
                       Create New Repository
                     </Text>
                   </View>
@@ -206,28 +207,28 @@ export default function GitHubConnectScreen() {
           </>
         ) : (
           <Card padding="lg" variant="elevated">
-            <View className="items-center mb-6">
-              <View className="w-16 h-16 bg-dark-700 rounded-full items-center justify-center mb-4">
-                <Github size={32} color={colors.dark[200]} />
+            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+              <View style={{ width: 64, height: 64, backgroundColor: theme.backgroundSecondary, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <Github size={32} color={theme.textSecondary} />
               </View>
-              <Text className="text-white text-xl font-semibold text-center">
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: '600', textAlign: 'center' }}>
                 Connect GitHub
               </Text>
-              <Text className="text-dark-400 text-center mt-2">
+              <Text style={{ color: theme.textTertiary, textAlign: 'center', marginTop: 8 }}>
                 Link your GitHub account to access your repositories
               </Text>
             </View>
 
-            <View className="gap-4 mb-6">
+            <View style={{ gap: 16, marginBottom: 24 }}>
               {[
                 'Browse and clone your repositories',
                 'Create new repos from mobile',
                 'View commit history and branches',
                 'Manage pull requests on the go',
               ].map((benefit, index) => (
-                <View key={index} className="flex-row items-center">
-                  <Check size={20} color={colors.success[500]} />
-                  <Text className="text-dark-200 ml-3">{benefit}</Text>
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Check size={20} color={theme.success} />
+                  <Text style={{ color: theme.textSecondary, marginLeft: 12 }}>{benefit}</Text>
                 </View>
               ))}
             </View>

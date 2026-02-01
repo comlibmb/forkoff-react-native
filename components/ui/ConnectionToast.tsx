@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Laptop, WifiOff, Wifi } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useConnectionStore } from '@/stores/connection.store';
 import { DeviceStatus } from '@/types';
 
@@ -90,6 +90,7 @@ export function ConnectionToast() {
 }
 
 function ToastMessage({ toast, index }: { toast: ToastItem; index: number }) {
+  const { theme } = useTheme();
   const slideAnim = useRef(new Animated.Value(100)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -135,31 +136,32 @@ function ToastMessage({ toast, index }: { toast: ToastItem; index: number }) {
     <Animated.View
       style={[
         styles.toast,
-        isOffline ? styles.toastOffline : styles.toastOnline,
         {
+          backgroundColor: theme.card,
+          borderColor: isOffline ? theme.error : theme.success,
           transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
           marginBottom: index > 0 ? 8 : 0,
         },
       ]}
     >
-      <View style={styles.iconContainer}>
-        <Laptop size={16} color={isOffline ? colors.error[300] : colors.success[300]} />
+      <View style={[styles.iconContainer, { backgroundColor: theme.backgroundTertiary }]}>
+        <Laptop size={16} color={isOffline ? theme.error : theme.success} />
       </View>
       <View style={styles.textContainer}>
-        <Text style={styles.deviceName} numberOfLines={1}>
+        <Text style={[styles.deviceName, { color: theme.text }]} numberOfLines={1}>
           {toast.deviceName}
         </Text>
         <View style={styles.statusRow}>
           {isOffline ? (
-            <WifiOff size={12} color={colors.error[400]} />
+            <WifiOff size={12} color={theme.error} />
           ) : (
-            <Wifi size={12} color={colors.success[400]} />
+            <Wifi size={12} color={theme.success} />
           )}
           <Text
             style={[
               styles.statusText,
-              isOffline ? styles.statusOffline : styles.statusOnline,
+              { color: isOffline ? theme.error : theme.success },
             ]}
           >
             {isOffline ? 'Disconnected' : 'Connected'}
@@ -182,7 +184,6 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -194,17 +195,10 @@ const styles = StyleSheet.create({
     elevation: 8,
     maxWidth: 300,
   },
-  toastOffline: {
-    borderColor: colors.error[500],
-  },
-  toastOnline: {
-    borderColor: colors.success[500],
-  },
   iconContainer: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: colors.dark[600],
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -215,7 +209,6 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.dark[50],
     marginBottom: 2,
   },
   statusRow: {
@@ -226,12 +219,6 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  statusOffline: {
-    color: colors.error[400],
-  },
-  statusOnline: {
-    color: colors.success[400],
   },
 });
 

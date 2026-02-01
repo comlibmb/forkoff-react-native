@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, TextInput, TouchableOpacity, Keyboard, Platform } from 'react-native';
 import { Send, Paperclip, Mic, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -21,6 +21,7 @@ export function ChatInput({
   disabled = false,
   autoFocus = false,
 }: ChatInputProps) {
+  const { theme } = useTheme();
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -42,11 +43,17 @@ export function ChatInput({
   const canSend = message.trim().length > 0 && !disabled;
 
   return (
-    <View className="border-t border-dark-700 bg-dark-800 px-4 py-3">
+    <View
+      className="px-4 py-3"
+      style={{ borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.background }}
+    >
       <View
-        className={`flex-row items-end bg-dark-700 rounded-2xl px-4 py-2 ${
-          isFocused ? 'border border-primary-500/50' : 'border border-transparent'
-        }`}
+        className="flex-row items-end rounded-2xl px-4 py-2"
+        style={{
+          backgroundColor: theme.backgroundSecondary,
+          borderWidth: 1,
+          borderColor: isFocused ? `${theme.primary}80` : 'transparent',
+        }}
       >
         {/* Attachment Button */}
         {onAttachment && (
@@ -57,7 +64,7 @@ export function ChatInput({
           >
             <Paperclip
               size={20}
-              color={disabled ? colors.dark[600] : colors.dark[400]}
+              color={disabled ? theme.backgroundTertiary : theme.textTertiary}
             />
           </TouchableOpacity>
         )}
@@ -66,9 +73,10 @@ export function ChatInput({
         <View className="flex-1 flex-row items-end">
           <TextInput
             ref={inputRef}
-            className="flex-1 text-white text-base py-2 max-h-32"
+            className="flex-1 text-base py-2 max-h-32"
+            style={{ color: theme.text }}
             placeholder={placeholder}
-            placeholderTextColor={colors.dark[500]}
+            placeholderTextColor={theme.textTertiary}
             value={message}
             onChangeText={setMessage}
             onFocus={() => setIsFocused(true)}
@@ -87,7 +95,7 @@ export function ChatInput({
               onPress={handleClear}
               className="ml-2 p-1"
             >
-              <X size={16} color={colors.dark[500]} />
+              <X size={16} color={theme.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
@@ -97,9 +105,10 @@ export function ChatInput({
           {canSend ? (
             <TouchableOpacity
               onPress={handleSend}
-              className="bg-primary-500 w-9 h-9 rounded-full items-center justify-center"
+              className="w-9 h-9 rounded-full items-center justify-center"
+              style={{ backgroundColor: theme.primary }}
             >
-              <Send size={18} color="#fff" />
+              <Send size={18} color={theme.textInverse} />
             </TouchableOpacity>
           ) : onVoice ? (
             <TouchableOpacity
@@ -109,12 +118,12 @@ export function ChatInput({
             >
               <Mic
                 size={20}
-                color={disabled ? colors.dark[600] : colors.dark[400]}
+                color={disabled ? theme.backgroundTertiary : theme.textTertiary}
               />
             </TouchableOpacity>
           ) : (
             <View className="w-9 h-9 rounded-full items-center justify-center opacity-50">
-              <Send size={18} color={colors.dark[500]} />
+              <Send size={18} color={theme.textTertiary} />
             </View>
           )}
         </View>

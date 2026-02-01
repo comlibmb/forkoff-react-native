@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,21 +11,7 @@ import {
   Laptop,
   Hammer,
 } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
-
-function Section({ title, children }: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      {title && <Text style={styles.sectionTitle}>{title}</Text>}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionContent}>{children}</View>
-      </View>
-    </View>
-  );
-}
+import { useTheme } from '@/theme/ThemeProvider';
 
 interface NotificationSetting {
   key: string;
@@ -36,6 +22,7 @@ interface NotificationSetting {
 }
 
 export default function NotificationsScreen() {
+  const { theme } = useTheme();
   const [settings, setSettings] = useState<NotificationSetting[]>([
     {
       key: 'all',
@@ -88,6 +75,8 @@ export default function NotificationsScreen() {
     },
   ]);
 
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const toggleSetting = (key: string) => {
     setSettings((prev) =>
       prev.map((s) => (s.key === key ? { ...s, enabled: !s.enabled } : s))
@@ -95,6 +84,20 @@ export default function NotificationsScreen() {
   };
 
   const allEnabled = settings.find((s) => s.key === 'all')?.enabled ?? true;
+
+  function Section({ title, children }: {
+    title: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <View style={styles.section}>
+        {title && <Text style={styles.sectionTitle}>{title}</Text>}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionContent}>{children}</View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -104,7 +107,7 @@ export default function NotificationsScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
+          <ArrowLeft size={24} color={theme.textSecondary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       </View>
@@ -116,8 +119,8 @@ export default function NotificationsScreen() {
         {/* Master Toggle */}
         <Section title="Master Toggle">
           <View style={styles.settingRow}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.primary[500] + '20' }]}>
-              <Bell size={20} color={colors.primary[500]} />
+            <View style={[styles.settingIcon, { backgroundColor: theme.primary + '20' }]}>
+              <Bell size={20} color={theme.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Push Notifications</Text>
@@ -126,8 +129,8 @@ export default function NotificationsScreen() {
             <Switch
               value={allEnabled}
               onValueChange={() => toggleSetting('all')}
-              trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
-              thumbColor={allEnabled ? '#fff' : colors.dark[200]}
+              trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
+              thumbColor={allEnabled ? '#fff' : theme.switchThumb}
             />
           </View>
         </Section>
@@ -141,7 +144,7 @@ export default function NotificationsScreen() {
                 {index > 0 && <View style={styles.divider} />}
                 <View style={[styles.settingRow, !allEnabled && styles.settingRowDisabled]}>
                   <View style={styles.settingIcon}>
-                    <setting.icon size={20} color={colors.dark[300]} />
+                    <setting.icon size={20} color={theme.textTertiary} />
                   </View>
                   <View style={styles.settingContent}>
                     <Text style={styles.settingTitle}>{setting.title}</Text>
@@ -151,8 +154,8 @@ export default function NotificationsScreen() {
                     value={setting.enabled && allEnabled}
                     onValueChange={() => toggleSetting(setting.key)}
                     disabled={!allEnabled}
-                    trackColor={{ false: colors.dark[500], true: colors.primary[500] }}
-                    thumbColor={setting.enabled && allEnabled ? '#fff' : colors.dark[200]}
+                    trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
+                    thumbColor={setting.enabled && allEnabled ? '#fff' : theme.switchThumb}
                   />
                 </View>
               </View>
@@ -167,10 +170,10 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark[800],
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -178,14 +181,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
+    borderBottomColor: theme.backgroundTertiary,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   backText: {
-    color: colors.dark[200],
+    color: theme.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
   },
@@ -199,19 +202,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
+    color: theme.text,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
+    color: theme.textTertiary,
     marginBottom: 20,
   },
   section: {
     marginBottom: 16,
   },
   sectionTitle: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -220,10 +223,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sectionCard: {
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
+    borderColor: theme.cardBorder,
     overflow: 'hidden',
   },
   sectionContent: {
@@ -240,9 +243,9 @@ const styles = StyleSheet.create({
   settingIcon: {
     width: 40,
     height: 40,
-    backgroundColor: colors.dark[700],
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: colors.dark[500],
+    borderColor: theme.border,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -252,23 +255,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingTitle: {
-    color: colors.dark[50],
+    color: theme.text,
     fontWeight: '600',
     fontSize: 15,
   },
   settingSubtitle: {
-    color: colors.dark[300],
+    color: theme.textTertiary,
     fontSize: 13,
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark[600],
+    backgroundColor: theme.divider,
     marginVertical: 12,
     marginLeft: 52,
   },
   disclaimer: {
-    color: colors.dark[400],
+    color: theme.textTertiary,
     textAlign: 'center',
     fontSize: 12,
     marginTop: 8,

@@ -26,7 +26,7 @@ import { useTerminalStore } from '@/stores/terminal.store';
 import { useClaudeStore } from '@/stores/claude.store';
 import { wsService } from '@/services/websocket.service';
 import { ConnectedTool } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const deviceTypeIcons: Record<string, typeof Laptop> = {
   laptop: Laptop,
@@ -38,6 +38,7 @@ const deviceTypeIcons: Record<string, typeof Laptop> = {
 };
 
 export default function DeviceDetailScreen() {
+  const { theme } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getDevice, renameDevice, removeDevice, refreshDeviceStatus, isLoading } =
     useDeviceStore();
@@ -83,14 +84,14 @@ export default function DeviceDetailScreen() {
 
   if (!device) {
     return (
-      <SafeAreaView className="flex-1 bg-dark-800 items-center justify-center">
-        <Laptop size={48} color={colors.dark[400]} />
-        <Text className="text-dark-200 text-lg mt-4">Device not found</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <Laptop size={48} color={theme.textTertiary} />
+        <Text style={{ color: theme.textSecondary, fontSize: 18, marginTop: 16 }}>Device not found</Text>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="mt-4 bg-dark-700 border border-dark-500 px-6 py-3 rounded-full"
+          style={{ marginTop: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 9999 }}
         >
-          <Text className="text-dark-50 font-medium">Go Back</Text>
+          <Text style={{ color: theme.text, fontWeight: '500' }}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -155,53 +156,81 @@ export default function DeviceDetailScreen() {
       <TouchableOpacity
         onPress={isClaudeTool ? () => handleToolPress(tool) : undefined}
         disabled={!isClaudeTool}
-        className="bg-dark-700 border border-dark-500 rounded-xl p-4 overflow-hidden"
-        style={!isClaudeTool ? { opacity: 0.6 } : undefined}
+        style={{
+          backgroundColor: theme.backgroundSecondary,
+          borderWidth: 1,
+          borderColor: theme.border,
+          borderRadius: 12,
+          padding: 16,
+          overflow: 'hidden',
+          opacity: !isClaudeTool ? 0.6 : 1,
+        }}
       >
         {isToolActive && isClaudeTool && (
           <View
-            className="absolute -top-12 -right-12 w-24 h-24 opacity-10"
-            style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(30px)' }}
+            style={{
+              position: 'absolute',
+              top: -48,
+              right: -48,
+              width: 96,
+              height: 96,
+              opacity: 0.1,
+              backgroundColor: theme.primary,
+              borderRadius: 100,
+            }}
           />
         )}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center">
-            <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
-              <Cpu size={20} color={isClaudeTool && isToolActive ? colors.primary[500] : colors.dark[300]} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Cpu size={20} color={isClaudeTool && isToolActive ? theme.primary : theme.textTertiary} />
             </View>
             <View>
-              <Text className="text-dark-50 font-medium">{tool.name}</Text>
-              {isClaudeTool && <Text className="text-dark-200 text-xs">v{tool.version}</Text>}
+              <Text style={{ color: theme.text, fontWeight: '500' }}>{tool.name}</Text>
+              {isClaudeTool && <Text style={{ color: theme.textSecondary, fontSize: 12 }}>v{tool.version}</Text>}
             </View>
           </View>
-          <View className="flex-row items-center gap-2">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {isClaudeTool ? (
               <>
                 <View
-                  className={`px-2 py-1 rounded flex-row items-center gap-1.5 ${
-                    isToolActive
-                      ? 'bg-primary-500/10 border border-primary-500/20'
-                      : 'bg-dark-500/30 border border-dark-500'
-                  }`}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: isToolActive ? theme.primary + '1A' : theme.border + '4D',
+                    borderWidth: 1,
+                    borderColor: isToolActive ? theme.primary + '33' : theme.border,
+                  }}
                 >
                   <View
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isToolActive ? 'bg-primary-500' : 'bg-dark-300'
-                    }`}
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: isToolActive ? theme.primary : theme.textTertiary,
+                    }}
                   />
                   <Text
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isToolActive ? 'text-primary-500' : 'text-dark-200'
-                    }`}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      color: isToolActive ? theme.primary : theme.textSecondary,
+                    }}
                   >
                     {isToolActive ? 'Active' : 'Inactive'}
                   </Text>
                 </View>
-                <ChevronRight size={16} color={colors.dark[400]} />
+                <ChevronRight size={16} color={theme.textTertiary} />
               </>
             ) : (
-              <View className="px-2 py-1 rounded bg-warning-300/10 border border-warning-300/20">
-                <Text className="text-warning-300 text-[10px] font-bold uppercase tracking-wider">
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, backgroundColor: theme.warning + '1A', borderWidth: 1, borderColor: theme.warning + '33' }}>
+                <Text style={{ color: theme.warning, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Coming soon
                 </Text>
               </View>
@@ -213,62 +242,70 @@ export default function DeviceDetailScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-800" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
       {/* Header */}
-      <View className="bg-dark-800/95 border-b border-dark-500 px-4 pb-4 pt-2 flex-row items-center justify-between">
+      <View style={{ backgroundColor: theme.background + 'F2', borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          className="flex-row items-center"
+          style={{ flexDirection: 'row', alignItems: 'center' }}
         >
-          <ArrowLeft size={24} color={colors.dark[200]} />
-          <Text className="text-dark-200 ml-2 font-medium">Back</Text>
+          <ArrowLeft size={24} color={theme.textSecondary} />
+          <Text style={{ color: theme.textSecondary, marginLeft: 8, fontWeight: '500' }}>Back</Text>
         </TouchableOpacity>
 
-        <View className="flex-row gap-2">
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
             onPress={() => refreshDeviceStatus(device.id)}
-            className="w-10 h-10 bg-dark-700 border border-dark-500 rounded-lg items-center justify-center"
+            style={{ width: 40, height: 40, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}
           >
-            <RefreshCw size={18} color={colors.dark[200]} />
+            <RefreshCw size={18} color={theme.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleRemove}
-            className="w-10 h-10 bg-error-300/10 border border-error-300/20 rounded-lg items-center justify-center"
+            style={{ width: 40, height: 40, backgroundColor: theme.error + '1A', borderWidth: 1, borderColor: theme.error + '33', borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Trash2 size={18} color={colors.error[300]} />
+            <Trash2 size={18} color={theme.error} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="py-4 pb-8">
+      <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} contentContainerStyle={{ paddingVertical: 16, paddingBottom: 32 }}>
         {/* Device Info Card */}
-        <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 mb-6 overflow-hidden">
+        <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, marginBottom: 24, overflow: 'hidden' }}>
           {/* Glow effect */}
           {isOnline && (
             <View
-              className="absolute -top-16 -right-16 w-32 h-32 opacity-10"
-              style={{ backgroundColor: colors.primary[500], borderRadius: 100, filter: 'blur(40px)' }}
+              style={{
+                position: 'absolute',
+                top: -64,
+                right: -64,
+                width: 128,
+                height: 128,
+                opacity: 0.1,
+                backgroundColor: theme.primary,
+                borderRadius: 100,
+              }}
             />
           )}
 
-          <View className="items-center">
+          <View style={{ alignItems: 'center' }}>
             {/* Device Icon */}
-            <View className="w-20 h-20 bg-dark-800 border border-dark-500 rounded-2xl items-center justify-center mb-4">
-              <Icon size={40} color={isOnline ? colors.primary[500] : colors.dark[300]} />
+            <View style={{ width: 80, height: 80, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Icon size={40} color={isOnline ? theme.primary : theme.textTertiary} />
             </View>
 
             {/* Name (editable) */}
             {isEditing ? (
-              <View className="flex-row items-center mb-3">
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                 <TextInput
                   value={newName}
                   onChangeText={setNewName}
-                  className="text-dark-50 text-xl font-bold text-center border-b-2 border-primary-500 px-4 py-1 min-w-[150px]"
+                  style={{ color: theme.text, fontSize: 20, fontWeight: '700', textAlign: 'center', borderBottomWidth: 2, borderBottomColor: theme.primary, paddingHorizontal: 16, paddingVertical: 4, minWidth: 150 }}
                   autoFocus
                 />
                 <TouchableOpacity
                   onPress={handleRename}
-                  className="ml-3 w-9 h-9 bg-success-500 rounded-full items-center justify-center"
+                  style={{ marginLeft: 12, width: 36, height: 36, backgroundColor: theme.success, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Check size={18} color="#fff" />
                 </TouchableOpacity>
@@ -277,40 +314,53 @@ export default function DeviceDetailScreen() {
                     setNewName(device.name);
                     setIsEditing(false);
                   }}
-                  className="ml-2 w-9 h-9 bg-dark-600 border border-dark-500 rounded-full items-center justify-center"
+                  style={{ marginLeft: 8, width: 36, height: 36, backgroundColor: theme.backgroundTertiary, borderWidth: 1, borderColor: theme.border, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <X size={18} color={colors.dark[200]} />
+                  <X size={18} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity
                 onPress={() => setIsEditing(true)}
-                className="flex-row items-center mb-3"
+                style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}
               >
-                <Text className="text-dark-50 text-xl font-bold mr-2">
+                <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700', marginRight: 8 }}>
                   {device.name}
                 </Text>
-                <Edit3 size={16} color={colors.dark[300]} />
+                <Edit3 size={16} color={theme.textTertiary} />
               </TouchableOpacity>
             )}
 
             {/* Status Badge */}
             <View
-              className={`px-3 py-1.5 rounded-full flex-row items-center gap-2 ${
-                isOnline
-                  ? 'bg-primary-500/10 border border-primary-500/20'
-                  : 'bg-dark-500/30 border border-dark-500'
-              }`}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 9999,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: isOnline ? theme.primary + '1A' : theme.border + '4D',
+                borderWidth: 1,
+                borderColor: isOnline ? theme.primary + '33' : theme.border,
+              }}
             >
               <View
-                className={`w-2 h-2 rounded-full ${
-                  isOnline ? 'bg-primary-500' : 'bg-dark-300'
-                }`}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: isOnline ? theme.primary : theme.textTertiary,
+                }}
               />
               <Text
-                className={`text-xs font-bold uppercase tracking-wider ${
-                  isOnline ? 'text-primary-500' : 'text-dark-200'
-                }`}
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  color: isOnline ? theme.primary : theme.textSecondary,
+                }}
               >
                 {isOnline ? 'Online' : 'Offline'}
               </Text>
@@ -318,25 +368,25 @@ export default function DeviceDetailScreen() {
           </View>
 
           {/* Device Stats */}
-          <View className="flex-row mt-6 pt-6 border-t border-dark-500">
-            <View className="flex-1 items-center">
-              <View className="flex-row items-center mb-1">
-                <Wifi size={14} color={colors.dark[300]} />
-                <Text className="text-dark-300 text-xs ml-2">Platform</Text>
+          <View style={{ flexDirection: 'row', marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: theme.border }}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Wifi size={14} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, fontSize: 12, marginLeft: 8 }}>Platform</Text>
               </View>
-              <Text className="text-dark-50 font-medium capitalize">
+              <Text style={{ color: theme.text, fontWeight: '500', textTransform: 'capitalize' }}>
                 {device.platform?.toLowerCase() || 'unknown'}
               </Text>
             </View>
 
-            <View className="w-px bg-dark-500" />
+            <View style={{ width: 1, backgroundColor: theme.border }} />
 
-            <View className="flex-1 items-center">
-              <View className="flex-row items-center mb-1">
-                <Clock size={14} color={colors.dark[300]} />
-                <Text className="text-dark-300 text-xs ml-2">Last seen</Text>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Clock size={14} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, fontSize: 12, marginLeft: 8 }}>Last seen</Text>
               </View>
-              <Text className="text-dark-50 font-medium">
+              <Text style={{ color: theme.text, fontWeight: '500' }}>
                 {formatLastSeen(device.lastSeen || device.lastSeenAt || new Date().toISOString())}
               </Text>
             </View>
@@ -344,23 +394,23 @@ export default function DeviceDetailScreen() {
         </View>
 
         {/* Connected Tools */}
-        <View className="mb-6">
-          <Text className="text-dark-50 text-lg font-bold mb-4">
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 16 }}>
             Connected Tools ({device.connectedTools?.length || 0})
           </Text>
 
           {(device.connectedTools?.length || 0) === 0 ? (
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
-              <Cpu size={48} color={colors.dark[400]} />
-              <Text className="text-dark-200 mt-4 text-center">
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+              <Cpu size={48} color={theme.textTertiary} />
+              <Text style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
                 No tools connected to this device
               </Text>
-              <Text className="text-dark-300 text-xs text-center mt-2">
+              <Text style={{ color: theme.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
                 Install Cursor, Copilot, or Claude Terminal on your device
               </Text>
             </View>
           ) : (
-            <View className="gap-3">
+            <View style={{ gap: 12 }}>
               {(device.connectedTools || []).map((tool) => (
                 <ToolCard key={tool.id} tool={tool} />
               ))}
@@ -370,60 +420,60 @@ export default function DeviceDetailScreen() {
 
         {/* Terminal Section */}
         <View>
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-dark-50 text-lg font-bold">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>
               Terminal
             </Text>
             {isOnline && (
               <TouchableOpacity
                 onPress={handleOpenTerminal}
-                className="bg-primary-500 px-4 py-2 rounded-full flex-row items-center gap-2"
+                style={{ backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 9999, flexDirection: 'row', alignItems: 'center', gap: 8 }}
               >
                 <Plus size={16} color="#fff" />
-                <Text className="text-white font-medium text-sm">New Terminal</Text>
+                <Text style={{ color: '#fff', fontWeight: '500', fontSize: 14 }}>New Terminal</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {!isOnline ? (
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
-              <Terminal size={48} color={colors.dark[400]} />
-              <Text className="text-dark-200 mt-4 text-center">
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+              <Terminal size={48} color={theme.textTertiary} />
+              <Text style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
                 Device is offline
               </Text>
-              <Text className="text-dark-300 text-xs text-center mt-2">
+              <Text style={{ color: theme.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
                 Terminal access requires the device to be online
               </Text>
             </View>
           ) : deviceTerminals.length === 0 ? (
-            <View className="bg-dark-700 border border-dark-500 rounded-xl p-6 items-center">
-              <Terminal size={48} color={colors.dark[400]} />
-              <Text className="text-dark-200 mt-4 text-center">
+            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+              <Terminal size={48} color={theme.textTertiary} />
+              <Text style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
                 No active terminal sessions
               </Text>
-              <Text className="text-dark-300 text-xs text-center mt-2">
+              <Text style={{ color: theme.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
                 Open a terminal to run commands on this device
               </Text>
             </View>
           ) : (
-            <View className="gap-3">
+            <View style={{ gap: 12 }}>
               {deviceTerminals.map((terminal) => (
                 <TouchableOpacity
                   key={terminal.id}
                   onPress={() => router.push(`/terminal/${terminal.id}`)}
-                  className="bg-dark-700 border border-dark-500 rounded-xl p-4"
+                  style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}
                 >
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 bg-dark-800 border border-dark-500 rounded-lg items-center justify-center mr-3">
-                      <Terminal size={20} color={colors.primary[500]} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Terminal size={20} color={theme.primary} />
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-dark-50 font-medium">{terminal.name}</Text>
-                      <Text className="text-dark-200 text-xs font-mono">{terminal.cwd}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.text, fontWeight: '500' }}>{terminal.name}</Text>
+                      <Text style={{ color: theme.textSecondary, fontSize: 12, fontFamily: 'monospace' }}>{terminal.cwd}</Text>
                     </View>
-                    <View className="flex-row items-center gap-2">
-                      <View className={`w-2 h-2 rounded-full ${terminal.isActive ? 'bg-success-500' : 'bg-dark-400'}`} />
-                      <ChevronRight size={16} color={colors.dark[400]} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: terminal.isActive ? theme.success : theme.textTertiary }} />
+                      <ChevronRight size={16} color={theme.textTertiary} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -434,9 +484,9 @@ export default function DeviceDetailScreen() {
 
         {/* IP Address */}
         {device.ipAddress && (
-          <View className="mt-6 bg-dark-700 border border-dark-500 rounded-xl p-4">
-            <Text className="text-dark-300 text-xs uppercase tracking-wider mb-1">IP Address</Text>
-            <Text className="text-dark-50 font-mono">{device.ipAddress}</Text>
+          <View style={{ marginTop: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
+            <Text style={{ color: theme.textTertiary, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>IP Address</Text>
+            <Text style={{ color: theme.text, fontFamily: 'monospace' }}>{device.ipAddress}</Text>
           </View>
         )}
       </ScrollView>

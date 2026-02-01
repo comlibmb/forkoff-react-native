@@ -6,7 +6,7 @@ import { ArrowLeft, Search, Lock, Globe, Star, GitFork, ChevronRight } from 'luc
 import { Card } from '@/components/ui';
 import { githubService } from '@/services/github.service';
 import { GitHubRepo } from '@/types';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const languageColors: Record<string, string> = {
   typescript: '#3178c6',
@@ -18,6 +18,7 @@ const languageColors: Record<string, string> = {
 };
 
 export default function GitHubReposScreen() {
+  const { theme } = useTheme();
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,87 +68,90 @@ export default function GitHubReposScreen() {
         });
       }}
     >
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1">
-          <View className="flex-row items-center">
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {repo.private ? (
-              <Lock size={14} color={colors.dark[400]} />
+              <Lock size={14} color={theme.textTertiary} />
             ) : (
-              <Globe size={14} color={colors.dark[400]} />
+              <Globe size={14} color={theme.textTertiary} />
             )}
-            <Text className="text-white font-semibold ml-2" numberOfLines={1}>
+            <Text style={{ color: theme.text, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>
               {repo.name}
             </Text>
           </View>
 
           {repo.description && (
-            <Text className="text-dark-400 text-sm mt-2" numberOfLines={2}>
+            <Text style={{ color: theme.textTertiary, fontSize: 14, marginTop: 8 }} numberOfLines={2}>
               {repo.description}
             </Text>
           )}
 
-          <View className="flex-row items-center mt-3 gap-4">
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 16 }}>
             {repo.language && (
-              <View className="flex-row items-center">
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View
-                  className="w-3 h-3 rounded-full mr-1"
                   style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    marginRight: 4,
                     backgroundColor:
-                      languageColors[repo.language.toLowerCase()] || colors.dark[400],
+                      languageColors[repo.language.toLowerCase()] || theme.textTertiary,
                   }}
                 />
-                <Text className="text-dark-400 text-xs">{repo.language}</Text>
+                <Text style={{ color: theme.textTertiary, fontSize: 12 }}>{repo.language}</Text>
               </View>
             )}
 
             {repo.stars > 0 && (
-              <View className="flex-row items-center">
-                <Star size={12} color={colors.warning[500]} />
-                <Text className="text-dark-400 text-xs ml-1">{repo.stars}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Star size={12} color={theme.warning} />
+                <Text style={{ color: theme.textTertiary, fontSize: 12, marginLeft: 4 }}>{repo.stars}</Text>
               </View>
             )}
 
             {repo.forks > 0 && (
-              <View className="flex-row items-center">
-                <GitFork size={12} color={colors.dark[400]} />
-                <Text className="text-dark-400 text-xs ml-1">{repo.forks}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <GitFork size={12} color={theme.textTertiary} />
+                <Text style={{ color: theme.textTertiary, fontSize: 12, marginLeft: 4 }}>{repo.forks}</Text>
               </View>
             )}
 
-            <Text className="text-dark-500 text-xs">
+            <Text style={{ color: theme.border, fontSize: 12 }}>
               {formatDate(repo.updatedAt)}
             </Text>
           </View>
         </View>
 
-        <ChevronRight size={20} color={colors.dark[500]} style={{ marginLeft: 8 }} />
+        <ChevronRight size={20} color={theme.border} style={{ marginLeft: 8 }} />
       </View>
     </Card>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-dark-900" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
       {/* Header */}
-      <View className="px-6 pt-4 pb-4">
-        <View className="flex-row items-center mb-4">
+      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            className="flex-row items-center"
+            style={{ flexDirection: 'row', alignItems: 'center' }}
           >
-            <ArrowLeft size={24} color={colors.dark[300]} />
-            <Text className="text-dark-300 ml-2">Back</Text>
+            <ArrowLeft size={24} color={theme.textTertiary} />
+            <Text style={{ color: theme.textTertiary, marginLeft: 8 }}>Back</Text>
           </TouchableOpacity>
         </View>
 
-        <Text className="text-white text-2xl font-bold mb-4">Repositories</Text>
+        <Text style={{ color: theme.text, fontSize: 24, fontWeight: 'bold', marginBottom: 16 }}>Repositories</Text>
 
         {/* Search */}
-        <View className="flex-row items-center bg-dark-800 rounded-xl px-4 py-3">
-          <Search size={20} color={colors.dark[400]} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Search size={20} color={theme.textTertiary} />
           <TextInput
-            className="flex-1 text-white ml-3"
+            style={{ flex: 1, color: theme.text, marginLeft: 12 }}
             placeholder="Search repositories..."
-            placeholderTextColor={colors.dark[400]}
+            placeholderTextColor={theme.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -156,19 +160,19 @@ export default function GitHubReposScreen() {
 
       {/* Repo List */}
       <ScrollView
-        className="flex-1 px-6"
-        contentContainerClassName="pb-8 gap-3"
+        style={{ flex: 1, paddingHorizontal: 24 }}
+        contentContainerStyle={{ paddingBottom: 32, gap: 12 }}
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
             onRefresh={loadRepos}
-            tintColor={colors.primary[500]}
+            tintColor={theme.primary}
           />
         }
       >
         {filteredRepos.length === 0 && !isLoading ? (
-          <View className="items-center py-12">
-            <Text className="text-dark-400 text-lg">
+          <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+            <Text style={{ color: theme.textTertiary, fontSize: 18 }}>
               {searchQuery ? 'No repositories found' : 'No repositories'}
             </Text>
           </View>

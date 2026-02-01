@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 interface CodeViewerProps {
   code: string;
@@ -72,16 +72,6 @@ function highlightCode(code: string): { text: string; type: string }[] {
   return result;
 }
 
-const tokenColors: Record<string, string> = {
-  keyword: colors.primary[400],
-  string: colors.success[500],
-  comment: colors.dark[500],
-  number: colors.warning[500],
-  function: '#dcdcaa',
-  type: '#4ec9b0',
-  plain: colors.dark[200],
-};
-
 export function CodeViewer({
   code,
   language = 'typescript',
@@ -89,7 +79,18 @@ export function CodeViewer({
   highlightLines = [],
   startLine = 1,
 }: CodeViewerProps) {
+  const { theme, colors } = useTheme();
   const lines = code.split('\n');
+
+  const tokenColors: Record<string, string> = {
+    keyword: colors.primary[400],
+    string: theme.success,
+    comment: theme.border,
+    number: colors.warning[500],
+    function: '#dcdcaa',
+    type: '#4ec9b0',
+    plain: theme.textSecondary,
+  };
 
   return (
     <ScrollView
@@ -108,13 +109,13 @@ export function CodeViewer({
               key={index}
               style={[
                 styles.line,
-                isHighlighted && styles.highlightedLine,
+                isHighlighted && { backgroundColor: theme.primary + '20' },
               ]}
             >
               {showLineNumbers && (
-                <Text style={styles.lineNumber}>{lineNumber}</Text>
+                <Text style={[styles.lineNumber, { color: theme.border }]}>{lineNumber}</Text>
               )}
-              <Text style={styles.code}>
+              <Text style={[styles.code, { color: theme.textSecondary }]}>
                 {tokens.map((token, i) => (
                   <Text
                     key={i}
@@ -141,12 +142,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 22,
   },
-  highlightedLine: {
-    backgroundColor: colors.primary[500] + '20',
-  },
   lineNumber: {
     width: 40,
-    color: colors.dark[500],
     fontSize: 13,
     fontFamily: 'monospace',
     textAlign: 'right',
@@ -155,7 +152,6 @@ const styles = StyleSheet.create({
   code: {
     fontSize: 13,
     fontFamily: 'monospace',
-    color: colors.dark[200],
   },
 });
 

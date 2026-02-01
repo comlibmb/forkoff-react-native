@@ -11,7 +11,7 @@ import {
   Award,
   LucideIcon,
 } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { AchievementTier } from '@/types';
 
 interface AchievementBadgeProps {
@@ -66,6 +66,7 @@ export function AchievementBadge({
   showcased,
   onPress,
 }: AchievementBadgeProps) {
+  const { theme } = useTheme();
   const Icon = iconMap[iconName] || Trophy;
   const tierColor = tierColors[tier];
   const tierBgColor = tierBgColors[tier];
@@ -79,7 +80,11 @@ export function AchievementBadge({
 
   return (
     <TouchableOpacity
-      style={[styles.container, !unlocked && styles.containerLocked]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.card, borderColor: theme.backgroundTertiary },
+        !unlocked && styles.containerLocked,
+      ]}
       onPress={onPress}
       disabled={!onPress}
     >
@@ -87,36 +92,36 @@ export function AchievementBadge({
       <View
         style={[
           styles.iconContainer,
-          { backgroundColor: unlocked ? tierBgColor : colors.dark[600] },
+          { backgroundColor: unlocked ? tierBgColor : theme.backgroundTertiary },
         ]}
       >
         <Icon
           size={28}
-          color={unlocked ? tierColor : colors.dark[400]}
+          color={unlocked ? tierColor : theme.textTertiary}
         />
         {showcased && (
-          <View style={styles.showcasedBadge}>
-            <Star size={10} color={colors.warning[400]} fill={colors.warning[400]} />
+          <View style={[styles.showcasedBadge, { backgroundColor: theme.card, borderColor: theme.warning }]}>
+            <Star size={10} color={theme.warning} fill={theme.warning} />
           </View>
         )}
       </View>
 
       {/* Info */}
       <View style={styles.info}>
-        <Text style={[styles.name, !unlocked && styles.textLocked]}>{name}</Text>
-        <Text style={styles.description} numberOfLines={2}>
+        <Text style={[styles.name, { color: theme.text }, !unlocked && { color: theme.textTertiary }]}>{name}</Text>
+        <Text style={[styles.description, { color: theme.textTertiary }]} numberOfLines={2}>
           {description}
         </Text>
 
         {/* Progress bar */}
         {!unlocked && progressPercent < 100 && (
           <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
+            <View style={[styles.progressBar, { backgroundColor: theme.backgroundTertiary }]}>
               <View
                 style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: tierColor }]}
               />
             </View>
-            <Text style={styles.progressText}>
+            <Text style={[styles.progressText, { color: theme.textTertiary }]}>
               {progress?.toLocaleString()}/{threshold?.toLocaleString()}
             </Text>
           </View>
@@ -134,10 +139,8 @@ export function AchievementBadge({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     padding: 12,
     alignItems: 'center',
   },
@@ -159,9 +162,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: colors.dark[700],
     borderWidth: 1,
-    borderColor: colors.warning[400],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -171,15 +172,10 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.dark[50],
     marginBottom: 2,
-  },
-  textLocked: {
-    color: colors.dark[300],
   },
   description: {
     fontSize: 12,
-    color: colors.dark[400],
     lineHeight: 16,
   },
   progressContainer: {
@@ -187,7 +183,6 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 4,
-    backgroundColor: colors.dark[600],
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -197,7 +192,6 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 10,
-    color: colors.dark[400],
     marginTop: 4,
   },
   tierBadge: {
