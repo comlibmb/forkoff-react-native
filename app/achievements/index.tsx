@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,42 +6,42 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, router } from 'expo-router';
-import { ChevronLeft, Trophy, Filter } from 'lucide-react-native';
-import { colors } from '@/theme/colors';
-import { useAchievementsStore } from '@/stores/achievements.store';
-import { AchievementBadge } from '@/components/achievements/AchievementBadge';
-import { AchievementCategory } from '@/types';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Stack, router } from "expo-router";
+import { ChevronLeft, Trophy, Filter } from "lucide-react-native";
+import { colors } from "@/theme/colors";
+import { useAchievementsStore } from "@/stores/achievements.store";
+import { AchievementBadge } from "@/components/achievements/AchievementBadge";
+import { AchievementCategory } from "@/types";
 
-const CATEGORIES: { key: AchievementCategory | 'ALL'; label: string }[] = [
-  { key: 'ALL', label: 'All' },
-  { key: 'TOKENS', label: 'Tokens' },
-  { key: 'SESSIONS', label: 'Sessions' },
-  { key: 'ENGAGEMENT', label: 'Engagement' },
+const CATEGORIES: { key: AchievementCategory | "ALL"; label: string }[] = [
+  { key: "ALL", label: "All" },
+  { key: "TOKENS", label: "Tokens" },
+  { key: "SESSIONS", label: "Sessions" },
+  { key: "ENGAGEMENT", label: "Engagement" },
 ];
 
 export default function AchievementsScreen() {
-  const {
-    achievements,
-    isLoading,
-    fetchAchievements,
-    toggleShowcase,
-  } = useAchievementsStore();
+  const { achievements, isLoading, fetchAchievements, toggleShowcase } =
+    useAchievementsStore();
 
-  const [selectedCategory, setSelectedCategory] = useState<AchievementCategory | 'ALL'>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<
+    AchievementCategory | "ALL"
+  >("ALL");
 
   useEffect(() => {
     fetchAchievements();
   }, []);
 
   const filteredAchievements =
-    selectedCategory === 'ALL'
+    selectedCategory === "ALL"
       ? achievements
       : achievements.filter((a) => a.category === selectedCategory);
 
-  const unlockedCount = achievements.filter((a) => a.userProgress?.unlockedAt).length;
+  const unlockedCount = achievements.filter(
+    (a) => a.userProgress?.unlockedAt,
+  ).length;
 
   return (
     <>
@@ -50,15 +50,18 @@ export default function AchievementsScreen() {
           headerShown: true,
           headerStyle: { backgroundColor: colors.dark[800] },
           headerTintColor: colors.dark[50],
-          headerTitle: 'Achievements',
+          headerTitle: "Achievements",
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
               <ChevronLeft size={24} color={colors.dark[50]} />
             </TouchableOpacity>
           ),
         }}
       />
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container} edges={["bottom"]}>
         {/* Summary header */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryIcon}>
@@ -107,13 +110,18 @@ export default function AchievementsScreen() {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={fetchAchievements} />
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={fetchAchievements}
+            />
           }
         >
           {filteredAchievements.length === 0 ? (
             <View style={styles.emptyState}>
               <Filter size={32} color={colors.dark[500]} />
-              <Text style={styles.emptyText}>No achievements in this category</Text>
+              <Text style={styles.emptyText}>
+                No achievements in this category
+              </Text>
             </View>
           ) : (
             <View style={styles.achievementsList}>
@@ -156,8 +164,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.dark[700],
     margin: 16,
     padding: 16,
@@ -169,9 +177,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 14,
-    backgroundColor: colors.primary[500] + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.primary[500] + "20",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16,
   },
   summaryContent: {
@@ -179,7 +187,7 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.dark[50],
     marginBottom: 4,
   },
@@ -196,9 +204,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryButton: {
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 25,
+    alignContent: "center",
+    justifyContent: "center",
     backgroundColor: colors.dark[700],
     borderWidth: 1,
     borderColor: colors.dark[600],
@@ -208,12 +218,12 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[500],
   },
   categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: "600",
     color: colors.dark[300],
   },
   categoryTextSelected: {
-    color: '#fff',
+    color: "#fff",
   },
   scrollView: {
     flex: 1,
@@ -226,7 +236,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyState: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 48,
   },
   emptyText: {

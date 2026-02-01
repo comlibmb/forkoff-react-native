@@ -8,6 +8,7 @@ import {
   Shield,
   CreditCard,
   Moon,
+  Sun,
   ChevronRight,
   LogOut,
   Github,
@@ -20,7 +21,7 @@ import {
   Clock,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useState } from 'react';
 
 interface SettingsItemProps {
@@ -30,6 +31,7 @@ interface SettingsItemProps {
   onPress?: () => void;
   rightElement?: React.ReactNode;
   danger?: boolean;
+  theme: ReturnType<typeof useTheme>['theme'];
 }
 
 function SettingsItem({
@@ -39,6 +41,7 @@ function SettingsItem({
   onPress,
   rightElement,
   danger,
+  theme,
 }: SettingsItemProps) {
   return (
     <TouchableOpacity
@@ -49,12 +52,13 @@ function SettingsItem({
       <View
         style={[
           styles.itemIcon,
-          danger && styles.itemIconDanger,
+          { backgroundColor: theme.card, borderColor: theme.border },
+          danger && { backgroundColor: theme.error + '15', borderColor: theme.error + '30' },
         ]}
       >
         <Icon
           size={20}
-          color={danger ? colors.error[300] : colors.dark[200]}
+          color={danger ? theme.error : theme.textSecondary}
         />
       </View>
 
@@ -62,18 +66,19 @@ function SettingsItem({
         <Text
           style={[
             styles.itemTitle,
-            danger && styles.itemTitleDanger,
+            { color: theme.text },
+            danger && { color: theme.error },
           ]}
         >
           {title}
         </Text>
         {subtitle && (
-          <Text style={styles.itemSubtitle}>{subtitle}</Text>
+          <Text style={[styles.itemSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>
         )}
       </View>
 
       {rightElement || (onPress && (
-        <ChevronRight size={20} color={colors.dark[400]} />
+        <ChevronRight size={20} color={theme.textTertiary} />
       ))}
     </TouchableOpacity>
   );
@@ -82,18 +87,20 @@ function SettingsItem({
 function SettingsSection({
   title,
   children,
+  theme,
 }: {
   title: string;
   children: React.ReactNode;
+  theme: ReturnType<typeof useTheme>['theme'];
 }) {
   return (
     <View style={styles.section}>
       {title && (
-        <Text style={styles.sectionTitle}>
+        <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>
           {title}
         </Text>
       )}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
         <View style={styles.sectionContent}>{children}</View>
       </View>
     </View>
@@ -102,7 +109,7 @@ function SettingsSection({
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuthStore();
-  const [darkMode, setDarkMode] = useState(true);
+  const { isDark, theme, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
 
   const handleSignOut = async () => {
@@ -118,11 +125,11 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSubtitle}>Preferences & account</Text>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>Preferences & account</Text>
       </View>
 
       <ScrollView
@@ -132,161 +139,173 @@ export default function SettingsScreen() {
         {/* Profile Card */}
         <TouchableOpacity
           onPress={() => router.push('/settings/account')}
-          style={styles.profileCard}
+          style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
         >
           <View style={styles.profileContent}>
             {/* Gradient glow */}
-            <View style={styles.profileGlow} />
+            <View style={[styles.profileGlow, { backgroundColor: theme.primary }]} />
 
             <View style={styles.profileRow}>
               {/* Initials avatar */}
-              <View style={styles.avatar}>
+              <View style={[styles.avatar, { backgroundColor: theme.primaryDark }]}>
                 <Text style={styles.avatarText}>
                   {(user?.name || 'U').charAt(0).toUpperCase()}
                 </Text>
               </View>
 
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
+                <Text style={[styles.profileName, { color: theme.text }]}>
                   {user?.name || 'User'}
                 </Text>
-                <Text style={styles.profileEmail}>{user?.email || 'email@example.com'}</Text>
-                <View style={styles.subscriptionBadge}>
-                  <Sparkles size={12} color={colors.primary[500]} />
-                  <Text style={styles.subscriptionText}>
+                <Text style={[styles.profileEmail, { color: theme.textSecondary }]}>{user?.email || 'email@example.com'}</Text>
+                <View style={[styles.subscriptionBadge, { backgroundColor: theme.primaryBackground, borderColor: theme.primary + '30' }]}>
+                  <Sparkles size={12} color={theme.primary} />
+                  <Text style={[styles.subscriptionText, { color: theme.primary }]}>
                     {user?.subscription || 'Free'} Plan
                   </Text>
                 </View>
               </View>
-              <ChevronRight size={20} color={colors.dark[400]} />
+              <ChevronRight size={20} color={theme.textTertiary} />
             </View>
           </View>
         </TouchableOpacity>
 
         {/* Account Settings */}
-        <SettingsSection title="Account">
+        <SettingsSection title="Account" theme={theme}>
           <SettingsItem
             icon={User}
             title="Profile"
             subtitle="Edit your profile information"
             onPress={() => router.push('/settings/account')}
+            theme={theme}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={Shield}
             title="Security"
             subtitle="Password, 2FA, biometrics"
             onPress={() => router.push('/settings/security')}
+            theme={theme}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={Github}
             title="GitHub"
             subtitle="Connected"
             onPress={() => router.push('/github/connect')}
+            theme={theme}
           />
         </SettingsSection>
 
         {/* Preferences */}
-        <SettingsSection title="Preferences">
+        <SettingsSection title="Preferences" theme={theme}>
           <SettingsItem
             icon={Bell}
             title="Notifications"
             subtitle="Push notifications, alerts"
             onPress={() => router.push('/settings/notifications')}
+            theme={theme}
             rightElement={
               <Switch
                 value={notifications}
                 onValueChange={setNotifications}
                 trackColor={{
-                  false: colors.dark[500],
-                  true: colors.primary[500],
+                  false: theme.switchTrackOff,
+                  true: theme.primary,
                 }}
-                thumbColor={notifications ? '#fff' : colors.dark[200]}
+                thumbColor={notifications ? '#fff' : theme.switchThumb}
               />
             }
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
-            icon={Moon}
+            icon={isDark ? Moon : Sun}
             title="Dark Mode"
-            subtitle="Always on"
+            subtitle={isDark ? 'On' : 'Off'}
+            theme={theme}
             rightElement={
               <Switch
-                value={darkMode}
-                onValueChange={setDarkMode}
+                value={isDark}
+                onValueChange={toggleTheme}
                 trackColor={{
-                  false: colors.dark[500],
-                  true: colors.primary[500],
+                  false: theme.switchTrackOff,
+                  true: theme.primary,
                 }}
-                thumbColor={darkMode ? '#fff' : colors.dark[200]}
+                thumbColor={isDark ? '#fff' : theme.switchThumb}
               />
             }
           />
         </SettingsSection>
 
         {/* Analytics & Achievements */}
-        <SettingsSection title="Analytics & Achievements">
+        <SettingsSection title="Analytics & Achievements" theme={theme}>
           <SettingsItem
             icon={BarChart3}
             title="Usage Analytics"
             subtitle="Token usage and cost tracking"
             onPress={() => router.push('/(tabs)/analytics')}
+            theme={theme}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={Trophy}
             title="Achievements"
             subtitle="View your milestones and badges"
             onPress={() => router.push('/achievements')}
+            theme={theme}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={Clock}
             title="Prompt Queue"
             subtitle="Manage queued prompts and schedule"
             onPress={() => router.push('/queue')}
+            theme={theme}
           />
         </SettingsSection>
 
         {/* Subscription */}
-        <SettingsSection title="Subscription">
+        <SettingsSection title="Subscription" theme={theme}>
           <SettingsItem
             icon={CreditCard}
             title="Manage Subscription"
             subtitle="Free plan - Upgrade for more features"
             onPress={() => router.push('/settings/subscription')}
+            theme={theme}
           />
         </SettingsSection>
 
         {/* Support */}
-        <SettingsSection title="Support">
+        <SettingsSection title="Support" theme={theme}>
           <SettingsItem
             icon={HelpCircle}
             title="Help Center"
             onPress={() => {}}
-            rightElement={<ExternalLink size={16} color={colors.dark[400]} />}
+            theme={theme}
+            rightElement={<ExternalLink size={16} color={theme.textTertiary} />}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={MessageCircle}
             title="Contact Support"
             onPress={() => {}}
+            theme={theme}
           />
         </SettingsSection>
 
         {/* Sign Out */}
-        <SettingsSection title="">
+        <SettingsSection title="" theme={theme}>
           <SettingsItem
             icon={LogOut}
             title="Sign Out"
             onPress={handleSignOut}
             danger
+            theme={theme}
           />
         </SettingsSection>
 
         {/* Version */}
-        <Text style={styles.version}>
+        <Text style={[styles.version, { color: theme.textTertiary }]}>
           ForkOff v1.0.0
         </Text>
       </ScrollView>
@@ -297,23 +316,19 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark[800],
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark[600],
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark[50],
   },
   headerSubtitle: {
     fontSize: 14,
-    color: colors.dark[300],
     marginTop: 4,
   },
   scrollView: {
@@ -327,7 +342,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    color: colors.dark[300],
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -336,10 +350,8 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sectionCard: {
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     overflow: 'hidden',
   },
   sectionContent: {
@@ -354,43 +366,29 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: colors.dark[700],
     borderWidth: 1,
-    borderColor: colors.dark[500],
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
-  },
-  itemIconDanger: {
-    backgroundColor: colors.error[300] + '15',
-    borderColor: colors.error[300] + '30',
   },
   itemContent: {
     flex: 1,
   },
   itemTitle: {
-    color: colors.dark[50],
     fontSize: 15,
     fontWeight: '600',
   },
-  itemTitleDanger: {
-    color: colors.error[300],
-  },
   itemSubtitle: {
-    color: colors.dark[200],
     fontSize: 12,
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark[600],
     marginLeft: 56,
   },
   profileCard: {
-    backgroundColor: colors.dark[700],
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.dark[600],
     overflow: 'hidden',
     marginBottom: 24,
   },
@@ -404,7 +402,6 @@ const styles = StyleSheet.create({
     right: -48,
     width: 96,
     height: 96,
-    backgroundColor: colors.primary[500],
     borderRadius: 48,
     opacity: 0.1,
   },
@@ -416,7 +413,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.primary[600],
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -430,21 +426,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    color: colors.dark[50],
     fontSize: 18,
     fontWeight: '700',
   },
   profileEmail: {
-    color: colors.dark[200],
     fontSize: 14,
     marginTop: 2,
   },
   subscriptionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary[500] + '15',
     borderWidth: 1,
-    borderColor: colors.primary[500] + '30',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
@@ -453,14 +445,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   subscriptionText: {
-    color: colors.primary[500],
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   version: {
-    color: colors.dark[400],
     textAlign: 'center',
     fontSize: 12,
     marginTop: 16,
