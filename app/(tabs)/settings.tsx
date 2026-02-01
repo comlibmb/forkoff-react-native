@@ -15,6 +15,9 @@ import {
   MessageCircle,
   ExternalLink,
   Sparkles,
+  BarChart3,
+  Trophy,
+  Clock,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { colors } from '@/theme/colors';
@@ -219,6 +222,30 @@ export default function SettingsScreen() {
                 thumbColor={darkMode ? '#fff' : colors.dark[200]}
               />
             }
+          />
+        </SettingsSection>
+
+        {/* Analytics & Achievements */}
+        <SettingsSection title="Analytics & Achievements">
+          <SettingsItem
+            icon={BarChart3}
+            title="Usage Analytics"
+            subtitle="Token usage and cost tracking"
+            onPress={() => router.push('/(tabs)/analytics')}
+          />
+          <View style={styles.divider} />
+          <SettingsItem
+            icon={Trophy}
+            title="Achievements"
+            subtitle="View your milestones and badges"
+            onPress={() => router.push('/achievements')}
+          />
+          <View style={styles.divider} />
+          <SettingsItem
+            icon={Clock}
+            title="Prompt Queue"
+            subtitle="Manage queued prompts and schedule"
+            onPress={() => router.push('/queue')}
           />
         </SettingsSection>
 

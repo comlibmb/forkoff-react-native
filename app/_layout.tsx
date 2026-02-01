@@ -10,6 +10,8 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useApprovalStore } from '@/stores/approval.store';
 import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
+import { useAchievementsStore } from '@/stores/achievements.store';
+import { useQueueStore } from '@/stores/queue.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -22,6 +24,7 @@ import { AlertProvider } from '@/components/ui/AlertModal';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
+import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import '../global.css';
 
 // Initialize Sentry FIRST to catch all errors
@@ -50,6 +53,8 @@ export default function RootLayout() {
   } = useApprovalStore();
   const { initialize: initializeConnection } = useConnectionStore();
   const { needsUpdate, checkVersion } = useVersionStore();
+  const { recentUnlock, setRecentUnlock } = useAchievementsStore();
+  const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -134,6 +139,57 @@ export default function RootLayout() {
       return () => unsubscribe();
     }
   }, [isAuthenticated, isInitialized, subscribeToApprovals]);
+
+  // Subscribe to achievement and queue events
+  useEffect(() => {
+    if (isAuthenticated && isInitialized) {
+      // Achievement unlocked
+      const unsubAchievement = wsService.on('achievement_unlocked', (data) => {
+        setRecentUnlock(data.achievement as any);
+      });
+
+      // Prompt queued
+      const unsubQueued = wsService.on('prompt_queued', (data) => {
+        addQueueItem({
+          id: data.queueItemId,
+          userId: user?.id || '',
+          deviceId: data.deviceId,
+          sessionKey: data.sessionKey || null,
+          prompt: data.prompt,
+          status: 'PENDING',
+          priority: 0,
+          rateLimitReason: data.rateLimitReason || null,
+          retryAfter: data.retryAfter || null,
+          scheduledFor: null,
+          executedAt: null,
+          errorMessage: null,
+          createdAt: data.createdAt,
+          updatedAt: data.createdAt,
+        });
+      });
+
+      // Queue item executed
+      const unsubExecuted = wsService.on('queue_item_executed', (data) => {
+        updateQueueItem(data.queueItemId, {
+          status: data.success ? 'COMPLETED' : 'FAILED',
+          errorMessage: data.errorMessage || null,
+          executedAt: data.executedAt,
+        });
+      });
+
+      // Queue updated
+      const unsubUpdated = wsService.on('queue_updated', (data) => {
+        updatePendingCount(data.pendingCount);
+      });
+
+      return () => {
+        unsubAchievement();
+        unsubQueued();
+        unsubExecuted();
+        unsubUpdated();
+      };
+    }
+  }, [isAuthenticated, isInitialized, user, setRecentUnlock, addQueueItem, updateQueueItem, updatePendingCount]);
 
   // Initialize connection monitoring
   useEffect(() => {
@@ -225,6 +281,20 @@ export default function RootLayout() {
                       presentation: 'modal',
                     }}
                   />
+                  <Stack.Screen
+                    name="achievements/index"
+                    options={{
+                      animation: 'slide_from_right',
+                      presentation: 'card',
+                    }}
+                  />
+                  <Stack.Screen
+                    name="queue/index"
+                    options={{
+                      animation: 'slide_from_right',
+                      presentation: 'card',
+                    }}
+                  />
                 </Stack>
 
                 {/* Global Claude Approval Modal */}
@@ -241,6 +311,13 @@ export default function RootLayout() {
 
                 {/* Version update modal */}
                 <UpdateRequiredModal visible={needsUpdate} />
+
+                {/* Achievement unlock modal */}
+                <AchievementUnlockModal
+                  visible={!!recentUnlock}
+                  achievement={recentUnlock}
+                  onClose={() => setRecentUnlock(null)}
+                />
               </ScreenTracker>
               </QueryClientProvider>
             </GestureHandlerRootView>

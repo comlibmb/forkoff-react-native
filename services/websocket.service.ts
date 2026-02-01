@@ -213,6 +213,53 @@ export interface TaskProgressEvent {
   tasks?: TaskInfo[];
 }
 
+// Achievement unlocked event
+export interface AchievementUnlockedEvent {
+  achievement: {
+    id: string;
+    key: string;
+    name: string;
+    description: string;
+    category: string;
+    iconName: string;
+    tier: string;
+    threshold: string;
+  };
+  unlockedAt: string;
+}
+
+// Prompt queued event
+export interface PromptQueuedEvent {
+  queueItemId: string;
+  deviceId: string;
+  sessionKey?: string;
+  prompt: string;
+  rateLimitReason?: string;
+  retryAfter?: string;
+  createdAt: string;
+}
+
+// Queue item executing event
+export interface QueueItemExecutingEvent {
+  queueItemId: string;
+  deviceId: string;
+  sessionKey?: string;
+  prompt: string;
+}
+
+// Queue item executed event
+export interface QueueItemExecutedEvent {
+  queueItemId: string;
+  success: boolean;
+  errorMessage?: string;
+  executedAt: string;
+}
+
+// Queue updated event
+export interface QueueUpdatedEvent {
+  pendingCount: number;
+}
+
 interface EventCallbacks {
   device_status: EventCallback<{ deviceId: string; status: DeviceStatus; lastSeenAt?: string }>[];
   terminal_output: EventCallback<TerminalOutputEvent>[];
@@ -240,6 +287,11 @@ interface EventCallbacks {
   thinking_content: EventCallback<ThinkingContentEvent>[];
   token_usage: EventCallback<TokenUsageEvent>[];
   task_progress: EventCallback<TaskProgressEvent>[];
+  achievement_unlocked: EventCallback<AchievementUnlockedEvent>[];
+  prompt_queued: EventCallback<PromptQueuedEvent>[];
+  queue_item_executing: EventCallback<QueueItemExecutingEvent>[];
+  queue_item_executed: EventCallback<QueueItemExecutedEvent>[];
+  queue_updated: EventCallback<QueueUpdatedEvent>[];
   connected: EventCallback<void>[];
   disconnected: EventCallback<void>[];
   error: EventCallback<Error>[];
@@ -278,6 +330,11 @@ class WebSocketService {
     thinking_content: [],
     token_usage: [],
     task_progress: [],
+    achievement_unlocked: [],
+    prompt_queued: [],
+    queue_item_executing: [],
+    queue_item_executed: [],
+    queue_updated: [],
     connected: [],
     disconnected: [],
     error: [],
@@ -486,6 +543,33 @@ class WebSocketService {
     this.socket.on('task_progress', (data) => {
       console.log('[WS] GOT task_progress:', data?.type, data?.task?.subject || `${data?.tasks?.length} tasks`);
       this.emitInternal('task_progress', data);
+    });
+
+    // Achievement events
+    this.socket.on('achievement_unlocked', (data) => {
+      console.log('[WS] GOT achievement_unlocked:', data?.achievement?.name);
+      this.emitInternal('achievement_unlocked', data);
+    });
+
+    // Queue events
+    this.socket.on('prompt_queued', (data) => {
+      console.log('[WS] GOT prompt_queued:', data?.queueItemId);
+      this.emitInternal('prompt_queued', data);
+    });
+
+    this.socket.on('queue_item_executing', (data) => {
+      console.log('[WS] GOT queue_item_executing:', data?.queueItemId);
+      this.emitInternal('queue_item_executing', data);
+    });
+
+    this.socket.on('queue_item_executed', (data) => {
+      console.log('[WS] GOT queue_item_executed:', data?.queueItemId, data?.success);
+      this.emitInternal('queue_item_executed', data);
+    });
+
+    this.socket.on('queue_updated', (data) => {
+      console.log('[WS] GOT queue_updated:', data?.pendingCount);
+      this.emitInternal('queue_updated', data);
     });
   }
 

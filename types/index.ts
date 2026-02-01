@@ -324,3 +324,97 @@ export interface ParsedOption {
   label: string; // The option text
   raw: string; // The full matched line
 }
+
+// ==================== ANALYTICS TYPES ====================
+
+export interface TokenUsageDaily {
+  date: string;
+  inputTokens: string;
+  outputTokens: string;
+  totalTokens: string;
+  sessionCount: number;
+  estimatedCostUsd: number | null;
+}
+
+export interface UsageStats {
+  totalInputTokens: string;
+  totalOutputTokens: string;
+  totalTokens: string;
+  totalSessionCount: number;
+  estimatedCostUsd: number;
+  period: 'day' | 'week' | 'month' | 'all';
+}
+
+export interface StreakInfo {
+  currentStreak: number;
+  totalActiveDays: number;
+}
+
+// ==================== ACHIEVEMENTS TYPES ====================
+
+export type AchievementTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+export type AchievementCategory = 'TOKENS' | 'SESSIONS' | 'ENGAGEMENT' | 'SPECIAL';
+
+export interface Achievement {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+  iconName: string;
+  tier: AchievementTier;
+  threshold: string;
+  createdAt: string;
+}
+
+export interface AchievementWithProgress extends Achievement {
+  userProgress: {
+    unlockedAt: string | null;
+    progress: string;
+    showcased: boolean;
+  } | null;
+}
+
+export interface UnlockedAchievement {
+  achievement: Achievement;
+  unlockedAt: string;
+  progress: string;
+  showcased: boolean;
+}
+
+// ==================== QUEUE TYPES ====================
+
+export type QueueItemStatus =
+  | 'PENDING'
+  | 'SCHEDULED'
+  | 'EXECUTING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface PromptQueueItem {
+  id: string;
+  userId: string;
+  deviceId: string;
+  sessionKey: string | null;
+  prompt: string;
+  status: QueueItemStatus;
+  priority: number;
+  rateLimitReason: string | null;
+  retryAfter: string | null;
+  scheduledFor: string | null;
+  executedAt: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QueueSchedule {
+  id: string;
+  userId: string;
+  enabled: boolean;
+  scheduledTime: string; // HH:mm format
+  daysOfWeek: number[]; // 0=Sunday, 1=Monday, etc.
+  createdAt: string;
+  updatedAt: string;
+}
