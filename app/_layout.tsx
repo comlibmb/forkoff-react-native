@@ -12,6 +12,7 @@ import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
 import { useQueueStore } from '@/stores/queue.store';
+import { useThemeStore } from '@/stores/theme.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -25,6 +26,7 @@ import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
+import { ThemeProvider } from '@/theme/ThemeProvider';
 import '../global.css';
 
 // Initialize Sentry FIRST to catch all errors
@@ -55,6 +57,7 @@ export default function RootLayout() {
   const { needsUpdate, checkVersion } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
   const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
+  const { isDark } = useThemeStore();
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -230,25 +233,26 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <PostHogProvider
-        apiKey="phc_jZavcKj34gXjF0rNrSUbZYEvsTKOpPMiB2HNuBZ8YXm"
-        options={{
-          host: 'https://us.i.posthog.com',
-        }}
-      >
-        <PostHogBridge>
-          <AlertProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <QueryClientProvider client={queryClient}>
-                <ScreenTracker>
-                <StatusBar style="light" />
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: '#0f172a' },
-                    animation: 'fade',
-                  }}
-                >
+      <ThemeProvider>
+        <PostHogProvider
+          apiKey="phc_jZavcKj34gXjF0rNrSUbZYEvsTKOpPMiB2HNuBZ8YXm"
+          options={{
+            host: 'https://us.i.posthog.com',
+          }}
+        >
+          <PostHogBridge>
+            <AlertProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <QueryClientProvider client={queryClient}>
+                  <ScreenTracker>
+                  <StatusBar style={isDark ? 'light' : 'dark'} />
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: isDark ? '#0d1117' : '#ffffff' },
+                      animation: 'fade',
+                    }}
+                  >
                   <Stack.Screen name="index" />
                   <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
                   <Stack.Screen name="(onboarding)" options={{ animation: 'slide_from_right' }} />
@@ -318,12 +322,13 @@ export default function RootLayout() {
                   achievement={recentUnlock}
                   onClose={() => setRecentUnlock(null)}
                 />
-              </ScreenTracker>
-              </QueryClientProvider>
-            </GestureHandlerRootView>
-          </AlertProvider>
-        </PostHogBridge>
-      </PostHogProvider>
+                </ScreenTracker>
+                </QueryClientProvider>
+              </GestureHandlerRootView>
+            </AlertProvider>
+          </PostHogBridge>
+        </PostHogProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

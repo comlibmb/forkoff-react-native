@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors } from '@/theme/colors';
+import { ThemeColors } from '@/theme/ThemeProvider';
 
 interface PeriodSelectorProps {
   selected: 'day' | 'week' | 'month' | 'all';
   onSelect: (period: 'day' | 'week' | 'month' | 'all') => void;
+  theme: ThemeColors;
 }
 
 const periods: { key: 'day' | 'week' | 'month' | 'all'; label: string }[] = [
@@ -14,17 +15,24 @@ const periods: { key: 'day' | 'week' | 'month' | 'all'; label: string }[] = [
   { key: 'all', label: 'All Time' },
 ];
 
-export function PeriodSelector({ selected, onSelect }: PeriodSelectorProps) {
+export function PeriodSelector({ selected, onSelect, theme }: PeriodSelectorProps) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
       {periods.map((period) => (
         <TouchableOpacity
           key={period.key}
-          style={[styles.button, selected === period.key && styles.buttonSelected]}
+          style={[
+            styles.button,
+            selected === period.key && { backgroundColor: theme.primary },
+          ]}
           onPress={() => onSelect(period.key)}
         >
           <Text
-            style={[styles.buttonText, selected === period.key && styles.buttonTextSelected]}
+            style={[
+              styles.buttonText,
+              { color: theme.textTertiary },
+              selected === period.key && styles.buttonTextSelected,
+            ]}
           >
             {period.label}
           </Text>
@@ -37,11 +45,9 @@ export function PeriodSelector({ selected, onSelect }: PeriodSelectorProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.dark[700],
     borderRadius: 10,
     padding: 4,
     borderWidth: 1,
-    borderColor: colors.dark[600],
   },
   button: {
     flex: 1,
@@ -50,13 +56,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  buttonSelected: {
-    backgroundColor: colors.primary[500],
-  },
   buttonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.dark[300],
   },
   buttonTextSelected: {
     color: '#fff',
