@@ -594,6 +594,24 @@ class WebSocketService {
     this.socket?.emit(event, data);
   }
 
+  // Public emit method with acknowledgment callback for getting server response
+  emitWithAck<T = unknown>(event: string, data?: unknown): Promise<T> {
+    return new Promise((resolve, reject) => {
+      console.log(`[WS] emitWithAck(${event}):`, JSON.stringify(data)?.substring(0, 100));
+      if (!this.socket?.connected) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+      this.socket.emit(event, data, (response: T | { error: string }) => {
+        if (response && typeof response === 'object' && 'error' in response) {
+          reject(new Error((response as { error: string }).error));
+        } else {
+          resolve(response as T);
+        }
+      });
+    });
+  }
+
   on<K extends keyof EventCallbacks>(
     event: K,
     callback: EventCallbacks[K][0]

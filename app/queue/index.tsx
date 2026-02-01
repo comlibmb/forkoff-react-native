@@ -29,12 +29,14 @@ export default function QueueScreen() {
     schedule,
     pendingCount,
     isLoading,
+    error,
     fetchQueue,
     fetchSchedule,
     updateSchedule,
     cancelItem,
     executeItem,
     executeNext,
+    clearError,
   } = useQueueStore();
 
   const [showCompleted, setShowCompleted] = useState(false);
@@ -52,9 +54,17 @@ export default function QueueScreen() {
       { confirmText: 'Execute' },
     );
     if (confirmed) {
-      executeItem(itemId);
+      await executeItem(itemId);
     }
   };
+
+  // Show error alert when error occurs
+  useEffect(() => {
+    if (error) {
+      alert.error('Execution Failed', error);
+      clearError();
+    }
+  }, [error, clearError]);
 
   const handleCancelItem = async (itemId: string) => {
     const confirmed = await alert.confirm(
