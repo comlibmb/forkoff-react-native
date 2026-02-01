@@ -65,6 +65,7 @@ export default function ClaudeSessionScreen() {
   const [isThinking, setIsThinking] = useState(false);
   const streamingMessageIdRef = useRef<string | null>(null);
   const sendingRef = useRef(false); // Guard against rapid duplicate sends
+  const recentUserMessagesRef = useRef<Set<string>>(new Set()); // Track recent user message content to prevent duplicates
   const [totalEntries, setTotalEntries] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -161,6 +162,20 @@ export default function ClaudeSessionScreen() {
       }
 
       setEntries((prev) => {
+        // Skip if we already have this exact entry (prevents duplicates from multiple event sources)
+        if (prev.some(e => e.id === msg.id)) {
+          // For partial updates, still update the content
+          if (msg.partial) {
+            return prev.map((entry) =>
+              entry.id === msg.id
+                ? { ...entry, content: { ...entry.content, text: msg.content } }
+                : entry
+            );
+          }
+          console.log('[Session] claude_message: Skipping duplicate ID:', msg.id);
+          return prev;
+        }
+
         // If this is a partial message, update existing entry
         if (msg.partial && streamingMessageIdRef.current === msg.id) {
           return prev.map((entry) =>
@@ -198,6 +213,33 @@ export default function ClaudeSessionScreen() {
             content: { ...updated[existingIdx].content, text: msg.content },
           };
           return updated;
+        }
+
+        // For user messages, check if there's an optimistic entry with same content
+        // This prevents showing duplicate user messages
+        if (msg.type === 'user') {
+          const msgText = msg.content || '';
+          const optimisticDuplicate = prev.find(e =>
+            e.id.startsWith('local-') &&
+            e.type === 'user' &&
+            e.content?.text === msgText
+          );
+          if (optimisticDuplicate) {
+            console.log('[Session] claude_message: Replacing optimistic entry:', optimisticDuplicate.id, '->', msg.id);
+            // Replace optimistic entry with real one
+            return prev.map(e => e.id === optimisticDuplicate.id ? {
+              id: msg.id,
+              type: msg.type,
+              timestamp: new Date().toISOString(),
+              lineNumber: 0,
+              content: {
+                text: msg.content,
+                toolName: msg.toolName,
+                toolInput: msg.toolInput,
+                isError: msg.isError,
+              },
+            } : e);
+          }
         }
 
         // New complete message
@@ -420,10 +462,26 @@ export default function ClaudeSessionScreen() {
             return prev;
           }
 
-          // For user messages, check if there's an optimistic entry with same content
-          // This prevents showing duplicate user messages when the transcript update arrives
+          // For user messages, check for content duplicates (Claude sometimes writes same message twice with different IDs)
           if (data.entry.type === 'user') {
             const entryText = data.entry.content?.text || '';
+
+            // Use ref to track recently processed user messages (handles race conditions)
+            if (recentUserMessagesRef.current.has(entryText)) {
+              console.log('[Session] Skipping duplicate user message (ref check):', data.entry.id);
+              return prev;
+            }
+
+            // Check if we already have a user message with the exact same content
+            // Only check recent messages (last 5) to avoid false positives
+            const recentUserMessages = prev.slice(-5).filter(e => e.type === 'user');
+            const contentDuplicate = recentUserMessages.find(e => e.content?.text === entryText);
+            if (contentDuplicate) {
+              console.log('[Session] Skipping duplicate user message by content:', data.entry.id);
+              return prev;
+            }
+
+            // Also check for optimistic entries
             const optimisticDuplicate = prev.find(e =>
               e.id.startsWith('local-') &&
               e.type === 'user' &&
@@ -431,9 +489,17 @@ export default function ClaudeSessionScreen() {
             );
             if (optimisticDuplicate) {
               console.log('[Session] Replacing optimistic entry with real entry:', optimisticDuplicate.id, '->', data.entry.id);
+              // Track this content so we skip the duplicate that arrives shortly after
+              recentUserMessagesRef.current.add(entryText);
+              // Clean up after 5 seconds
+              setTimeout(() => recentUserMessagesRef.current.delete(entryText), 5000);
               // Replace optimistic entry with real one (don't increment total)
               return prev.map(e => e.id === optimisticDuplicate.id ? data.entry : e);
             }
+
+            // Track this content for duplicate detection
+            recentUserMessagesRef.current.add(entryText);
+            setTimeout(() => recentUserMessagesRef.current.delete(entryText), 5000);
           }
 
           console.log('[Session] Adding entry:', data.entry.type, data.entry.id);
@@ -643,18 +709,22 @@ export default function ClaudeSessionScreen() {
   };
 
   const handleSendMessage = async () => {
+    // Capture and clear input FIRST to prevent double-sends from onSubmitEditing + button tap
+    const message = inputText.trim();
+    if (!message) return;
+
+    // Clear input immediately to prevent capturing the same message twice
+    setInputText('');
+
     // Use ref guard to prevent rapid duplicate sends (state may not update fast enough)
     if (sendingRef.current) {
       console.log('[Session] Blocked duplicate send - already sending');
       return;
     }
-    if (!inputText.trim() || !deviceId || isSending || !isSessionReady) return;
+    if (!deviceId || isSending || !isSessionReady) return;
 
     // Set ref guard immediately (synchronous)
     sendingRef.current = true;
-
-    const message = inputText.trim();
-    setInputText('');
     setIsSending(true);
 
     // Track message sent
