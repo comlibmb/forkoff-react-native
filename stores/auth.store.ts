@@ -101,10 +101,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.signIn(credentials);
 
-      // Identify user in analytics
-      analyticsService.identify(user.id, {
+      // Identify user in analytics (with country if available)
+      analyticsService.identifyWithCountry(user.id, {
         email: user.email,
         name: user.name,
+        country: user.country,
       });
 
       // Set user context in Sentry
@@ -117,6 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Track sign in event
       analyticsService.track('user_signed_in', {
         method: 'password',
+        country: user.country,
       });
 
       set({
@@ -257,10 +259,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const user = await authService.verifyOtp(pendingEmail, code);
 
-      // Identify user in analytics
-      analyticsService.identify(user.id, {
+      // Identify user in analytics (with country if available)
+      analyticsService.identifyWithCountry(user.id, {
         email: user.email,
         name: user.name,
+        country: user.country,
       });
 
       // Set user context in Sentry
@@ -274,6 +277,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       analyticsService.track('otp_verified');
       analyticsService.track('user_signed_in', {
         method: 'otp',
+        country: user.country,
       });
 
       set({

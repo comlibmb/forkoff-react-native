@@ -2,6 +2,7 @@ import { createClient, SupabaseClient, AuthError, Session, User as SupabaseUser 
 import * as SecureStore from 'expo-secure-store';
 import * as AuthSession from 'expo-auth-session';
 import { User, LoginCredentials, RegisterCredentials } from '@/types';
+import { useVersionStore } from '@/stores/version.store';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -212,12 +213,19 @@ class AuthService {
 
         if (response.ok) {
           const profile = await response.json();
+
+          // Handle appConfig if present
+          if (profile.appConfig) {
+            useVersionStore.getState().setVersionConfig(profile.appConfig);
+          }
+
           return {
             ...baseUser,
             username: profile.username || baseUser.username,
             name: profile.name || baseUser.name,
             avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
             subscription: profile.subscription || baseUser.subscription,
+            country: profile.country,
           };
         }
       }
@@ -341,6 +349,12 @@ class AuthService {
 
         if (response.ok) {
           const profile = await response.json();
+
+          // Handle appConfig if present
+          if (profile.appConfig) {
+            useVersionStore.getState().setVersionConfig(profile.appConfig);
+          }
+
           // Merge API profile data with Supabase user
           return {
             ...baseUser,
@@ -348,6 +362,7 @@ class AuthService {
             name: profile.name || baseUser.name,
             avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
             subscription: profile.subscription || baseUser.subscription,
+            country: profile.country,
           };
         }
       }

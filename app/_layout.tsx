@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '@/stores/auth.store';
 import { useApprovalStore } from '@/stores/approval.store';
+import { useConnectionStore } from '@/stores/connection.store';
+import { useVersionStore } from '@/stores/version.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -17,6 +19,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ScreenTracker } from '@/components/ScreenTracker';
 import { PostHogBridge } from '@/components/PostHogBridge';
 import { AlertProvider } from '@/components/ui/AlertModal';
+import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { ConnectionToast } from '@/components/ui/ConnectionToast';
+import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import '../global.css';
 
 // Initialize Sentry FIRST to catch all errors
@@ -43,6 +48,8 @@ export default function RootLayout() {
     respondToApproval,
     subscribeToApprovals,
   } = useApprovalStore();
+  const { initialize: initializeConnection } = useConnectionStore();
+  const { needsUpdate, checkVersion } = useVersionStore();
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -127,6 +134,19 @@ export default function RootLayout() {
       return () => unsubscribe();
     }
   }, [isAuthenticated, isInitialized, subscribeToApprovals]);
+
+  // Initialize connection monitoring
+  useEffect(() => {
+    const cleanup = initializeConnection();
+    return cleanup;
+  }, [initializeConnection]);
+
+  // Check version when app starts and after auth
+  useEffect(() => {
+    if (isInitialized) {
+      checkVersion();
+    }
+  }, [isInitialized, checkVersion]);
 
   // Handle notification responses (when user taps a notification)
   useEffect(() => {
@@ -214,6 +234,13 @@ export default function RootLayout() {
                   onRespond={handleApprovalRespond}
                   onDismiss={hideApproval}
                 />
+
+                {/* Connection status components */}
+                <OfflineBanner />
+                <ConnectionToast />
+
+                {/* Version update modal */}
+                <UpdateRequiredModal visible={needsUpdate} />
               </ScreenTracker>
               </QueryClientProvider>
             </GestureHandlerRootView>
