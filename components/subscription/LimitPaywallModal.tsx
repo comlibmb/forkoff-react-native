@@ -138,34 +138,34 @@ export function LimitPaywallModal({
           showsVerticalScrollIndicator={false}
         >
           {/* Logo with Pro badge */}
-          <View className="items-center py-8">
-            <View className="w-24 h-24 items-center justify-center mb-6">
+          <View className="items-center" style={{ marginTop: -49, paddingBottom: 32 }}>
+            <View style={{ width: 172, height: 172, alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
               <Image
                 source={require('@/assets/logo.png')}
-                style={{ width: 80, height: 80, opacity: 0.9 }}
+                style={{ width: 144, height: 144, opacity: 0.9 }}
                 resizeMode="contain"
               />
               {/* Pro badge overlay */}
               <View
                 style={{
                   position: 'absolute',
-                  bottom: 0,
-                  right: 0,
+                  bottom: 39,
+                  right: 4,
                   backgroundColor: colors.primary[500],
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 10,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 5,
                 }}
               >
-                <Crown size={12} color="white" />
-                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 11 }}>PRO</Text>
+                <Crown size={14} color="white" />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>PRO</Text>
               </View>
             </View>
 
-            <Text className="text-white text-2xl font-bold text-center mb-2">
+            <Text className="text-white text-2xl font-bold text-center mb-2" style={{ marginTop: -15 }}>
               {content.subheading}
             </Text>
 

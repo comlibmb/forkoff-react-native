@@ -29,6 +29,7 @@ import { LocalCommandBlock, parseLocalCommandTags, isLocalCommandText } from '@/
 import { SystemReminderBlock, parseSystemReminderTags, stripSystemReminderTags, hasSystemReminderTags } from '@/components/claude/SystemReminderBlock';
 import { StatusBar, ActivityState, getActivityFromTool, getActivityDetail } from '@/components/claude/StatusBar';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
+import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
 
 const INITIAL_LOAD = 400;
 const LOAD_MORE_COUNT = 200;
@@ -86,6 +87,7 @@ export default function ClaudeSessionScreen() {
   const [limitCurrentUsage, setLimitCurrentUsage] = useState(0);
   const [limitMax, setLimitMax] = useState(20);
   const [countdownText, setCountdownText] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Usage store for optimistic local increment (server is authoritative)
   const { incrementMessages } = useUsageStore();
@@ -442,7 +444,8 @@ export default function ClaudeSessionScreen() {
           messagesUsedToday: data.currentUsage || 0,
           messageLimitResetAt: data.resetAt || useUsageStore.getState().messageLimitResetAt,
         });
-        // Show inline limit reached UI and stop all loading states
+        // Show paywall modal and inline limit reached UI, stop all loading states
+        setShowPaywall(true);
         setIsLimitReached(true);
         setLimitResetAt(data.resetAt || null);
         setLimitCurrentUsage(data.currentUsage || 0);
@@ -1192,6 +1195,15 @@ export default function ClaudeSessionScreen() {
         request={permissionRequest}
         onApprove={handlePermissionApprove}
         onDeny={handlePermissionDeny}
+      />
+      {/* Limit Paywall Modal */}
+      <LimitPaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        limitType="messages_daily"
+        resetAt={limitResetAt || undefined}
+        currentUsage={limitCurrentUsage}
+        limit={limitMax}
       />
       <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
         <KeyboardAvoidingView
