@@ -497,7 +497,8 @@ export interface ReferralStats {
   totalReferrals: number;
   successfulConversions: number;
   rewardMonthsAvailable: number;
-  nextRewardProgress: number; // 0-2 (progress to next reward)
+  nextRewardProgress: number; // Progress towards next tier
+  nextRewardTarget: number; // Conversions needed for next reward (3, 6, 9, ...)
 }
 
 export interface ReferralCodeResponse {
