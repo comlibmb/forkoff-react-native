@@ -456,3 +456,72 @@ export interface SubscriptionLimits {
   historyRetentionDays: number;
   maxPhoneSessions?: number;
 }
+
+// ==================== VOUCHER TYPES ====================
+
+export type VoucherType = 'LIFETIME_PRO' | 'CAMPAIGN' | 'SINGLE_USE';
+export type VoucherBenefitType = 'FREE_MONTHS' | 'LIFETIME_PRO' | 'DISCOUNT_PERCENT';
+
+export interface VoucherBenefit {
+  type: VoucherBenefitType;
+  value: number;
+  expiresAt?: string;
+  description: string;
+}
+
+export interface VoucherRedemptionResult {
+  success: boolean;
+  message: string;
+  benefit?: VoucherBenefit;
+}
+
+export interface VoucherValidationResult {
+  valid: boolean;
+  message: string;
+  benefit?: VoucherBenefit;
+}
+
+export interface VoucherRedemptionHistory {
+  id: string;
+  code: string;
+  benefitType: VoucherBenefitType;
+  benefitValue: number;
+  benefitExpiresAt?: string;
+  redeemedAt: string;
+  campaignName?: string;
+}
+
+// ==================== REFERRAL TYPES ====================
+
+export interface ReferralStats {
+  totalReferrals: number;
+  successfulConversions: number;
+  rewardMonthsAvailable: number;
+  nextRewardProgress: number; // 0-2 (progress to next reward)
+}
+
+export interface ReferralCodeResponse {
+  referralCode: string;
+  shareUrl: string;
+  stats: ReferralStats;
+}
+
+export interface ReferralListItem {
+  id: string;
+  referredUserEmail?: string;
+  signedUpAt: string;
+  isConverted: boolean;
+  convertedAt?: string;
+}
+
+export interface ClaimRewardResult {
+  success: boolean;
+  message: string;
+  monthsClaimed?: number;
+  newExpiresAt?: string;
+}
+
+export interface ApplyReferralResult {
+  success: boolean;
+  message: string;
+}

@@ -19,10 +19,13 @@ import {
   BarChart3,
   Trophy,
   Clock,
+  Gift,
+  Users,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useState } from 'react';
+import { useReferralStore } from '@/stores/referral.store';
+import { useState, useEffect } from 'react';
 
 interface SettingsItemProps {
   icon: typeof User;
@@ -110,7 +113,12 @@ function SettingsSection({
 export default function SettingsScreen() {
   const { user, signOut } = useAuthStore();
   const { isDark, theme, toggleTheme } = useTheme();
+  const { stats: referralStats, fetchStats: fetchReferralStats } = useReferralStore();
   const [notifications, setNotifications] = useState(true);
+
+  useEffect(() => {
+    fetchReferralStats();
+  }, []);
 
   const handleSignOut = async () => {
     const confirmed = await alert.confirm(
@@ -271,6 +279,26 @@ export default function SettingsScreen() {
             title="Manage Subscription"
             subtitle="Free plan - Upgrade for more features"
             onPress={() => router.push('/settings/subscription')}
+            theme={theme}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Gift}
+            title="Redeem Voucher"
+            subtitle="Enter a promo or voucher code"
+            onPress={() => router.push('/settings/vouchers')}
+            theme={theme}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Users}
+            title="Refer Friends"
+            subtitle={
+              referralStats?.rewardMonthsAvailable
+                ? `${referralStats.rewardMonthsAvailable} reward${referralStats.rewardMonthsAvailable > 1 ? 's' : ''} available!`
+                : 'Earn free PRO months'
+            }
+            onPress={() => router.push('/settings/referrals')}
             theme={theme}
           />
         </SettingsSection>
