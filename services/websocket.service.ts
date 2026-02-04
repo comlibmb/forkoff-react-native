@@ -14,16 +14,16 @@ const RAW_WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
 function getSecureWsUrl(): string {
   const url = RAW_WS_URL;
 
-  // In development, allow insecure connections to localhost only
+  // In development, allow insecure connections to local network addresses
   if (IS_DEV_BUILD) {
-    if (url.startsWith('ws://localhost') || url.startsWith('ws://127.0.0.1') || url.startsWith('ws://192.168.')) {
+    if (url.startsWith('ws://localhost') || url.startsWith('ws://127.0.0.1') || url.startsWith('ws://192.168.') || url.startsWith('ws://10.') || url.startsWith('ws://172.')) {
       console.warn('[WS] SECURITY WARNING: Using insecure WebSocket connection (development only)');
       return url;
     }
   }
 
   // In production or for non-local URLs, enforce wss://
-  if (url.startsWith('ws://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+  if (url.startsWith('ws://') && !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.') && !url.includes('10.') && !url.includes('172.')) {
     console.warn('[WS] SECURITY: Upgrading insecure WebSocket URL to wss://');
     return url.replace('ws://', 'wss://');
   }

@@ -89,7 +89,15 @@
       "WebFetch(domain:hexdocs.pm)",
       "Bash(npx prisma:*)",
       "Bash(git status:*)",
-      "Bash(git -C \"C:/Users/User/Desktop/test/forkoff-api\" status -u)"
+      "Bash(git -C \"C:/Users/User/Desktop/test/forkoff-api\" status -u)",
+      "Bash(npx eslint:*)",
+      "Bash(npm audit:*)",
+      "Bash(wmic process where \"commandline like ''%forkoff-cli%''\" get processid,commandline)",
+      "Bash(git push)",
+      "Bash(npm run:*)",
+      "Bash(ipconfig:*)",
+      "Bash(npx next dev -p 3002)",
+      "WebFetch(domain:www.figma.com)"
     ]
   }
 }

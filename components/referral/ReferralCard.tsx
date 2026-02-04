@@ -105,7 +105,11 @@ export function ReferralCard({
 
         {/* Progress bar */}
         <View className="mb-6">
-          <ReferralProgressBar progress={stats.nextRewardProgress} />
+          <ReferralProgressBar
+            progress={stats.nextRewardProgress}
+            target={stats.nextRewardTarget || 3}
+            currentTier={Math.floor(stats.successfulConversions / 3) + 1}
+          />
         </View>
 
         {/* Rewards available */}
