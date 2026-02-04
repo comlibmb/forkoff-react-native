@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
-import { X, Zap, Lock, Crown } from 'lucide-react-native';
+import { X, Zap, Lock, Crown, Ticket } from 'lucide-react-native';
 import { Button } from '@/components/ui';
 import { PlanCard, Plan } from './PlanCard';
 import { colors } from '@/theme/colors';
+import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
+import { VoucherRedemptionResult } from '@/types';
 
 interface PaywallModalProps {
   visible: boolean;
@@ -67,6 +69,18 @@ export function PaywallModal({
   feature,
   onSelectPlan,
 }: PaywallModalProps) {
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [voucherResult, setVoucherResult] = useState<VoucherRedemptionResult | null>(null);
+
+  const handleVoucherSuccess = (result: VoucherRedemptionResult) => {
+    setVoucherResult(result);
+  };
+
+  const handleVoucherSuccessClose = () => {
+    setVoucherResult(null);
+    onClose(); // Close the paywall after successful voucher redemption
+  };
+
   return (
     <Modal
       visible={visible}
@@ -153,6 +167,19 @@ export function PaywallModal({
           </Text>
         </ScrollView>
 
+        {/* Voucher link */}
+        <View className="px-6 pb-4">
+          <TouchableOpacity
+            onPress={() => setShowVoucherModal(true)}
+            className="flex-row items-center justify-center py-2"
+          >
+            <Ticket size={16} color={colors.primary[400]} />
+            <Text className="text-primary-400 ml-2 font-medium">
+              Have a voucher code?
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Restore Purchases */}
         <View className="px-6 pb-8">
           <Button
@@ -163,6 +190,20 @@ export function PaywallModal({
           />
         </View>
       </View>
+
+      {/* Voucher Modal */}
+      <VoucherRedeemModal
+        visible={showVoucherModal}
+        onClose={() => setShowVoucherModal(false)}
+        onSuccess={handleVoucherSuccess}
+      />
+
+      {/* Voucher Success Modal */}
+      <VoucherSuccessModal
+        visible={!!voucherResult}
+        onClose={handleVoucherSuccessClose}
+        result={voucherResult}
+      />
     </Modal>
   );
 }

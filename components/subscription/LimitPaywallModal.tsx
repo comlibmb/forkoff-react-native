@@ -1,11 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
-import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown } from 'lucide-react-native';
+import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket } from 'lucide-react-native';
 import { Button } from '@/components/ui';
-import { LimitType } from '@/types';
+import { LimitType, VoucherRedemptionResult } from '@/types';
 import { colors } from '@/theme/colors';
 import { useRouter } from 'expo-router';
 import { analyticsService } from '@/services/analytics.service';
+import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
 
 interface LimitPaywallModalProps {
   visible: boolean;
@@ -93,6 +94,17 @@ export function LimitPaywallModal({
   limit,
 }: LimitPaywallModalProps) {
   const router = useRouter();
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [voucherResult, setVoucherResult] = useState<VoucherRedemptionResult | null>(null);
+
+  const handleVoucherSuccess = (result: VoucherRedemptionResult) => {
+    setVoucherResult(result);
+  };
+
+  const handleVoucherSuccessClose = () => {
+    setVoucherResult(null);
+    onClose(); // Close the paywall after successful voucher redemption
+  };
 
   const content = useMemo(() => {
     if (!limitType) return null;
@@ -223,6 +235,19 @@ export function LimitPaywallModal({
           </View>
         </ScrollView>
 
+        {/* Voucher link */}
+        <View className="px-6 pb-2">
+          <TouchableOpacity
+            onPress={() => setShowVoucherModal(true)}
+            className="flex-row items-center justify-center py-2"
+          >
+            <Ticket size={14} color={colors.dark[400]} />
+            <Text className="text-dark-400 ml-2 text-sm">
+              Have a promo code?
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Action buttons */}
         <View className="px-6 pb-8 gap-3">
           <Button
@@ -238,6 +263,20 @@ export function LimitPaywallModal({
           />
         </View>
       </View>
+
+      {/* Voucher Modal */}
+      <VoucherRedeemModal
+        visible={showVoucherModal}
+        onClose={() => setShowVoucherModal(false)}
+        onSuccess={handleVoucherSuccess}
+      />
+
+      {/* Voucher Success Modal */}
+      <VoucherSuccessModal
+        visible={!!voucherResult}
+        onClose={handleVoucherSuccessClose}
+        result={voucherResult}
+      />
     </Modal>
   );
 }
