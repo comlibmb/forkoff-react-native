@@ -28,6 +28,7 @@ import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
+import { AnimatedSplash } from '@/components/splash/AnimatedSplash';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import '../global.css';
 
@@ -94,13 +95,6 @@ function ThemedApp({
           options={{
             animation: 'slide_from_bottom',
             presentation: 'modal',
-          }}
-        />
-        <Stack.Screen
-          name="chat/[sessionId]"
-          options={{
-            animation: 'slide_from_right',
-            presentation: 'card',
           }}
         />
         <Stack.Screen
@@ -173,6 +167,7 @@ export default function RootLayout() {
   const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
   const { fetchUsage } = useUsageStore();
   const [showOnboardingPaywall, setShowOnboardingPaywall] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Handle notification tap - navigate to approval or session
   const handleNotificationTap = useCallback((response: Notifications.NotificationResponse) => {
@@ -210,8 +205,7 @@ export default function RootLayout() {
         console.error('Failed to initialize app:', error);
         sentryService.captureException(error, { context: 'app_initialization' });
       } finally {
-        // Hide splash screen
-        await SplashScreen.hideAsync();
+        // Native splash is now hidden by AnimatedSplash component
       }
     }
 
@@ -400,6 +394,9 @@ export default function RootLayout() {
                   />
                 </ScreenTracker>
                 </QueryClientProvider>
+                {showSplash && (
+                  <AnimatedSplash onComplete={() => setShowSplash(false)} />
+                )}
               </GestureHandlerRootView>
             </AlertProvider>
           </PostHogBridge>
