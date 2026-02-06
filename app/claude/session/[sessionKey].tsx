@@ -10,13 +10,16 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain, Zap, Clock } from 'lucide-react-native';
+import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain, Zap, Clock, ShieldOff } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
+import { alert } from '@/components/ui/AlertModal';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useUsageStore } from '@/stores/usage.store';
+import { useSessionSettingsStore } from '@/stores/session-settings.store';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -88,6 +91,12 @@ export default function ClaudeSessionScreen() {
   const [limitMax, setLimitMax] = useState(20);
   const [countdownText, setCountdownText] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // Unrestricted mode - per-session override, defaults to global setting
+  const globalUnrestricted = useSessionSettingsStore((s) => s.unrestrictedMode);
+  const globalHasSeenWarning = useSessionSettingsStore((s) => s.hasSeenWarning);
+  const setGlobalHasSeenWarning = useSessionSettingsStore((s) => s.setHasSeenWarning);
+  const [sessionUnrestricted, setSessionUnrestricted] = useState(globalUnrestricted);
 
   // Usage store for optimistic local increment (server is authoritative)
   const { incrementMessages } = useUsageStore();
@@ -165,6 +174,11 @@ export default function ClaudeSessionScreen() {
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [isLimitReached, limitResetAt]);
+
+  // Sync local session unrestricted state with global when it changes (unless user overrode)
+  useEffect(() => {
+    setSessionUnrestricted(globalUnrestricted);
+  }, [globalUnrestricted]);
 
   // Track session opened
   useEffect(() => {
@@ -740,6 +754,30 @@ export default function ClaudeSessionScreen() {
     }
   }, [hasMore, isLoadingMore, loadMore]);
 
+  const handleToggleSessionUnrestricted = async (value: boolean) => {
+    if (!value) {
+      setSessionUnrestricted(false);
+      return;
+    }
+
+    const title = 'Enable Unrestricted Mode?';
+    const body = globalHasSeenWarning
+      ? 'Claude will run without permission checks for this session. It can execute commands, edit files, and make network requests without asking for approval.'
+      : 'This runs Claude without permission checks. It can execute commands, edit files, and make changes without asking for approval.\n\nOnly enable this if you trust your prompts and understand the risks.';
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      alert.show(title, body, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Enable', style: 'default', onPress: () => resolve(true) },
+      ], { variant: 'warning' });
+    });
+
+    if (confirmed) {
+      setSessionUnrestricted(true);
+      if (!globalHasSeenWarning) setGlobalHasSeenWarning();
+    }
+  };
+
   const handleTakeOver = async () => {
     if (!session || !deviceId) return;
 
@@ -768,6 +806,7 @@ export default function ClaudeSessionScreen() {
       sessionKey,
       directory: session.directory,
       terminalSessionId: sessionKey, // Use sessionKey as the process identifier
+      dangerouslySkipPermissions: sessionUnrestricted,
     });
 
     // Mark as taken over - isTakingOver will be set false when session is ready
@@ -1340,6 +1379,20 @@ export default function ClaudeSessionScreen() {
           <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
             {!hasTakenOver ? (
               <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                {/* Per-session unrestricted mode toggle */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: sessionUnrestricted ? theme.warning + '15' : colors.dark[800], borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ShieldOff size={14} color={sessionUnrestricted ? theme.warning : theme.textTertiary} />
+                    <Text style={{ color: sessionUnrestricted ? theme.warning : theme.textSecondary, fontSize: 13, fontWeight: '600' }}>Unrestricted</Text>
+                  </View>
+                  <Switch
+                    value={sessionUnrestricted}
+                    onValueChange={handleToggleSessionUnrestricted}
+                    trackColor={{ false: theme.switchTrackOff, true: theme.warning }}
+                    thumbColor={sessionUnrestricted ? '#fff' : theme.switchThumb}
+                    style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={handleTakeOver}
                   disabled={isTakingOver || !session}
