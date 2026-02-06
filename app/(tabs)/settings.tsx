@@ -10,6 +10,7 @@ import {
   Moon,
   Sun,
   ChevronRight,
+  ShieldOff,
   LogOut,
   Github,
   HelpCircle,
@@ -25,6 +26,7 @@ import {
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useReferralStore } from '@/stores/referral.store';
+import { useSessionSettingsStore } from '@/stores/session-settings.store';
 import { useState, useEffect } from 'react';
 
 interface SettingsItemProps {
@@ -114,6 +116,7 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuthStore();
   const { isDark, theme, toggleTheme } = useTheme();
   const { stats: referralStats, fetchStats: fetchReferralStats } = useReferralStore();
+  const { unrestrictedMode, hasSeenWarning, setUnrestrictedMode, setHasSeenWarning } = useSessionSettingsStore();
   const [notifications, setNotifications] = useState(true);
 
   useEffect(() => {
@@ -129,6 +132,30 @@ export default function SettingsScreen() {
     if (confirmed) {
       await signOut();
       router.replace('/(auth)/login');
+    }
+  };
+
+  const handleToggleUnrestricted = async (value: boolean) => {
+    if (!value) {
+      setUnrestrictedMode(false);
+      return;
+    }
+
+    const title = 'Enable Unrestricted Mode?';
+    const body = hasSeenWarning
+      ? 'Claude will run without permission checks. It can execute commands, edit files, and make network requests without asking for approval.'
+      : 'This runs Claude without permission checks. It can execute commands, edit files, and make changes without asking for approval.\n\nOnly enable this if you trust your prompts and understand the risks.';
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      alert.show(title, body, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Enable', style: 'default', onPress: () => resolve(true) },
+      ], { variant: 'warning' });
+    });
+
+    if (confirmed) {
+      setUnrestrictedMode(true);
+      if (!hasSeenWarning) setHasSeenWarning();
     }
   };
 
@@ -243,6 +270,31 @@ export default function SettingsScreen() {
               />
             }
           />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <View style={unrestrictedMode ? { backgroundColor: theme.warning + '10', marginHorizontal: -16, paddingHorizontal: 16 } : undefined}>
+            <SettingsItem
+              icon={ShieldOff}
+              title="Unrestricted Mode"
+              subtitle="Skip permission prompts"
+              theme={theme}
+              rightElement={
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {unrestrictedMode && (
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.warning }} />
+                  )}
+                  <Switch
+                    value={unrestrictedMode}
+                    onValueChange={handleToggleUnrestricted}
+                    trackColor={{
+                      false: theme.switchTrackOff,
+                      true: theme.warning,
+                    }}
+                    thumbColor={unrestrictedMode ? '#fff' : theme.switchThumb}
+                  />
+                </View>
+              }
+            />
+          </View>
         </SettingsSection>
 
         {/* Analytics & Achievements */}

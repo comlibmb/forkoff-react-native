@@ -22,9 +22,11 @@ import {
   Folder,
   List,
   Grid,
+  ShieldOff,
 } from 'lucide-react-native';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
+import { useSessionSettingsStore } from '@/stores/session-settings.store';
 import { useTerminalStore } from '@/stores/terminal.store';
 import { ClaudeSession } from '@/types';
 import DirectoryBrowser from '@/components/directory/DirectoryBrowser';
@@ -51,6 +53,7 @@ export default function ClaudeToolDetailScreen() {
   } = useClaudeStore();
 
   const { getDevice } = useDeviceStore();
+  const unrestrictedMode = useSessionSettingsStore((s) => s.unrestrictedMode);
 
   const device = deviceId ? getDevice(deviceId) : undefined;
   const deviceSessions = deviceId ? sessions.get(deviceId) || [] : [];
@@ -208,26 +211,40 @@ export default function ClaudeToolDetailScreen() {
                 <Text className="text-dark-400 text-sm">{device?.name || 'Unknown Device'}</Text>
               </View>
             </View>
-            {/* Status Badge */}
-            <View
-              className={`px-3 py-1.5 rounded-full flex-row items-center gap-2 ${
-                isActive
-                  ? 'bg-primary-500/10 border border-primary-500/20'
-                  : 'bg-dark-500/30 border border-dark-500'
-              }`}
-            >
+            <View className="flex-row items-center gap-2">
+              {/* Unrestricted Badge */}
+              {unrestrictedMode && (
+                <View
+                  className="px-2.5 py-1.5 rounded-full flex-row items-center gap-1.5"
+                  style={{ backgroundColor: colors.warning[300] + '15', borderWidth: 1, borderColor: colors.warning[300] + '30' }}
+                >
+                  <ShieldOff size={12} color={colors.warning[300]} />
+                  <Text style={{ color: colors.warning[300], fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Unrestricted
+                  </Text>
+                </View>
+              )}
+              {/* Status Badge */}
               <View
-                className={`w-2 h-2 rounded-full ${
-                  isActive ? 'bg-primary-500' : 'bg-dark-300'
-                }`}
-              />
-              <Text
-                className={`text-xs font-bold uppercase tracking-wider ${
-                  isActive ? 'text-primary-500' : 'text-dark-200'
+                className={`px-3 py-1.5 rounded-full flex-row items-center gap-2 ${
+                  isActive
+                    ? 'bg-primary-500/10 border border-primary-500/20'
+                    : 'bg-dark-500/30 border border-dark-500'
                 }`}
               >
-                {isActive ? 'Active' : 'Inactive'}
-              </Text>
+                <View
+                  className={`w-2 h-2 rounded-full ${
+                    isActive ? 'bg-primary-500' : 'bg-dark-300'
+                  }`}
+                />
+                <Text
+                  className={`text-xs font-bold uppercase tracking-wider ${
+                    isActive ? 'text-primary-500' : 'text-dark-200'
+                  }`}
+                >
+                  {isActive ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
             </View>
           </View>
         </View>

@@ -7,6 +7,7 @@ import { unstable_batchedUpdates } from 'react-native';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 import { useUsageStore } from './usage.store';
+import { useSessionSettingsStore } from './session-settings.store';
 
 interface ClaudeState {
   // Session state per device
@@ -185,11 +186,13 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
+      const { unrestrictedMode } = useSessionSettingsStore.getState();
       wsService.emit('claude_resume_session', {
         deviceId,
         sessionKey: session.sessionKey,
         directory: session.directory,
         terminalSessionId,
+        dangerouslySkipPermissions: unrestrictedMode,
       });
 
       analyticsService.track('claude_session_resumed', {
@@ -233,10 +236,12 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
       // Increment session count
       incrementSessions();
 
+      const { unrestrictedMode } = useSessionSettingsStore.getState();
       wsService.emit('claude_start_session', {
         deviceId,
         directory,
         terminalSessionId,
+        dangerouslySkipPermissions: unrestrictedMode,
       });
 
       analyticsService.track('claude_session_started', {
