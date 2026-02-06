@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -7,9 +7,10 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useAnalyticsStore } from '@/stores/analytics.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
 import { UsageSummaryCard } from '@/components/analytics/UsageSummaryCard';
-import { UsageChart } from '@/components/analytics/UsageChart';
+import { WaveAreaChart } from '@/components/analytics/WaveAreaChart';
 import { PeriodSelector } from '@/components/analytics/PeriodSelector';
 import { AchievementBadge } from '@/components/achievements/AchievementBadge';
+import { AnalyticsSkeleton } from '@/components/analytics/AnalyticsSkeleton';
 import { wsService } from '@/services/websocket.service';
 
 export default function AnalyticsScreen() {
@@ -28,6 +29,11 @@ export default function AnalyticsScreen() {
   } = useAnalyticsStore();
 
   const { unlockedAchievements, fetchUnlockedAchievements } = useAchievementsStore();
+
+  // Skeleton crossfade state
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const skeletonOpacity = useRef(new Animated.Value(1)).current;
 
   // Handle realtime token usage updates
   const handleTokenUsage = useCallback((data: { usage?: { inputTokens?: number; outputTokens?: number } }) => {
@@ -59,10 +65,33 @@ export default function AnalyticsScreen() {
     };
   }, [handleTokenUsage]);
 
+  // Crossfade: skeleton out, content in
+  const hasData = usageStats !== null || dailyUsage.length > 0;
+  useEffect(() => {
+    if (!isLoading && isInitialLoad && hasData) {
+      Animated.parallel([
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setIsInitialLoad(false);
+      });
+    }
+  }, [isLoading, isInitialLoad, hasData, skeletonOpacity, contentOpacity]);
+
   const handleRefresh = () => {
     fetchUsageStats();
     fetchStreakInfo();
-    fetchUnlockedAchievements();
+    fetchUnlockedAchievements(true);
   };
 
   // Format large numbers
@@ -84,111 +113,123 @@ export default function AnalyticsScreen() {
         <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>Track your Claude usage</Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
-        }
-      >
-        {/* Period selector */}
-        <PeriodSelector selected={selectedPeriod} onSelect={setSelectedPeriod} theme={theme} />
+      {/* Skeleton overlay */}
+      {isInitialLoad && (
+        <Animated.View style={[StyleSheet.absoluteFill, styles.skeletonOverlay, { opacity: skeletonOpacity }]}>
+          <ScrollView style={styles.scrollView}>
+            <AnalyticsSkeleton />
+          </ScrollView>
+        </Animated.View>
+      )}
 
-        {/* Summary cards - Hero token card */}
-        <View style={styles.heroCard}>
-          <UsageSummaryCard
-            title="Total Tokens"
-            value={formatNumber(usageStats?.totalTokens || '0')}
-            icon="tokens"
-            large
-          />
-        </View>
+      {/* Main content */}
+      <Animated.View style={[styles.contentWrapper, { opacity: isInitialLoad ? contentOpacity : 1 }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={isLoading && !isInitialLoad} onRefresh={handleRefresh} />
+          }
+        >
+          {/* Period selector */}
+          <PeriodSelector selected={selectedPeriod} onSelect={setSelectedPeriod} theme={theme} />
 
-        {/* Secondary stats row */}
-        <View style={styles.cardsRow}>
-          <UsageSummaryCard
-            title="Sessions"
-            value={formatNumber(usageStats?.totalSessionCount || 0)}
-            icon="sessions"
-          />
-          <UsageSummaryCard
-            title="Streak"
-            value={`${streakInfo?.currentStreak || 0} days`}
-            subtitle={`${streakInfo?.totalActiveDays || 0} active`}
-            icon="streak"
-          />
-        </View>
-
-        {/* Usage chart */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Usage Trend</Text>
-          <UsageChart data={dailyUsage} height={240} />
-        </View>
-
-        {/* Token breakdown */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Token Breakdown</Text>
-          <View style={[styles.breakdownCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownItem}>
-                <View style={[styles.breakdownDot, { backgroundColor: theme.primary }]} />
-                <Text style={[styles.breakdownLabel, { color: theme.textTertiary }]}>Input Tokens</Text>
-              </View>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {formatNumber(usageStats?.totalInputTokens || '0')}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownItem}>
-                <View style={[styles.breakdownDot, { backgroundColor: theme.success }]} />
-                <Text style={[styles.breakdownLabel, { color: theme.textTertiary }]}>Output Tokens</Text>
-              </View>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                {formatNumber(usageStats?.totalOutputTokens || '0')}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Recent achievements */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Achievements</Text>
-            <Text
-              style={[styles.seeAllLink, { color: theme.primary }]}
-              onPress={() => router.push('/achievements')}
-            >
-              See All
-            </Text>
+          {/* Summary cards - Hero token card */}
+          <View style={styles.heroCard}>
+            <UsageSummaryCard
+              title="Total Tokens"
+              value={formatNumber(usageStats?.totalTokens || '0')}
+              icon="tokens"
+              large
+            />
           </View>
 
-          {recentAchievements.length === 0 ? (
-            <View style={[styles.emptyAchievements, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-              <Trophy size={32} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No achievements yet</Text>
-              <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
-                Keep using Claude to unlock achievements!
+          {/* Secondary stats row */}
+          <View style={styles.cardsRow}>
+            <UsageSummaryCard
+              title="Sessions"
+              value={formatNumber(usageStats?.totalSessionCount || 0)}
+              icon="sessions"
+            />
+            <UsageSummaryCard
+              title="Streak"
+              value={`${streakInfo?.currentStreak || 0} days`}
+              subtitle={`${streakInfo?.totalActiveDays || 0} active`}
+              icon="streak"
+            />
+          </View>
+
+          {/* Usage chart */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Usage Trend</Text>
+            <WaveAreaChart data={dailyUsage} height={260} />
+          </View>
+
+          {/* Token breakdown */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Token Breakdown</Text>
+            <View style={[styles.breakdownCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownItem}>
+                  <View style={[styles.breakdownDot, { backgroundColor: theme.primary }]} />
+                  <Text style={[styles.breakdownLabel, { color: theme.textTertiary }]}>Input Tokens</Text>
+                </View>
+                <Text style={[styles.breakdownValue, { color: theme.text }]}>
+                  {formatNumber(usageStats?.totalInputTokens || '0')}
+                </Text>
+              </View>
+              <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownItem}>
+                  <View style={[styles.breakdownDot, { backgroundColor: theme.success }]} />
+                  <Text style={[styles.breakdownLabel, { color: theme.textTertiary }]}>Output Tokens</Text>
+                </View>
+                <Text style={[styles.breakdownValue, { color: theme.text }]}>
+                  {formatNumber(usageStats?.totalOutputTokens || '0')}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Recent achievements */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Achievements</Text>
+              <Text
+                style={[styles.seeAllLink, { color: theme.primary }]}
+                onPress={() => router.push('/achievements')}
+              >
+                See All
               </Text>
             </View>
-          ) : (
-            <View style={styles.achievementsList}>
-              {recentAchievements.map((ua) => (
-                <AchievementBadge
-                  key={ua.achievement.id}
-                  name={ua.achievement.name}
-                  description={ua.achievement.description}
-                  iconName={ua.achievement.iconName}
-                  tier={ua.achievement.tier}
-                  unlocked
-                  showcased={ua.showcased}
-                  onPress={() => router.push('/achievements')}
-                />
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+
+            {recentAchievements.length === 0 ? (
+              <View style={[styles.emptyAchievements, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+                <Trophy size={32} color={theme.textTertiary} />
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No achievements yet</Text>
+                <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
+                  Keep using Claude to unlock achievements!
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.achievementsList}>
+                {recentAchievements.map((ua) => (
+                  <AchievementBadge
+                    key={ua.achievement.id}
+                    name={ua.achievement.name}
+                    description={ua.achievement.description}
+                    iconName={ua.achievement.iconName}
+                    tier={ua.achievement.tier}
+                    unlocked
+                    showcased={ua.showcased}
+                    onPress={() => router.push('/achievements')}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -202,6 +243,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 1,
+    zIndex: 2,
   },
   headerTitle: {
     fontSize: 28,
@@ -210,6 +252,13 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     marginTop: 4,
+  },
+  skeletonOverlay: {
+    top: 0,
+    zIndex: 1,
+  },
+  contentWrapper: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
