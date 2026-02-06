@@ -4,7 +4,7 @@ import { authService } from './auth.service';
 import { sentryService } from './sentry.service';
 import { analyticsService } from './analytics.service';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.forkoff.app/api';
 
 // SECURITY: Sensitive query parameter names to redact from logs
 const SENSITIVE_PARAMS = ['token', 'key', 'api_key', 'apikey', 'secret', 'password', 'auth', 'bearer', 'credential', 'session'];
