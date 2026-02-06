@@ -1,11 +1,10 @@
-import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet, Linking } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   User,
   Bell,
-  Shield,
   CreditCard,
   Moon,
   Sun,
@@ -216,14 +215,6 @@ export default function SettingsScreen() {
           />
           <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
-            icon={Shield}
-            title="Security"
-            subtitle="Password, 2FA, biometrics"
-            onPress={() => router.push('/settings/security')}
-            theme={theme}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingsItem
             icon={Github}
             title="GitHub"
             subtitle="Connected"
@@ -360,7 +351,7 @@ export default function SettingsScreen() {
           <SettingsItem
             icon={HelpCircle}
             title="Help Center"
-            onPress={() => {}}
+            onPress={() => Linking.openURL('https://forkoff-website.vercel.app/docs')}
             theme={theme}
             rightElement={<ExternalLink size={16} color={theme.textTertiary} />}
           />
@@ -368,7 +359,7 @@ export default function SettingsScreen() {
           <SettingsItem
             icon={MessageCircle}
             title="Contact Support"
-            onPress={() => {}}
+            onPress={() => Linking.openURL('mailto:support@forkoff.app')}
             theme={theme}
           />
         </SettingsSection>
