@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.forkoff.app",
+      "bundleIdentifier": "app.forkoff",
       "infoPlist": {
         "NSCameraUsageDescription": "ForkOff needs camera access to scan QR codes for device pairing.",
         "NSFaceIDUsageDescription": "ForkOff uses Face ID for secure authentication.",
@@ -28,10 +28,11 @@
         "backgroundColor": "#4424b2"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.forkoff.app",
+      "package": "app.forkoff",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -74,6 +75,7 @@
       "eas": {
         "projectId": "03d21bf0-3c1b-4020-90c9-09ce39cf1cd5"
       }
-    }
+    },
+    "owner": "zadnan2002"
   }
 }
