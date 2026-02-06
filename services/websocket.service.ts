@@ -8,7 +8,7 @@ import { DeviceStatus, ServerStatus, ApprovalRequest, CodeChange, ClaudeSession,
 const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV === 'development';
 
 // SECURITY: Get WebSocket URL and validate protocol
-const RAW_WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
+const RAW_WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'wss://api.forkoff.app';
 
 // SECURITY: Enforce secure WebSocket in production
 function getSecureWsUrl(): string {
