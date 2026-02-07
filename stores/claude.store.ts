@@ -110,6 +110,7 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
           if (existingIndex >= 0) {
             deviceSessions[existingIndex] = {
               ...deviceSessions[existingIndex],
+              directory: data.directory || deviceSessions[existingIndex].directory,
               state: data.state,
               lastUsedAt: data.lastUsedAt,
               transcriptPath: data.transcriptPath,
