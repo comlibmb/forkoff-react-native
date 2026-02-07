@@ -28,6 +28,7 @@ import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
 import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
+import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { AnimatedSplash } from '@/components/splash/AnimatedSplash';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import '../global.css';
@@ -148,6 +149,9 @@ function ThemedApp({
         onClose={() => setShowOnboardingPaywall(false)}
         limitType="onboarding"
       />
+
+      {/* One-time guided tutorial overlay */}
+      <TutorialOverlay />
     </>
   );
 }

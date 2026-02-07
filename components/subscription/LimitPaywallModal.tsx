@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
-import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket } from 'lucide-react-native';
+import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket, Users } from 'lucide-react-native';
 import { Button } from '@/components/ui';
 import { LimitType, VoucherRedemptionResult } from '@/types';
 import { colors } from '@/theme/colors';
@@ -233,6 +233,21 @@ export function LimitPaywallModal({
             </View>
             <Text className="text-dark-500 text-sm mt-1">Cancel anytime</Text>
           </View>
+
+          {/* Referral CTA */}
+          <TouchableOpacity
+            onPress={() => {
+              onClose();
+              router.push('/settings/referrals');
+            }}
+            className="bg-dark-800/50 rounded-xl px-4 py-3 flex-row items-center mb-6"
+          >
+            <Users size={18} color={colors.primary[400]} />
+            <Text className="text-primary-400 text-sm ml-3 flex-1">
+              Or earn free PRO months — refer friends
+            </Text>
+            <Text className="text-dark-500 text-lg ml-2">›</Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Voucher link */}

@@ -28,7 +28,7 @@ const OPTION_REGEX = /^[a-zA-Z0-9]:[\w\s]{1,30}$/;
  * @property {string} [deviceId] - Optional device ID that originated the request
  * @property {string[]} context - Recent output lines providing context for the approval decision
  * @property {string[]} options - Available response options in "key:label" format
- *                                (e.g., ['y:yes', 'n:no', 'p:plan'])
+ *                                (e.g., ['y:yes', 'n:no'])
  * @property {string} promptText - The actual approval prompt text from Claude CLI
  * @property {string} timestamp - ISO timestamp when the request was created
  */
@@ -38,7 +38,7 @@ export interface ClaudeApprovalRequest {
   sessionKey?: string;
   deviceId?: string;
   context: string[];       // Recent output lines for context
-  options: string[];       // Available options (e.g., ['y:yes', 'n:no', 'p:plan'])
+  options: string[];       // Available options (e.g., ['y:yes', 'n:no'])
   promptText: string;      // The actual prompt text
   timestamp: string;
 }
@@ -59,8 +59,8 @@ export interface ClaudeApprovalRequest {
  * // Returns: { key: 'y', label: 'yes' }
  *
  * @example
- * parseApprovalOption('n');
- * // Returns: { key: 'n', label: 'n' }
+ * parseApprovalOption('n:no');
+ * // Returns: { key: 'n', label: 'no' }
  */
 export function parseApprovalOption(option: string): { key: string; label: string } {
   const [key, label] = option.split(':');
@@ -251,7 +251,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
    * (e.g., 'y', 'n', 'p') is forwarded to the Claude CLI process.
    *
    * @param {string} approvalId - The unique identifier of the approval
-   * @param {string} response - The user's response (typically 'y', 'n', or 'p')
+   * @param {string} response - The user's response (typically 'y' or 'n')
    */
   respondToApproval: (approvalId: string, response: string) => {
     const state = get();
@@ -305,6 +305,8 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
    * service. When a request is received, it's added to the pending list and
    * immediately shown in the approval modal.
    *
+   * Edit tool requests are auto-approved since the user already has edit access.
+   *
    * Should be called once when the app initializes or when the user authenticates.
    *
    * @returns {() => void} Unsubscribe function to remove the WebSocket listener
@@ -329,6 +331,32 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
         });
         return;
       }
+
+      // Auto-approve Edit tool requests — user already has edit access
+      const isEditTool = /Claude (?:is using|wants to use):?\s*Edit/i.test(approval.promptText);
+      if (isEditTool) {
+        console.log('[ApprovalStore] Auto-approving Edit tool request:', approval.approvalId);
+        try {
+          wsService.respondToClaudeApproval(approval.approvalId, 'y', {
+            deviceId: approval.deviceId,
+            sessionKey: approval.sessionKey,
+          });
+          analyticsService.track('approval_auto_approved', {
+            approvalId: approval.approvalId,
+            tool: 'Edit',
+          });
+        } catch (error) {
+          console.error('[ApprovalStore] Error auto-approving Edit:', error);
+          sentryService.captureException(error, { context: 'auto_approve_edit', approvalId: approval.approvalId });
+        }
+        return;
+      }
+
+      // Filter out the 'plan' option — not used in mobile
+      approval.options = approval.options.filter(opt => {
+        const key = opt.split(':')[0]?.toLowerCase();
+        return key !== 'p';
+      });
 
       // Track approval requested event (don't include sensitive data)
       analyticsService.track('approval_requested', {

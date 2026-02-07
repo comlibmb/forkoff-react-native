@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
@@ -11,10 +11,18 @@ type AddMethod = 'qr' | 'code';
 
 export default function AddDeviceScreen() {
   const { theme } = useTheme();
-  const { pairDevice, isLoading } = useDeviceStore();
+  const { pairDevice, isLoading, devices } = useDeviceStore();
   const [method, setMethod] = useState<AddMethod>('qr');
   const [pairingCode, setPairingCode] = useState('');
   const [isPaired, setIsPaired] = useState(false);
+  const deviceCountOnMount = useRef(devices.length);
+
+  // Detect if a device was paired via the pair screen (user navigated back)
+  useEffect(() => {
+    if (!isPaired && devices.length > deviceCountOnMount.current) {
+      setIsPaired(true);
+    }
+  }, [devices.length, isPaired]);
 
   const handlePairWithCode = async () => {
     if (!pairingCode.trim()) {
