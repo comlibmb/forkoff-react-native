@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, memo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -11,6 +11,7 @@ import {
   WifiOff,
   ChevronRight,
   Activity,
+  Terminal,
 } from 'lucide-react-native';
 import { useDevices } from '@/hooks/useDevices';
 import { useClaudeStore } from '@/stores/claude.store';
@@ -262,6 +263,39 @@ const EmptyState = memo(({
   </View>
 ));
 
+// All devices offline banner
+const AllOfflineBanner = memo(({
+  theme,
+}: {
+  theme: ReturnType<typeof useTheme>['theme'];
+}) => (
+  <View
+    style={[
+      styles.offlineBanner,
+      {
+        backgroundColor: theme.backgroundSecondary,
+        borderColor: theme.border,
+      },
+    ]}
+  >
+    <View style={[styles.offlineBannerIcon, { backgroundColor: theme.warning + '15' }]}>
+      <WifiOff size={20} color={theme.warning} />
+    </View>
+    <Text style={[styles.offlineBannerTitle, { color: theme.text }]}>
+      No devices are online
+    </Text>
+    <Text style={[styles.offlineBannerText, { color: theme.textSecondary }]}>
+      Did you run ForkOff Connect on your computer?
+    </Text>
+    <View style={[styles.offlineBannerCommand, { backgroundColor: theme.background, borderColor: theme.border }]}>
+      <Terminal size={14} color={theme.textTertiary} />
+      <Text style={[styles.offlineBannerCommandText, { color: theme.textSecondary }]}>
+        npx forkoff connect
+      </Text>
+    </View>
+  </View>
+));
+
 const filters: { key: FilterType; label: string; icon?: typeof Wifi }[] = [
   { key: 'all', label: 'All' },
   { key: 'online', label: 'Online', icon: Wifi },
@@ -331,6 +365,13 @@ export default function DevicesScreen() {
     <EmptyState filter={filter} onAddDevice={handleAddDevice} theme={theme} />
   ), [filter, handleAddDevice, theme]);
 
+  const allOffline = devices.length > 0 && onlineCount === 0;
+
+  const ListHeaderComponent = useMemo(() => {
+    if (!allOffline) return null;
+    return <AllOfflineBanner theme={theme} />;
+  }, [allOffline, theme]);
+
   // Add device button for header
   const addButton = (
     <TouchableOpacity
@@ -378,6 +419,7 @@ export default function DevicesScreen() {
         renderItem={renderDevice}
         keyExtractor={keyExtractor}
         ListEmptyComponent={ListEmptyComponent}
+        ListHeaderComponent={ListHeaderComponent}
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
           <RefreshControl
@@ -568,5 +610,43 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  offlineBanner: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  offlineBannerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  offlineBannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  offlineBannerText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  offlineBannerCommand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  offlineBannerCommandText: {
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
