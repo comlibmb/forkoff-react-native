@@ -21,11 +21,13 @@ import {
   Clock,
   Gift,
   Users,
+  Compass,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useReferralStore } from '@/stores/referral.store';
 import { useSessionSettingsStore } from '@/stores/session-settings.store';
+import { useTutorialStore } from '@/stores/tutorial.store';
 import { useState, useEffect } from 'react';
 
 interface SettingsItemProps {
@@ -116,11 +118,20 @@ export default function SettingsScreen() {
   const { isDark, theme, toggleTheme } = useTheme();
   const { stats: referralStats, fetchStats: fetchReferralStats } = useReferralStore();
   const { unrestrictedMode, hasSeenWarning, setUnrestrictedMode, setHasSeenWarning } = useSessionSettingsStore();
+  const { resetTutorial, startTutorial: startTutorialAction } = useTutorialStore();
   const [notifications, setNotifications] = useState(true);
 
   useEffect(() => {
     fetchReferralStats();
   }, []);
+
+  const handleReplayTutorial = () => {
+    resetTutorial();
+    setTimeout(() => {
+      startTutorialAction();
+      router.navigate('/(tabs)/projects');
+    }, 100);
+  };
 
   const handleSignOut = async () => {
     const confirmed = await alert.confirm(
@@ -286,6 +297,14 @@ export default function SettingsScreen() {
               }
             />
           </View>
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Compass}
+            title="Replay Tutorial"
+            subtitle="Take the guided tour again"
+            onPress={handleReplayTutorial}
+            theme={theme}
+          />
         </SettingsSection>
 
         {/* Analytics & Achievements */}
@@ -343,6 +362,14 @@ export default function SettingsScreen() {
             }
             onPress={() => router.push('/settings/referrals')}
             theme={theme}
+            rightElement={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {(referralStats?.rewardMonthsAvailable ?? 0) > 0 && (
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
+                )}
+                <ChevronRight size={20} color={theme.textTertiary} />
+              </View>
+            }
           />
         </SettingsSection>
 

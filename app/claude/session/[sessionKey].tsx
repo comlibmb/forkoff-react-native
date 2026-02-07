@@ -11,10 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  Animated,
+  Easing,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, Send, Brain, Zap, Clock, ShieldOff } from 'lucide-react-native';
+import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, ArrowUp, Brain, Zap, Clock, ShieldOff } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
 import { alert } from '@/components/ui/AlertModal';
 import { useClaudeStore } from '@/stores/claude.store';
@@ -109,6 +112,15 @@ export default function ClaudeSessionScreen() {
   const contentHeightRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
 
+  // Premium input state & animations
+  const [isFocused, setIsFocused] = useState(false);
+  const sendButtonScale = useRef(new Animated.Value(1)).current;
+  const sendButtonBg = useRef(new Animated.Value(0)).current;
+  const focusBorder = useRef(new Animated.Value(0)).current;
+  const summoningGlow = useRef(new Animated.Value(0.5)).current;
+  const takeOverScale = useRef(new Animated.Value(1)).current;
+  const upgradeScale = useRef(new Animated.Value(1)).current;
+
   const session = useClaudeStore((state) =>
     state.sessions
       .get(deviceId as string)
@@ -179,6 +191,62 @@ export default function ClaudeSessionScreen() {
   useEffect(() => {
     setSessionUnrestricted(globalUnrestricted);
   }, [globalUnrestricted]);
+
+  // Animated interpolations for premium input
+  const sendBgColor = sendButtonBg.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.backgroundTertiary, colors.primary[600]],
+  });
+  const cardBorderColor = focusBorder.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.border, theme.primary + '40'],
+  });
+  const inputBorderColor = focusBorder.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', theme.primary + '80'],
+  });
+
+  // Animate send button bg when inputText changes
+  useEffect(() => {
+    Animated.timing(sendButtonBg, {
+      toValue: inputText.trim() && !isSending && isSessionReady ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [inputText, isSending, isSessionReady]);
+
+  // Animate focus border
+  useEffect(() => {
+    Animated.timing(focusBorder, {
+      toValue: isFocused ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused]);
+
+  // Pulsing glow for summoning state
+  useEffect(() => {
+    if (isTakingOver) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(summoningGlow, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(summoningGlow, {
+            toValue: 0.5,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [isTakingOver]);
 
   // Track session opened
   useEffect(() => {
@@ -835,6 +903,23 @@ export default function ClaudeSessionScreen() {
     // Clear input immediately to prevent capturing the same message twice
     setInputText('');
 
+    // Haptic feedback + pop animation
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.sequence([
+      Animated.spring(sendButtonScale, {
+        toValue: 0.85,
+        tension: 200,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+      Animated.spring(sendButtonScale, {
+        toValue: 1,
+        tension: 200,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     // Use ref guard to prevent rapid duplicate sends (state may not update fast enough)
     if (sendingRef.current) {
       console.log('[Session] Blocked duplicate send - already sending');
@@ -1378,9 +1463,23 @@ export default function ClaudeSessionScreen() {
           {/* Bottom: Take Over button OR Input field */}
           <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
             {!hasTakenOver ? (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+              /* State 1: Before Take Over */
+              <View style={{
+                backgroundColor: theme.card,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 16,
+                marginHorizontal: 12,
+                marginVertical: 8,
+                padding: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 4,
+              }}>
                 {/* Per-session unrestricted mode toggle */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: sessionUnrestricted ? theme.warning + '15' : colors.dark[800], borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: sessionUnrestricted ? theme.warning + '15' : colors.dark[800], borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <ShieldOff size={14} color={sessionUnrestricted ? theme.warning : theme.textTertiary} />
                     <Text style={{ color: sessionUnrestricted ? theme.warning : theme.textSecondary, fontSize: 13, fontWeight: '600' }}>Unrestricted</Text>
@@ -1393,102 +1492,208 @@ export default function ClaudeSessionScreen() {
                     style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                   />
                 </View>
-                <TouchableOpacity
-                  onPress={handleTakeOver}
-                  disabled={isTakingOver || !session}
-                  style={{
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isTakingOver || !session ? theme.backgroundSecondary : colors.primary[600]
-                  }}
-                >
-                  {isTakingOver ? (
-                    <>
-                      <ActivityIndicator size="small" color="white" />
-                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Connecting...</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Play size={18} color="white" />
-                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Take Over Session</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                <Animated.View style={{ transform: [{ scale: takeOverScale }] }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      Animated.sequence([
+                        Animated.spring(takeOverScale, { toValue: 0.97, tension: 200, friction: 10, useNativeDriver: true }),
+                        Animated.spring(takeOverScale, { toValue: 1, tension: 200, friction: 10, useNativeDriver: true }),
+                      ]).start();
+                      handleTakeOver();
+                    }}
+                    disabled={isTakingOver || !session}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isTakingOver || !session ? theme.backgroundSecondary : colors.primary[600],
+                    }}
+                  >
+                    {isTakingOver ? (
+                      <>
+                        <Animated.View style={{ opacity: summoningGlow }}>
+                          <ActivityIndicator size="small" color="white" />
+                        </Animated.View>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Connecting...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={18} color="white" />
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Take Over Session</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
               </View>
             ) : isTakingOver ? (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              /* State 2: Summoning Claude */
+              <View style={{
+                backgroundColor: theme.card,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 16,
+                marginHorizontal: 12,
+                marginVertical: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: colors.success[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '700' }}>$</Text>
+                  <Animated.Text style={{ color: colors.success[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '700', opacity: summoningGlow }}>$</Animated.Text>
                   <Text style={{ color: theme.textSecondary, fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
                   <AnimatedConnectDots />
                 </View>
               </View>
             ) : isLimitReached ? (
-              // Limit reached - show upgrade UI
-              <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+              /* State 3: Limit Reached */
+              <View style={{
+                backgroundColor: theme.card,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 16,
+                marginHorizontal: 12,
+                marginVertical: 8,
+                padding: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 4,
+              }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                   <Text style={{ color: theme.textSecondary, fontSize: 13, fontFamily: 'monospace' }}>
                     Daily limit reached ({limitCurrentUsage}/{limitMax} messages)
                   </Text>
                 </View>
-                <TouchableOpacity
-                  onPress={() => router.push('/settings/subscription')}
-                  style={{
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: colors.primary[600],
-                  }}
-                >
-                  <Zap size={18} color="white" />
-                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>
-                    Upgrade to Pro
-                  </Text>
-                  {countdownText && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                      <Clock size={12} color="rgba(255,255,255,0.8)" />
-                      <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace' }}>
-                        {countdownText}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                <Animated.View style={{ transform: [{ scale: upgradeScale }] }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      Animated.sequence([
+                        Animated.spring(upgradeScale, { toValue: 0.97, tension: 200, friction: 10, useNativeDriver: true }),
+                        Animated.spring(upgradeScale, { toValue: 1, tension: 200, friction: 10, useNativeDriver: true }),
+                      ]).start();
+                      router.push('/settings/subscription');
+                    }}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: colors.primary[600],
+                    }}
+                  >
+                    <Zap size={18} color="white" />
+                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>
+                      Upgrade to Pro
+                    </Text>
+                    {countdownText && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                        <Clock size={12} color="rgba(255,255,255,0.8)" />
+                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace' }}>
+                          {countdownText}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
               </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>
-                <TextInput
-                  ref={inputRef}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="Type a message to Claude..."
-                  placeholderTextColor={theme.textTertiary}
-                  style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, color: theme.text, fontFamily: 'monospace', fontSize: 14 }}
-                  onSubmitEditing={handleSendMessage}
-                  returnKeyType="send"
-                  editable={!isSending && isSessionReady}
-                />
-                <TouchableOpacity
-                  onPress={handleSendMessage}
-                  disabled={!inputText.trim() || isSending || !isSessionReady}
-                  style={{
-                    marginLeft: 8,
-                    padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: inputText.trim() && !isSending && isSessionReady ? colors.primary[600] : theme.backgroundSecondary
-                  }}
-                >
-                  {isSending ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Send size={20} color={inputText.trim() && isSessionReady ? 'white' : theme.textTertiary} />
-                  )}
-                </TouchableOpacity>
-              </View>
+              /* State 4: Message Input — Main Redesign */
+              <Animated.View style={{
+                backgroundColor: theme.card,
+                borderWidth: 1,
+                borderColor: cardBorderColor,
+                borderRadius: 16,
+                marginHorizontal: 12,
+                marginVertical: 8,
+                padding: 8,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 4,
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                opacity: isWaitingForResponse && !inputText ? 0.7 : 1,
+              }}>
+                <Animated.View style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: inputBorderColor,
+                  borderRadius: 10,
+                  backgroundColor: theme.backgroundSecondary,
+                }}>
+                  <TextInput
+                    ref={inputRef}
+                    value={inputText}
+                    onChangeText={setInputText}
+                    placeholder={isWaitingForResponse ? "Waiting for Claude..." : "Message Claude..."}
+                    placeholderTextColor={theme.textTertiary}
+                    multiline={true}
+                    blurOnSubmit={false}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      color: theme.text,
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      minHeight: 44,
+                      maxHeight: 120,
+                      textAlignVertical: 'center',
+                    }}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    editable={!isSending && isSessionReady}
+                  />
+                </Animated.View>
+                <Animated.View style={{
+                  transform: [{ scale: sendButtonScale }],
+                  marginLeft: 8,
+                  marginBottom: 3,
+                }}>
+                  <TouchableOpacity
+                    onPress={handleSendMessage}
+                    disabled={!inputText.trim() || isSending || !isSessionReady}
+                    activeOpacity={0.7}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Animated.View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: sendBgColor,
+                    }}>
+                      {isSending ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <ArrowUp size={18} color={inputText.trim() && isSessionReady ? 'white' : theme.textTertiary} />
+                      )}
+                    </Animated.View>
+                  </TouchableOpacity>
+                </Animated.View>
+              </Animated.View>
             )}
           </View>
         </KeyboardAvoidingView>

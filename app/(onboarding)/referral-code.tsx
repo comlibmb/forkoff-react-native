@@ -1,37 +1,41 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Github, CheckCircle, ExternalLink, ArrowRight } from 'lucide-react-native';
-import { authService } from '@/services/auth.service';
-import * as WebBrowser from 'expo-web-browser';
+import { ArrowLeft, CheckCircle, ArrowRight, Users } from 'lucide-react-native';
+import { useReferralStore } from '@/stores/referral.store';
 import { useTheme } from '@/theme/ThemeProvider';
 
-export default function ConnectGitHubScreen() {
+export default function ReferralCodeScreen() {
   const { theme } = useTheme();
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const { applyReferralCode } = useReferralStore();
+  const [code, setCode] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
+  const [isApplied, setIsApplied] = useState(false);
 
-  const handleConnectGitHub = async () => {
-    setIsConnecting(true);
+  const handleApplyCode = async () => {
+    if (!code.trim()) {
+      alert.error('Error', 'Please enter a referral code');
+      return;
+    }
 
+    setIsApplying(true);
     try {
-      const { url } = await authService.signInWithGitHub();
-
-      const result = await WebBrowser.openAuthSessionAsync(url, 'forkoff://auth/callback');
-
-      if (result.type === 'success') {
-        setIsConnected(true);
+      const result = await applyReferralCode(code);
+      if (result.success) {
+        setIsApplied(true);
+      } else {
+        alert.error('Invalid Code', result.message || 'This referral code is not valid.');
       }
     } catch (error) {
-      alert.error('Error', 'Failed to connect GitHub. Please try again.');
+      alert.error('Error', 'Failed to apply referral code. Please try again.');
     } finally {
-      setIsConnecting(false);
+      setIsApplying(false);
     }
   };
 
-  if (isConnected) {
+  if (isApplied) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={{ flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
@@ -55,15 +59,15 @@ export default function ConnectGitHubScreen() {
           </View>
 
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 16 }}>
-            GitHub Connected!
+            Referral Applied!
           </Text>
 
           <Text style={{ color: theme.textSecondary, textAlign: 'center', fontSize: 16, marginBottom: 32 }}>
-            You can now access your repositories and manage your code from ForkOff
+            You're all set. Welcome to ForkOff!
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push('/(onboarding)/referral-code')}
+            onPress={() => router.replace('/(tabs)')}
             style={{
               backgroundColor: theme.primary,
               borderRadius: 12,
@@ -101,104 +105,97 @@ export default function ConnectGitHubScreen() {
         </TouchableOpacity>
 
         <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
-          Connect GitHub
+          Got a referral code?
         </Text>
         <Text style={{ fontSize: 16, color: theme.textSecondary, marginBottom: 32 }}>
-          Link your GitHub account to access repositories
+          If a friend invited you, enter their code to get started
         </Text>
 
-        {/* Benefits */}
+        {/* Referral Code Input */}
         <View style={{ flex: 1 }}>
-          <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24 }}>
-            <View style={{ alignItems: 'center', marginBottom: 24 }}>
-              <View
-                style={{
-                  width: 64,
-                  height: 64,
-                  backgroundColor: theme.background,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  borderRadius: 32,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 16,
-                }}
-              >
-                <Github size={32} color={theme.textSecondary} />
-              </View>
-              <Text style={{ color: theme.text, fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>
-                GitHub Integration
-              </Text>
-            </View>
-
-            <View style={{ gap: 16 }}>
-              {[
-                'Browse and clone your repositories',
-                'Create new repos from mobile',
-                'View commit history and branches',
-                'Manage pull requests on the go',
-              ].map((benefit, index) => (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <CheckCircle size={20} color={theme.success} />
-                  <Text style={{ color: theme.textSecondary, marginLeft: 12 }}>{benefit}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
           <View
             style={{
-              marginTop: 24,
               backgroundColor: theme.backgroundSecondary,
               borderWidth: 1,
               borderColor: theme.border,
               borderRadius: 12,
-              padding: 16,
-              flexDirection: 'row',
+              padding: 24,
               alignItems: 'center',
             }}
           >
-            <ExternalLink size={20} color={theme.textTertiary} />
-            <Text style={{ color: theme.textTertiary, marginLeft: 12, flex: 1, fontSize: 14 }}>
-              You'll be redirected to GitHub to authorize ForkOff
-            </Text>
-          </View>
-        </View>
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                backgroundColor: theme.background,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+              }}
+            >
+              <Users size={32} color={theme.textSecondary} />
+            </View>
 
-        {/* Actions */}
-        <View style={{ gap: 16 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              Referral Code
+            </Text>
+            <TextInput
+              placeholder="e.g., ABC12345"
+              placeholderTextColor={theme.textTertiary}
+              value={code}
+              onChangeText={(text) => setCode(text.toUpperCase())}
+              autoCapitalize="characters"
+              maxLength={8}
+              style={{
+                backgroundColor: theme.background,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+                color: theme.text,
+                fontSize: 18,
+                fontFamily: 'monospace',
+                textAlign: 'center',
+                letterSpacing: 4,
+                width: '100%',
+              }}
+            />
+          </View>
+
           <TouchableOpacity
-            onPress={handleConnectGitHub}
-            disabled={isConnecting}
+            onPress={handleApplyCode}
+            disabled={code.length !== 8 || isApplying}
             style={{
               backgroundColor: theme.primary,
               borderRadius: 12,
               padding: 16,
-              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
+              marginTop: 24,
               shadowColor: theme.primary,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.2,
               shadowRadius: 12,
               elevation: 5,
-              opacity: isConnecting ? 0.7 : 1,
+              opacity: code.length !== 8 || isApplying ? 0.5 : 1,
             }}
           >
-            <Github size={20} color={theme.textInverse} />
             <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>
-              {isConnecting ? 'Connecting...' : 'Connect GitHub'}
+              {isApplying ? 'Applying...' : 'Apply Code'}
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push('/(onboarding)/referral-code')}
-            style={{ padding: 16, alignItems: 'center' }}
-          >
-            <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>
-          </TouchableOpacity>
         </View>
+
+        {/* Skip */}
+        <TouchableOpacity
+          onPress={() => router.replace('/(tabs)')}
+          style={{ marginTop: 16, padding: 16, alignItems: 'center' }}
+        >
+          <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );

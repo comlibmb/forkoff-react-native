@@ -1,9 +1,23 @@
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Home, Laptop, FolderGit2, Settings, BarChart3 } from 'lucide-react-native';
+import { View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useReferralStore } from '@/stores/referral.store';
+import { useTutorialStore } from '@/stores/tutorial.store';
 
 export default function TabLayout() {
   const { theme, isDark } = useTheme();
+  const { stats: referralStats } = useReferralStore();
+  const { hasCompletedTutorial, isTutorialActive, startTutorial } = useTutorialStore();
+  const hasHydrated = useTutorialStore.persist.hasHydrated();
+
+  useEffect(() => {
+    if (hasHydrated && !hasCompletedTutorial && !isTutorialActive) {
+      const timer = setTimeout(() => startTutorial(), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [hasHydrated, hasCompletedTutorial, isTutorialActive]);
 
   return (
     <Tabs
@@ -56,7 +70,24 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <View style={{ position: 'relative' }}>
+              <Settings size={size} color={color} />
+              {(referralStats?.rewardMonthsAvailable ?? 0) > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -4,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: theme.primary,
+                  }}
+                />
+              )}
+            </View>
+          ),
         }}
       />
     </Tabs>

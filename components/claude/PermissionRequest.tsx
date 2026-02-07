@@ -27,14 +27,14 @@ export interface PermissionRequestData {
   details?: any;
 }
 
-// Claude approval request (yes/no/plan prompts from CLI)
+// Claude approval request (yes/no prompts from CLI)
 export interface ClaudeApprovalRequestData {
   approvalId: string;
   terminalSessionId: string;
   sessionKey?: string;
   deviceId?: string;
   context: string[];       // Recent output lines for context
-  options: string[];       // Available options (e.g., ['y:yes', 'n:no', 'p:plan'])
+  options: string[];       // Available options (e.g., ['y:yes', 'n:no'])
   promptText: string;      // The actual prompt text
 }
 
@@ -396,12 +396,6 @@ function getOptionColor(key: string): { bg: string; text: string; border: string
         text: 'text-error-400',
         border: 'border-error-600',
       };
-    case 'p':
-      return {
-        bg: 'bg-warning-600/20',
-        text: 'text-warning-400',
-        border: 'border-warning-600',
-      };
     default:
       return {
         bg: 'bg-dark-600/20',
@@ -414,7 +408,8 @@ function getOptionColor(key: string): { bg: string; text: string; border: string
 /**
  * ClaudeApproval - Claude approval request UI with macOS styling
  *
- * Shows a modal when Claude needs user input (yes/no/plan).
+ * Shows a modal when Claude needs user input (yes/no).
+ * Edit tool requests are auto-approved in the store.
  * Uses macOS-style title bar with traffic light buttons.
  */
 export function ClaudeApproval({
@@ -595,7 +590,7 @@ export function ClaudeApproval({
                     onPress={() => handleRespond(option.key)}
                     className="flex-1 py-3 rounded-lg items-center"
                     style={{
-                      backgroundColor: isYes ? colors.primary[600] : isNo ? theme.backgroundTertiary : colors.warning[600],
+                      backgroundColor: isYes ? colors.primary[600] : theme.backgroundTertiary,
                       borderWidth: isNo ? 1 : 0,
                       borderColor: theme.border,
                       maxWidth: 100,
@@ -603,7 +598,7 @@ export function ClaudeApproval({
                   >
                     <Text
                       className="font-bold text-sm uppercase"
-                      style={{ color: isNo ? theme.textSecondary : '#fff' }}
+                      style={{ color: isYes ? '#fff' : theme.textSecondary }}
                     >
                       {option.label}
                     </Text>
