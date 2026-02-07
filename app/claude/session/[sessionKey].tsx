@@ -17,6 +17,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, ArrowUp, Brain, Zap, Clock, ShieldOff } from 'lucide-react-native';
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
 import { alert } from '@/components/ui/AlertModal';
@@ -111,6 +112,9 @@ export default function ClaudeSessionScreen() {
   const scrollPositionRef = useRef(0);
   const contentHeightRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
+  const viewportHeightRef = useRef(0);
+  const scrollToBottomOpacity = useRef(new Animated.Value(0)).current;
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   // Premium input state & animations
   const [isFocused, setIsFocused] = useState(false);
@@ -813,14 +817,28 @@ export default function ClaudeSessionScreen() {
   }, [deviceId, sessionKey, session?.transcriptPath, currentOffset, hasMore, isLoadingMore]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset } = event.nativeEvent;
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
     scrollPositionRef.current = contentOffset.y;
+    viewportHeightRef.current = layoutMeasurement.height;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    const shouldShow = distanceFromBottom > 100;
+    if (shouldShow !== showScrollToBottom) {
+      setShowScrollToBottom(shouldShow);
+    }
 
     // Load more when scrolled near top (within 100px)
     if (contentOffset.y < 100 && hasMore && !isLoadingMore) {
       loadMore();
     }
-  }, [hasMore, isLoadingMore, loadMore]);
+  }, [hasMore, isLoadingMore, loadMore, showScrollToBottom]);
+
+  useEffect(() => {
+    Animated.timing(scrollToBottomOpacity, {
+      toValue: showScrollToBottom ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [showScrollToBottom]);
 
   const handleToggleSessionUnrestricted = async (value: boolean) => {
     if (!value) {
@@ -1169,13 +1187,21 @@ export default function ClaudeSessionScreen() {
       }
     }
 
-    // User input - shown as prompt
+    // User input - shown as prompt with accent card
     if (isUser) {
       return (
-        <View style={{ marginBottom: 16 }}>
+        <View style={{
+          marginBottom: 16,
+          backgroundColor: colors.primary[500] + '0C',
+          borderRadius: 10,
+          borderLeftWidth: 2,
+          borderLeftColor: colors.primary[400],
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+        }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            <Text style={{ color: theme.primaryLight, fontFamily: 'monospace', marginRight: 8 }}>{'>'}</Text>
-            <Text style={{ color: theme.text, fontFamily: 'monospace', flex: 1 }}>
+            <Text style={{ color: colors.primary[400], fontFamily: 'monospace', marginRight: 8, fontSize: 14, lineHeight: 20, fontWeight: '600' }}>{'>'}</Text>
+            <Text style={{ color: '#ffffff', fontFamily: 'monospace', flex: 1, fontSize: 14, lineHeight: 20 }}>
               {item.content?.text}
             </Text>
           </View>
@@ -1198,27 +1224,27 @@ export default function ClaudeSessionScreen() {
       const fileName = filePath?.split(/[/\\]/).pop();
 
       return (
-        <View style={{ marginBottom: 8 }}>
+        <View style={{ marginBottom: 6, backgroundColor: colors.dark[800], borderRadius: 8, overflow: 'hidden' }}>
           <TouchableOpacity
             onPress={() => toggleToolExpand(item.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10 }}
           >
             {isExpanded ? (
-              <ChevronDown size={14} color={isWrite ? theme.primaryLight : theme.textTertiary} />
+              <ChevronDown size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
             ) : (
-              <ChevronRight size={14} color={isWrite ? theme.primaryLight : theme.textTertiary} />
+              <ChevronRight size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
             )}
-            <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 4, color: isWrite ? theme.primaryLight : theme.textTertiary }}>
+            <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 8, color: isWrite ? colors.primary[400] : colors.dark[200], fontWeight: '500' }}>
               {item.content?.toolName}
             </Text>
             {fileName && (
-              <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12, marginLeft: 8 }}>
+              <Text style={{ color: colors.dark[300], fontFamily: 'monospace', fontSize: 12, marginLeft: 8 }}>
                 {fileName}
               </Text>
             )}
           </TouchableOpacity>
           {isExpanded && (
-            <View style={{ marginLeft: 16, paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: theme.backgroundTertiary }}>
+            <View style={{ marginLeft: 16, paddingLeft: 10, paddingBottom: 8, paddingRight: 10, borderLeftWidth: 1, borderLeftColor: colors.dark[600] }}>
               {/* Show file content as diff for Write operations */}
               {isWrite && hasFileContent ? (
                 renderNewFileContent(writeData!.content!, filePath)
@@ -1240,36 +1266,37 @@ export default function ClaudeSessionScreen() {
       if (!hasContent) return null;
 
       return (
-        <View style={{ marginBottom: 8, marginLeft: 16 }}>
+        <View style={{ marginBottom: 6, marginLeft: 12, backgroundColor: colors.dark[800] + '80', borderRadius: 6, overflow: 'hidden' }}>
           <TouchableOpacity
             onPress={() => toggleToolExpand(item.id)}
-            style={{ flexDirection: 'row', alignItems: 'center' }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10 }}
           >
             {isExpanded ? (
-              <ChevronDown size={12} color={hasDiff ? theme.primaryLight : theme.textTertiary} />
+              <ChevronDown size={14} color={hasDiff ? colors.primary[400] : colors.dark[300]} />
             ) : (
-              <ChevronRight size={12} color={hasDiff ? theme.primaryLight : theme.textTertiary} />
+              <ChevronRight size={14} color={hasDiff ? colors.primary[400] : colors.dark[300]} />
             )}
             <Text style={{
               fontFamily: 'monospace',
               fontSize: 12,
-              marginLeft: 4,
+              marginLeft: 6,
+              fontWeight: '500',
               color: item.content?.isError
                 ? theme.error
                 : hasDiff
-                  ? theme.primaryLight
-                  : theme.textTertiary
+                  ? colors.primary[400]
+                  : colors.dark[200]
             }}>
               {item.content?.isError ? 'error' : hasDiff ? item.content?.text || 'diff' : 'result'}
             </Text>
             {item.content?.filePath && (
-              <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 8, color: theme.border }}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 8, color: colors.dark[300] }}>
                 {item.content.filePath.split(/[/\\]/).pop()}
               </Text>
             )}
           </TouchableOpacity>
           {isExpanded && (
-            <View style={{ marginLeft: 16, marginTop: 4 }}>
+            <View style={{ marginLeft: 16, marginTop: 2, paddingBottom: 8, paddingHorizontal: 10 }}>
               {hasDiff ? (
                 renderDiff(item.content!.diff!)
               ) : (
@@ -1290,14 +1317,14 @@ export default function ClaudeSessionScreen() {
     const cleanText = hasSystemReminderTags(rawText) ? stripSystemReminderTags(rawText) : rawText;
 
     return (
-      <View style={{ marginBottom: 16 }}>
+      <View style={{ marginBottom: 16, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: colors.dark[600] }}>
         {/* Show system reminders if present */}
         {systemReminders.map((reminder, idx) => (
           <SystemReminderBlock key={`reminder-${idx}`} content={reminder} />
         ))}
         {/* Main assistant text */}
         {cleanText && (
-          <Text style={{ color: theme.text, fontFamily: 'monospace', fontSize: 14, lineHeight: 20 }}>
+          <Text style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: 14, lineHeight: 22 }}>
             {cleanText}
           </Text>
         )}
@@ -1329,32 +1356,37 @@ export default function ClaudeSessionScreen() {
         currentUsage={limitCurrentUsage}
         limit={limitMax}
       />
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.dark[900] }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
+          {/* Header — unified compact bar */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.dark[700], backgroundColor: colors.dark[800] }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              style={{ flexDirection: 'row', alignItems: 'center' }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ padding: 4, marginRight: 10 }}
             >
-              <ArrowLeft size={20} color={theme.textSecondary} />
-              <Text style={{ color: theme.textSecondary, marginLeft: 8, fontSize: 14 }}>Back</Text>
+              <ArrowLeft size={20} color={colors.dark[200]} />
             </TouchableOpacity>
 
-            {/* Center: Directory name or thinking indicator */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center', marginHorizontal: 16 }}>
+            {/* Center: Title + path stacked, or thinking indicator */}
+            <View style={{ flex: 1, marginRight: 12 }}>
               {isThinking ? (
                 <ThinkingIndicator isThinking={true} />
               ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Terminal size={14} color={theme.primary} />
-                  <Text style={{ color: colors.dark[100], fontFamily: 'monospace', fontSize: 14, marginLeft: 8 }} numberOfLines={1}>
-                    {directoryName}
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Terminal size={13} color={colors.primary[400]} />
+                    <Text style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: 14, fontWeight: '600', marginLeft: 6 }} numberOfLines={1}>
+                      {directoryName}
+                    </Text>
+                  </View>
+                  <Text style={{ color: colors.dark[300], fontFamily: 'monospace', fontSize: 11, marginTop: 2, marginLeft: 19 }} numberOfLines={1}>
+                    {session?.directory}
                   </Text>
-                </View>
+                </>
               )}
             </View>
 
@@ -1367,17 +1399,10 @@ export default function ClaudeSessionScreen() {
                   style="header"
                 />
               )}
-              <Text style={{ color: theme.border, fontFamily: 'monospace', fontSize: 12 }}>
+              <Text style={{ color: colors.dark[400], fontFamily: 'monospace', fontSize: 11 }}>
                 {entries.length}/{totalEntries}
               </Text>
             </View>
-          </View>
-
-          {/* Session path */}
-          <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(0, 0, 0, 0.5)', borderBottomWidth: 1, borderBottomColor: colors.dark[800] }}>
-            <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }} numberOfLines={1}>
-              {session?.directory}
-            </Text>
           </View>
 
           {/* Task Progress Panel */}
@@ -1407,7 +1432,8 @@ export default function ClaudeSessionScreen() {
             <TouchableOpacity
               onPress={loadMore}
               disabled={isLoadingMore}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, backgroundColor: 'rgba(0, 0, 0, 0.25)' }}
+              activeOpacity={0.7}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: colors.dark[800], borderRadius: 10, marginHorizontal: 16, marginVertical: 6, borderWidth: 1, borderColor: colors.dark[700] }}
             >
               {isLoadingMore ? (
                 <ActivityIndicator size="small" color={theme.textTertiary} />
@@ -1426,28 +1452,55 @@ export default function ClaudeSessionScreen() {
           ) : entries.length === 0 ? (
             <TerminalLoader variant="empty" />
           ) : (
-            <ScrollView
-              ref={scrollViewRef}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              onContentSizeChange={(w, h) => {
-                contentHeightRef.current = h;
-                // Scroll to bottom on initial load
-                if (currentOffset <= INITIAL_LOAD) {
-                  scrollViewRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              {entries.map((entry, index) => (
-                <React.Fragment key={`${entry.id}-${entry.lineNumber}-${index}`}>
-                  {renderEntry(entry)}
-                </React.Fragment>
-              ))}
-            </ScrollView>
+            <View style={{ flex: 1, position: 'relative' }}>
+              <ScrollView
+                ref={scrollViewRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 16, paddingBottom: 20 }}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                onContentSizeChange={(w, h) => {
+                  contentHeightRef.current = h;
+                  // Scroll to bottom on initial load
+                  if (currentOffset <= INITIAL_LOAD) {
+                    scrollViewRef.current?.scrollToEnd({ animated: false });
+                  }
+                }}
+                showsVerticalScrollIndicator={true}
+                scrollIndicatorInsets={{ right: 1 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {entries.map((entry, index) => (
+                  <React.Fragment key={`${entry.id}-${entry.lineNumber}-${index}`}>
+                    {renderEntry(entry)}
+                  </React.Fragment>
+                ))}
+              </ScrollView>
+              <Animated.View
+                pointerEvents={showScrollToBottom ? 'auto' : 'none'}
+                style={{
+                  position: 'absolute',
+                  right: 16,
+                  bottom: 8,
+                  opacity: scrollToBottomOpacity,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                  activeOpacity={0.7}
+                  style={{
+                    width: 38, height: 38, borderRadius: 19,
+                    backgroundColor: colors.dark[700],
+                    borderWidth: 1, borderColor: colors.dark[500],
+                    alignItems: 'center', justifyContent: 'center',
+                    shadowColor: colors.primary[500], shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.15, shadowRadius: 8, elevation: 6,
+                  }}
+                >
+                  <ChevronDown size={18} color={colors.dark[100]} />
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
           )}
 
           {/* Status Bar - shows activity state like Claude Code CLI */}
@@ -1461,115 +1514,128 @@ export default function ClaudeSessionScreen() {
           )}
 
           {/* Bottom: Take Over button OR Input field */}
-          <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: colors.dark[900] }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.dark[700], backgroundColor: colors.dark[900] }}>
             {!hasTakenOver ? (
-              /* State 1: Before Take Over */
+              /* State 1: Before Take Over — Premium CTA */
               <View style={{
-                backgroundColor: theme.card,
+                backgroundColor: colors.dark[800],
                 borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 16,
-                marginHorizontal: 12,
-                marginVertical: 8,
-                padding: 12,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 4,
+                borderColor: colors.primary[500] + '25',
+                borderRadius: 20,
+                marginHorizontal: 16,
+                marginVertical: 12,
+                padding: 16,
+                shadowColor: colors.primary[500],
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 20,
+                elevation: 8,
               }}>
                 {/* Per-session unrestricted mode toggle */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: sessionUnrestricted ? theme.warning + '15' : colors.dark[800], borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <ShieldOff size={14} color={sessionUnrestricted ? theme.warning : theme.textTertiary} />
-                    <Text style={{ color: sessionUnrestricted ? theme.warning : theme.textSecondary, fontSize: 13, fontWeight: '600' }}>Unrestricted</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: sessionUnrestricted ? theme.warning + '12' : colors.dark[700], borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ShieldOff size={14} color={sessionUnrestricted ? theme.warning : colors.dark[300]} />
+                    <Text style={{ color: sessionUnrestricted ? theme.warning : colors.dark[200], fontSize: 13, fontWeight: '600' }}>Unrestricted</Text>
                   </View>
                   <Switch
                     value={sessionUnrestricted}
                     onValueChange={handleToggleSessionUnrestricted}
-                    trackColor={{ false: theme.switchTrackOff, true: theme.warning }}
-                    thumbColor={sessionUnrestricted ? '#fff' : theme.switchThumb}
+                    trackColor={{ false: colors.dark[500], true: theme.warning }}
+                    thumbColor={sessionUnrestricted ? '#fff' : colors.dark[200]}
                     style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                   />
                 </View>
                 <Animated.View style={{ transform: [{ scale: takeOverScale }] }}>
                   <TouchableOpacity
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       Animated.sequence([
-                        Animated.spring(takeOverScale, { toValue: 0.97, tension: 200, friction: 10, useNativeDriver: true }),
+                        Animated.spring(takeOverScale, { toValue: 0.96, tension: 200, friction: 10, useNativeDriver: true }),
                         Animated.spring(takeOverScale, { toValue: 1, tension: 200, friction: 10, useNativeDriver: true }),
                       ]).start();
                       handleTakeOver();
                     }}
                     disabled={isTakingOver || !session}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                     style={{
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isTakingOver || !session ? theme.backgroundSecondary : colors.primary[600],
+                      borderRadius: 14,
+                      overflow: 'hidden',
+                      opacity: isTakingOver || !session ? 0.5 : 1,
                     }}
                   >
-                    {isTakingOver ? (
-                      <>
-                        <Animated.View style={{ opacity: summoningGlow }}>
-                          <ActivityIndicator size="small" color="white" />
-                        </Animated.View>
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Connecting...</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Play size={18} color="white" />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Take Over Session</Text>
-                      </>
-                    )}
+                    <LinearGradient
+                      colors={isTakingOver || !session ? [colors.dark[600], colors.dark[600]] : [colors.primary[500], colors.primary[700]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        paddingVertical: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: colors.primary[400],
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 8,
+                      }}
+                    >
+                      {isTakingOver ? (
+                        <>
+                          <Animated.View style={{ opacity: summoningGlow }}>
+                            <ActivityIndicator size="small" color="white" />
+                          </Animated.View>
+                          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 8, letterSpacing: 0.3 }}>Connecting...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={18} color="white" />
+                          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 10, letterSpacing: 0.3 }}>Take Over Session</Text>
+                        </>
+                      )}
+                    </LinearGradient>
                   </TouchableOpacity>
                 </Animated.View>
               </View>
             ) : isTakingOver ? (
-              /* State 2: Summoning Claude */
+              /* State 2: Summoning Claude — Atmospheric */
               <View style={{
-                backgroundColor: theme.card,
+                backgroundColor: colors.dark[800],
                 borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 16,
-                marginHorizontal: 12,
-                marginVertical: 8,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 4,
+                borderColor: colors.primary[500] + '30',
+                borderRadius: 20,
+                marginHorizontal: 16,
+                marginVertical: 12,
+                paddingHorizontal: 20,
+                paddingVertical: 16,
+                shadowColor: colors.primary[500],
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 16,
+                elevation: 6,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Animated.Text style={{ color: colors.success[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '700', opacity: summoningGlow }}>$</Animated.Text>
-                  <Text style={{ color: theme.textSecondary, fontFamily: 'monospace', fontSize: 13 }}>Summoning Claude</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Animated.Text style={{ color: colors.primary[300], fontFamily: 'monospace', fontSize: 14, fontWeight: '700', opacity: summoningGlow }}>$</Animated.Text>
+                  <Text style={{ color: colors.dark[100], fontFamily: 'monospace', fontSize: 13, fontWeight: '500' }}>Summoning Claude</Text>
                   <AnimatedConnectDots />
                 </View>
               </View>
             ) : isLimitReached ? (
               /* State 3: Limit Reached */
               <View style={{
-                backgroundColor: theme.card,
+                backgroundColor: colors.dark[800],
                 borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 16,
-                marginHorizontal: 12,
-                marginVertical: 8,
-                padding: 12,
+                borderColor: colors.dark[600],
+                borderRadius: 20,
+                marginHorizontal: 16,
+                marginVertical: 12,
+                padding: 16,
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 4,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 12,
+                elevation: 6,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                   <Text style={{ color: theme.textSecondary, fontSize: 13, fontFamily: 'monospace' }}>
@@ -1586,45 +1652,53 @@ export default function ClaudeSessionScreen() {
                       ]).start();
                       router.push('/settings/subscription');
                     }}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                     style={{
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: colors.primary[600],
+                      borderRadius: 14,
+                      overflow: 'hidden',
                     }}
                   >
-                    <Zap size={18} color="white" />
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>
-                      Upgrade to Pro
-                    </Text>
-                    {countdownText && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                        <Clock size={12} color="rgba(255,255,255,0.8)" />
-                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace' }}>
-                          {countdownText}
-                        </Text>
-                      </View>
-                    )}
+                    <LinearGradient
+                      colors={[colors.primary[500], colors.primary[700]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        paddingVertical: 14,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Zap size={18} color="white" />
+                      <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 8, letterSpacing: 0.3 }}>
+                        Upgrade to Pro
+                      </Text>
+                      {countdownText && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                          <Clock size={12} color="rgba(255,255,255,0.9)" />
+                          <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace', fontWeight: '600' }}>
+                            {countdownText}
+                          </Text>
+                        </View>
+                      )}
+                    </LinearGradient>
                   </TouchableOpacity>
                 </Animated.View>
               </View>
             ) : (
-              /* State 4: Message Input — Main Redesign */
+              /* State 4: Message Input — Premium */
               <Animated.View style={{
-                backgroundColor: theme.card,
+                backgroundColor: colors.dark[800],
                 borderWidth: 1,
                 borderColor: cardBorderColor,
-                borderRadius: 16,
-                marginHorizontal: 12,
-                marginVertical: 8,
+                borderRadius: 20,
+                marginHorizontal: 16,
+                marginVertical: 12,
                 padding: 8,
-                shadowColor: '#000',
+                shadowColor: colors.primary[500],
                 shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
+                shadowOpacity: 0.08,
+                shadowRadius: 12,
                 elevation: 4,
                 flexDirection: 'row',
                 alignItems: 'flex-end',
@@ -1634,21 +1708,21 @@ export default function ClaudeSessionScreen() {
                   flex: 1,
                   borderWidth: 1,
                   borderColor: inputBorderColor,
-                  borderRadius: 10,
-                  backgroundColor: theme.backgroundSecondary,
+                  borderRadius: 14,
+                  backgroundColor: colors.dark[700],
                 }}>
                   <TextInput
                     ref={inputRef}
                     value={inputText}
                     onChangeText={setInputText}
                     placeholder={isWaitingForResponse ? "Waiting for Claude..." : "Message Claude..."}
-                    placeholderTextColor={theme.textTertiary}
+                    placeholderTextColor={colors.dark[300]}
                     multiline={true}
                     blurOnSubmit={false}
                     style={{
                       paddingHorizontal: 14,
                       paddingVertical: 10,
-                      color: theme.text,
+                      color: '#ffffff',
                       fontFamily: 'monospace',
                       fontSize: 14,
                       minHeight: 44,
@@ -1663,7 +1737,7 @@ export default function ClaudeSessionScreen() {
                 <Animated.View style={{
                   transform: [{ scale: sendButtonScale }],
                   marginLeft: 8,
-                  marginBottom: 3,
+                  marginBottom: 4,
                 }}>
                   <TouchableOpacity
                     onPress={handleSendMessage}
