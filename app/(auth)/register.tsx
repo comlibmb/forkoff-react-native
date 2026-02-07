@@ -8,11 +8,12 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, User, ArrowRight, Github } from 'lucide-react-native';
+import { Mail, User, ArrowRight, Github, Check } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { useAuthStore } from '@/stores/auth.store';
@@ -26,6 +27,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [isGitHubLoading, setIsGitHubLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     name?: string;
     email?: string;
@@ -53,6 +55,10 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     clearError();
+
+    if (!agreedToTerms) {
+      return;
+    }
 
     if (!validateForm()) {
       return;
@@ -235,17 +241,45 @@ export default function RegisterScreen() {
                 </Text>
               </View>
 
-              {/* Terms */}
-              <Text style={{ color: theme.textTertiary, textAlign: 'center', fontSize: 12, marginBottom: 24 }}>
-                By creating an account, you agree to our{' '}
-                <Text style={{ color: theme.primary }}>Terms of Service</Text> and{' '}
-                <Text style={{ color: theme.primary }}>Privacy Policy</Text>
-              </Text>
+              {/* Terms Checkbox */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+                <TouchableOpacity
+                  onPress={() => setAgreedToTerms(!agreedToTerms)}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    borderWidth: 1.5,
+                    borderColor: agreedToTerms ? theme.primary : theme.border,
+                    backgroundColor: agreedToTerms ? theme.primary : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {agreedToTerms && <Check size={14} color="#fff" />}
+                </TouchableOpacity>
+                <Text style={{ color: theme.textSecondary, fontSize: 13, flex: 1 }}>
+                  I agree to the{' '}
+                  <Text
+                    style={{ color: theme.primary }}
+                    onPress={() => Linking.openURL('https://forkoff.app/legal/terms')}
+                  >
+                    Terms of Service
+                  </Text>
+                  {' '}and{' '}
+                  <Text
+                    style={{ color: theme.primary }}
+                    onPress={() => Linking.openURL('https://forkoff.app/legal/privacy')}
+                  >
+                    Privacy Policy
+                  </Text>
+                </Text>
+              </View>
 
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleRegister}
-                disabled={isLoading || isGitHubLoading}
+                disabled={isLoading || isGitHubLoading || !agreedToTerms}
                 style={{
                   backgroundColor: theme.primary,
                   borderRadius: 12,
@@ -259,7 +293,7 @@ export default function RegisterScreen() {
                   shadowOpacity: 0.2,
                   shadowRadius: 12,
                   elevation: 5,
-                  opacity: isLoading || isGitHubLoading ? 0.7 : 1,
+                  opacity: isLoading || isGitHubLoading || !agreedToTerms ? 0.7 : 1,
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
@@ -278,7 +312,7 @@ export default function RegisterScreen() {
               {/* GitHub Sign Up */}
               <TouchableOpacity
                 onPress={handleGitHubSignUp}
-                disabled={isGitHubLoading || isLoading}
+                disabled={isGitHubLoading || isLoading || !agreedToTerms}
                 style={{
                   backgroundColor: theme.backgroundSecondary,
                   borderWidth: 1,
@@ -289,7 +323,7 @@ export default function RegisterScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 12,
-                  opacity: isGitHubLoading || isLoading ? 0.7 : 1,
+                  opacity: isGitHubLoading || isLoading || !agreedToTerms ? 0.7 : 1,
                 }}
               >
                 {isGitHubLoading ? (
