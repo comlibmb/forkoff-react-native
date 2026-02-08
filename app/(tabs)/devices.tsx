@@ -78,7 +78,10 @@ const DeviceCard = memo(({
   theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const Icon = deviceTypeIcons[device.type] || Laptop;
-  const connectedTools = device.connectedTools || [];
+  const connectedTools = (device.connectedTools || []).filter((tool) => {
+    const t = tool.type.toLowerCase();
+    return ['claude_code', 'claude-code', 'claude_terminal'].includes(t);
+  });
   const isOnline = device.status?.toLowerCase() === 'online' || device.status?.toLowerCase() === 'syncing';
   const isSyncing = device.status?.toLowerCase() === 'syncing';
 

@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ShieldOff,
   LogOut,
-  Github,
   HelpCircle,
   MessageCircle,
   ExternalLink,
@@ -222,14 +221,6 @@ export default function SettingsScreen() {
             title="Profile"
             subtitle="Edit your profile information"
             onPress={() => router.push('/settings/account')}
-            theme={theme}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingsItem
-            icon={Github}
-            title="GitHub"
-            subtitle="Connected"
-            onPress={() => router.push('/github/connect')}
             theme={theme}
           />
         </SettingsSection>

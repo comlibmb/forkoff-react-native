@@ -13,7 +13,7 @@ interface DeviceState {
   error: string | null;
 
   // Actions
-  fetchDevices: () => Promise<void>;
+  fetchDevices: (showLoading?: boolean) => Promise<void>;
   getDevice: (id: string) => Device | undefined;
   selectDevice: (id: string | null) => void;
   pairDevice: (pairingCode: string) => Promise<Device>;
@@ -32,9 +32,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchDevices: async () => {
+  fetchDevices: async (showLoading = true) => {
     try {
-      set({ isLoading: true, error: null });
+      if (showLoading) set({ isLoading: true, error: null });
 
       const devices = await deviceService.getDevices();
 
