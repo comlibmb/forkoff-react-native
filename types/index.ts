@@ -8,9 +8,14 @@ export interface User {
   createdAt: string;
   subscription: SubscriptionTier;
   country?: string;
+  // Stripe subscription fields
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
 }
 
-export type SubscriptionTier = 'free' | 'pro' | 'team';
+export type SubscriptionTier = 'free' | 'pro';
 
 export interface AuthState {
   user: User | null;
