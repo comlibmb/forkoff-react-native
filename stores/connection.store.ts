@@ -18,6 +18,7 @@ interface ConnectionState {
   setPhoneOnline: (isOnline: boolean) => void;
   setServerConnected: (isConnected: boolean) => void;
   setDeviceStatus: (deviceId: string, status: DeviceStatus) => void;
+  clearDeviceStatuses: () => void;
   isDeviceOnline: (deviceId: string) => boolean;
 }
 
@@ -77,6 +78,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         [deviceId]: status,
       },
     })),
+
+  clearDeviceStatuses: () => set({ deviceStatuses: {} }),
 
   isDeviceOnline: (deviceId) => {
     const status = get().deviceStatuses[deviceId];

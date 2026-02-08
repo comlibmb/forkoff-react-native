@@ -26,16 +26,6 @@ export default function SubscriptionScreen() {
   const isPro = currentPlan === 'pro';
   const renewalDate = user?.stripeCurrentPeriodEnd ? new Date(user.stripeCurrentPeriodEnd) : null;
 
-  // DEBUG: Log current state
-  console.log('[SubscriptionScreen] Current state:', {
-    subscription: user?.subscription,
-    currentPlan,
-    isPro,
-    stripeSubscriptionId: user?.stripeSubscriptionId,
-    stripeCurrentPeriodEnd: user?.stripeCurrentPeriodEnd,
-    renewalDate: renewalDate?.toISOString(),
-  });
-
   const plans = useMemo(() => [
     {
       id: 'free' as const,

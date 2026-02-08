@@ -397,21 +397,13 @@ class AuthService {
         if (response.ok) {
           const profile = await response.json();
 
-          // DEBUG: Log what API returns
-          console.log('[AuthService] API /auth/me response:', {
-            subscription: profile.subscription,
-            stripeSubscriptionId: profile.stripeSubscriptionId,
-            stripePriceId: profile.stripePriceId,
-            stripeCurrentPeriodEnd: profile.stripeCurrentPeriodEnd,
-          });
-
           // Handle appConfig if present
           if (profile.appConfig) {
             useVersionStore.getState().setVersionConfig(profile.appConfig);
           }
 
           // Merge API profile data with Supabase user
-          const mergedUser = {
+          return {
             ...baseUser,
             username: profile.username || baseUser.username,
             name: profile.name || baseUser.name,
@@ -424,14 +416,6 @@ class AuthService {
             stripePriceId: profile.stripePriceId,
             stripeCurrentPeriodEnd: profile.stripeCurrentPeriodEnd,
           };
-
-          console.log('[AuthService] Merged user object:', {
-            subscription: mergedUser.subscription,
-            stripeSubscriptionId: mergedUser.stripeSubscriptionId,
-            stripeCurrentPeriodEnd: mergedUser.stripeCurrentPeriodEnd,
-          });
-
-          return mergedUser;
         }
       }
     } catch (error) {
@@ -720,9 +704,11 @@ class AuthService {
       };
     }
 
-    const { data } = this.supabase!.auth.onAuthStateChange((event, session) => {
+    const { data } = this.supabase!.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        callback(this.mapSupabaseUser(session.user));
+        // Fetch full user profile from API instead of just mapping Supabase metadata
+        const user = await this.getCurrentUser();
+        callback(user);
       } else {
         callback(null);
       }
