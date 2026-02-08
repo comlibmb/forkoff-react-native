@@ -348,6 +348,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       analyticsService.reset();
       sentryService.setUser(null);
 
+      // Clear device statuses to prevent "disconnected" toasts
+      const { useConnectionStore } = await import('@/stores/connection.store');
+      useConnectionStore.getState().clearDeviceStatuses();
+
       set({
         user: null,
         isAuthenticated: false,

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
@@ -114,21 +115,19 @@ export default function LoginScreen() {
             <View style={{ alignItems: 'center', marginBottom: 32 }}>
               <View
                 style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 16,
+                  width: 80,
+                  height: 80,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 16,
-                  backgroundColor: theme.primary,
-                  shadowColor: theme.primary,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 20,
-                  elevation: 10,
+                  overflow: 'visible',
                 }}
               >
-                <Text style={{ color: '#fff', fontSize: 30, fontWeight: 'bold' }}>F</Text>
+                <Image
+                  source={require('@/assets/logo.png')}
+                  style={{ width: 187, height: 187 }}
+                  resizeMode="contain"
+                />
               </View>
             </View>
 
