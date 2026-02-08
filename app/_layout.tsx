@@ -85,6 +85,13 @@ function ThemedApp({
         <Stack.Screen name="(onboarding)" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
         <Stack.Screen
+          name="project-hub"
+          options={{
+            animation: 'slide_from_right',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="device/[id]"
           options={{
             animation: 'slide_from_right',

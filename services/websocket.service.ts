@@ -70,6 +70,15 @@ interface DirectoryListResponseEvent {
   currentPath: string;
 }
 
+// Read file response event
+interface ReadFileResponseEvent {
+  requestId: string;
+  content?: string;
+  exists: boolean;
+  fileName: string;
+  error?: string;
+}
+
 // Tab completion response event
 interface TabCompleteResponseEvent {
   requestId: string;
@@ -323,6 +332,7 @@ interface EventCallbacks {
   tool_status_update: EventCallback<ToolStatusUpdateEvent>[];
   claude_session_update: EventCallback<ClaudeSessionUpdateEvent>[];
   directory_list_response: EventCallback<DirectoryListResponseEvent>[];
+  read_file_response: EventCallback<ReadFileResponseEvent>[];
   tab_complete_response: EventCallback<TabCompleteResponseEvent>[];
   transcript_history: EventCallback<TranscriptHistoryEvent>[];
   transcript_update: EventCallback<TranscriptUpdateEvent>[];
@@ -370,6 +380,7 @@ class WebSocketService {
     tool_status_update: [],
     claude_session_update: [],
     directory_list_response: [],
+    read_file_response: [],
     tab_complete_response: [],
     transcript_history: [],
     transcript_update: [],
@@ -511,6 +522,11 @@ class WebSocketService {
 
     this.socket.on('directory_list_response', (data) => {
       this.emitInternal('directory_list_response', data);
+    });
+
+    this.socket.on('read_file_response', (data) => {
+      console.log('[WS] GOT read_file_response:', data?.fileName, data?.exists);
+      this.emitInternal('read_file_response', data);
     });
 
     this.socket.on('tab_complete_response', (data) => {
@@ -832,6 +848,16 @@ class WebSocketService {
       sessionKey,
       limit: options?.limit ?? 400,
       offset: options?.offset ?? 0,
+    });
+  }
+
+  // Read a file from device (e.g., CLAUDE.md)
+  readFile(deviceId: string, filePath: string, requestId: string): void {
+    console.log(`[WS] Requesting read_file: ${filePath}`);
+    this.socket?.emit('read_file', {
+      deviceId,
+      filePath,
+      requestId,
     });
   }
 

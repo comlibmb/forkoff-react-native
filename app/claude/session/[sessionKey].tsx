@@ -55,9 +55,11 @@ function AnimatedConnectDots() {
 
 export default function ClaudeSessionScreen() {
   const { theme } = useTheme();
-  const { sessionKey, deviceId } = useLocalSearchParams<{
+  const { sessionKey, deviceId, autoPrompt, autoDirectory } = useLocalSearchParams<{
     sessionKey: string;
     deviceId: string;
+    autoPrompt?: string;
+    autoDirectory?: string;
   }>();
   const router = useRouter();
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
@@ -95,6 +97,10 @@ export default function ClaudeSessionScreen() {
   const [limitMax, setLimitMax] = useState(20);
   const [countdownText, setCountdownText] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+
+  // Auto-prompt state (for quick actions from Project Hub)
+  const [autoPromptSent, setAutoPromptSent] = useState(false);
+  const autoPromptSentRef = useRef(false);
 
   // Unrestricted mode - per-session override, defaults to global setting
   const globalUnrestricted = useSessionSettingsStore((s) => s.unrestrictedMode);
@@ -871,6 +877,52 @@ export default function ClaudeSessionScreen() {
     }
   };
 
+  // Auto-prompt: Start a new session and send the prompt when ready
+  // Used by quick actions from the Project Hub (Status Check, Brainstorm, Initialize)
+  useEffect(() => {
+    if (!autoPrompt || !autoDirectory || !deviceId) return;
+    if (autoPromptSentRef.current) return;
+
+    // Start a new Claude session in the specified directory
+    console.log('[Session] Auto-prompt: starting new session in', autoDirectory);
+    const { startNewSession } = useClaudeStore.getState();
+    startNewSession(deviceId, autoDirectory, sessionKey!).catch((err) => {
+      console.error('[Session] Auto-prompt: failed to start session:', err);
+    });
+
+    // Mark as taken over so the session lifecycle hooks work
+    setIsTakingOver(true);
+    setHasTakenOver(true);
+  }, [autoPrompt, autoDirectory, deviceId, sessionKey]);
+
+  // Send auto-prompt when session becomes ready
+  useEffect(() => {
+    if (!autoPrompt || !deviceId || !isSessionReady) return;
+    if (autoPromptSentRef.current) return;
+    autoPromptSentRef.current = true;
+
+    console.log('[Session] Auto-prompt: sending prompt');
+    setAutoPromptSent(true);
+
+    // Small delay to let the session fully initialize
+    setTimeout(() => {
+      wsService.sendUserMessage(deviceId, autoPrompt, {
+        sessionKey: sessionKey,
+      });
+      setIsWaitingForResponse(true);
+
+      // Add optimistic user message
+      const optimisticEntry: TranscriptEntry = {
+        id: `auto-${Date.now()}`,
+        type: 'user',
+        timestamp: new Date().toISOString(),
+        lineNumber: 0,
+        content: { text: autoPrompt, role: 'user' },
+      };
+      setEntries((prev) => [...prev, optimisticEntry]);
+    }, 500);
+  }, [autoPrompt, deviceId, isSessionReady, sessionKey]);
+
   const handleTakeOver = async () => {
     if (!session || !deviceId) return;
 
@@ -1518,6 +1570,15 @@ export default function ClaudeSessionScreen() {
               tokenUsage={tokenUsage || undefined}
               isVisible={true}
             />
+          )}
+
+          {/* Auto-prompt indicator */}
+          {autoPromptSent && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 6, backgroundColor: colors.primary[500] + '12' }}>
+              <Text style={{ color: colors.primary[400], fontSize: 12, fontFamily: 'monospace', textAlign: 'center' }}>
+                Auto-prompt sent
+              </Text>
+            </View>
           )}
 
           {/* Bottom: Take Over button OR Input field */}
