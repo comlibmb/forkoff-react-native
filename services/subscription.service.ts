@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { apiClient } from './api.client';
 import { SubscriptionLimits, SubscriptionUsage } from '@/types';
 
@@ -44,6 +43,7 @@ export interface SubscriptionPlan {
   currency: string;
   interval: 'month' | 'year';
   features: string[];
+  stripePriceId?: string;
   productId: {
     ios: string;
     android: string;
@@ -68,6 +68,8 @@ export interface UsageStats {
     limit: number;
   };
 }
+
+const STRIPE_PRO_PRICE_ID = process.env.EXPO_PUBLIC_STRIPE_PRO_PRICE_ID || '';
 
 const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
@@ -97,6 +99,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     price: 9.99,
     currency: 'USD',
     interval: 'month',
+    stripePriceId: STRIPE_PRO_PRICE_ID,
     features: [
       'Unlimited messages',
       'Unlimited sessions',
@@ -118,6 +121,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     price: 99.99,
     currency: 'USD',
     interval: 'year',
+    stripePriceId: STRIPE_PRO_PRICE_ID,
     features: [
       'Everything in Pro Monthly',
       '2 months free',
@@ -198,27 +202,45 @@ class SubscriptionService {
     }
   }
 
-  async purchaseSubscription(planId: string): Promise<{ success: boolean; error?: string }> {
+  async createCheckoutSession(priceId: string): Promise<{ success: boolean; url?: string; error?: string }> {
+    if (!priceId) {
+      return { success: false, error: 'No price ID configured for this plan' };
+    }
+
+    try {
+      const response = await apiClient.post<{ url: string }>('/stripe/checkout', { priceId });
+      return { success: true, url: response.url };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to create checkout session',
+      };
+    }
+  }
+
+  async createPortalSession(): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const response = await apiClient.post<{ url: string }>('/stripe/portal', {});
+      return { success: true, url: response.url };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to create portal session',
+      };
+    }
+  }
+
+  async purchaseSubscription(planId: string): Promise<{ success: boolean; url?: string; error?: string }> {
     const plan = this.getPlanById(planId);
     if (!plan) {
       return { success: false, error: 'Invalid plan' };
     }
 
-    try {
-      // In a real app, this would use RevenueCat or native IAP
-      // const productId = Platform.OS === 'ios' ? plan.productId.ios : plan.productId.android;
-      // const result = await Purchases.purchaseProduct(productId);
-
-      // Mock successful purchase
-      await apiClient.post('/subscription/purchase', { planId });
-
-      return { success: true };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || 'Purchase failed',
-      };
+    if (!plan.stripePriceId) {
+      return { success: false, error: 'No price configured for this plan' };
     }
+
+    return this.createCheckoutSession(plan.stripePriceId);
   }
 
   async restorePurchases(): Promise<{ success: boolean; subscription?: Subscription; error?: string }> {

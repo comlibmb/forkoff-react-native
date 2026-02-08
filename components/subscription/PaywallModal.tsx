@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { X, Zap, Lock, Crown, Ticket } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Button } from '@/components/ui';
 import { PlanCard, Plan } from './PlanCard';
 import { colors } from '@/theme/colors';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
 import { VoucherRedemptionResult } from '@/types';
+import { subscriptionService } from '@/services/subscription.service';
 
 interface PaywallModalProps {
   visible: boolean;
@@ -13,6 +15,8 @@ interface PaywallModalProps {
   feature?: string;
   onSelectPlan: (plan: Plan) => void;
 }
+
+const STRIPE_PRO_PRICE_ID = process.env.EXPO_PUBLIC_STRIPE_PRO_PRICE_ID || '';
 
 const plans: Plan[] = [
   {
@@ -36,6 +40,7 @@ const plans: Plan[] = [
     price: 9.99,
     interval: 'month',
     popular: true,
+    stripePriceId: STRIPE_PRO_PRICE_ID,
     features: [
       { name: 'Unlimited devices', included: true },
       { name: 'Unlimited projects', included: true },
@@ -71,6 +76,27 @@ export function PaywallModal({
 }: PaywallModalProps) {
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherResult, setVoucherResult] = useState<VoucherRedemptionResult | null>(null);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const handlePlanSelect = async (plan: Plan) => {
+    if (plan.stripePriceId) {
+      setIsCheckoutLoading(true);
+      try {
+        const result = await subscriptionService.createCheckoutSession(plan.stripePriceId);
+        if (result.success && result.url) {
+          await WebBrowser.openBrowserAsync(result.url);
+          onClose();
+        }
+      } catch {
+        // Fall back to the original handler
+        onSelectPlan(plan);
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+    } else {
+      onSelectPlan(plan);
+    }
+  };
 
   const handleVoucherSuccess = (result: VoucherRedemptionResult) => {
     setVoucherResult(result);
@@ -154,7 +180,7 @@ export function PaywallModal({
                 key={plan.id}
                 plan={plan}
                 isCurrentPlan={plan.id === 'free'}
-                onSelect={onSelectPlan}
+                onSelect={handlePlanSelect}
               />
             ))}
           </View>
