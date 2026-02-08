@@ -410,6 +410,11 @@ class AuthService {
             avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
             subscription: profile.subscription || baseUser.subscription,
             country: profile.country,
+            // Stripe subscription fields
+            stripeCustomerId: profile.stripeCustomerId,
+            stripeSubscriptionId: profile.stripeSubscriptionId,
+            stripePriceId: profile.stripePriceId,
+            stripeCurrentPeriodEnd: profile.stripeCurrentPeriodEnd,
           };
         }
       }
