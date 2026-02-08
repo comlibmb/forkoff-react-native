@@ -1,24 +1,36 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Check, Zap, Star, Users, ArrowRight } from 'lucide-react-native';
+import { ArrowLeft, Check, Zap, Star, Users, ArrowRight, Settings } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
+import { subscriptionService } from '@/services/subscription.service';
 
 type PlanId = 'free' | 'pro' | 'team';
 
 export default function SubscriptionScreen() {
   const { theme } = useTheme();
-  const { user } = useAuthStore();
+  const { user, initialize } = useAuthStore();
+  const { checkout } = useLocalSearchParams<{ checkout?: string }>();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>((user?.subscription as PlanId) || 'free');
   const [isLoading, setIsLoading] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const currentPlan = user?.subscription || 'free';
+
+  // Handle checkout return from Stripe
+  useEffect(() => {
+    if (checkout === 'success') {
+      initialize().then(() => {
+        alert.success('Subscription Updated', 'Your subscription has been activated!');
+      });
+    }
+  }, [checkout]);
 
   const plans = useMemo(() => [
     {
@@ -81,17 +93,38 @@ export default function SubscriptionScreen() {
     if (planId === currentPlan) return;
 
     setIsLoading(true);
+    try {
+      const result = await subscriptionService.purchaseSubscription(`${planId}_monthly`);
+      if (result.success && result.url) {
+        await WebBrowser.openBrowserAsync(result.url);
+        // Refresh user data after returning from browser
+        await initialize();
+      } else if (result.error) {
+        await alert.error('Error', result.error);
+      }
+    } catch (error: any) {
+      await alert.error('Error', error.message || 'Something went wrong');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    // Simulate subscription process
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    await alert.success(
-      'Subscription Updated',
-      `You've been upgraded to the ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan!`
-    );
-    router.back();
-
-    setIsLoading(false);
+  const handleManageSubscription = async () => {
+    setIsLoading(true);
+    try {
+      const result = await subscriptionService.createPortalSession();
+      if (result.success && result.url) {
+        await WebBrowser.openBrowserAsync(result.url);
+        // Refresh user data after returning from portal
+        await initialize();
+      } else if (result.error) {
+        await alert.error('Error', result.error);
+      }
+    } catch (error: any) {
+      await alert.error('Error', error.message || 'Something went wrong');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   function PlanCard({ children, popular = false, color = theme.cardBorder }: {
@@ -205,6 +238,18 @@ export default function SubscriptionScreen() {
           </Text>
           {!isLoading && selectedPlan !== currentPlan && <ArrowRight size={18} color="#fff" />}
         </TouchableOpacity>
+
+        {/* Manage Subscription Button */}
+        {currentPlan !== 'free' && (
+          <TouchableOpacity
+            onPress={handleManageSubscription}
+            disabled={isLoading}
+            style={[styles.manageButton, isLoading && styles.subscribeButtonDisabled]}
+          >
+            <Settings size={18} color={theme.primary} />
+            <Text style={styles.manageButtonText}>Manage Subscription</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.disclaimer}>Cancel anytime. No hidden fees.</Text>
       </ScrollView>
@@ -379,9 +424,25 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     fontWeight: '700',
     fontSize: 16,
   },
+  manageButton: {
+    borderWidth: 1,
+    borderColor: theme.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    marginTop: 12,
+  },
+  manageButtonText: {
+    color: theme.primary,
+    fontWeight: '600' as const,
+    fontSize: 15,
+  },
   disclaimer: {
     color: theme.textTertiary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     fontSize: 12,
     marginTop: 16,
   },

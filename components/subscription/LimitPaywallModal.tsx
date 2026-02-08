@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket, Users } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Button } from '@/components/ui';
 import { LimitType, VoucherRedemptionResult } from '@/types';
 import { colors } from '@/theme/colors';
 import { useRouter } from 'expo-router';
 import { analyticsService } from '@/services/analytics.service';
+import { subscriptionService } from '@/services/subscription.service';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
 
 interface LimitPaywallModalProps {
@@ -113,10 +115,31 @@ export function LimitPaywallModal({
 
   const resetTimeText = useMemo(() => formatTimeUntilReset(resetAt), [resetAt]);
 
-  const handleUpgrade = () => {
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const handleUpgrade = async () => {
     analyticsService.track('paywall_upgrade_clicked', {
       limitType,
     });
+
+    const proPriceId = process.env.EXPO_PUBLIC_STRIPE_PRO_PRICE_ID;
+    if (proPriceId) {
+      setIsCheckoutLoading(true);
+      try {
+        const result = await subscriptionService.createCheckoutSession(proPriceId);
+        if (result.success && result.url) {
+          await WebBrowser.openBrowserAsync(result.url);
+          onClose();
+          return;
+        }
+      } catch {
+        // Fall back to navigation
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+    }
+
+    // Fallback: navigate to subscription screen
     onClose();
     router.push('/settings/subscription');
   };
@@ -266,8 +289,9 @@ export function LimitPaywallModal({
         {/* Action buttons */}
         <View className="px-6 pb-8 gap-3">
           <Button
-            title="Make It ForkOff"
+            title={isCheckoutLoading ? 'Opening checkout...' : 'Make It ForkOff'}
             onPress={handleUpgrade}
+            disabled={isCheckoutLoading}
             fullWidth
           />
           <Button

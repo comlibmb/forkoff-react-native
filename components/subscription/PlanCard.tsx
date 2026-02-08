@@ -16,6 +16,7 @@ export interface Plan {
   interval: 'month' | 'year';
   features: PlanFeature[];
   popular?: boolean;
+  stripePriceId?: string;
 }
 
 interface PlanCardProps {
