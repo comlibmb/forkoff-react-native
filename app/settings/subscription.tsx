@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Check, Zap, Star, Users, ArrowRight, Settings } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -15,22 +15,12 @@ type PlanId = 'free' | 'pro' | 'team';
 export default function SubscriptionScreen() {
   const { theme } = useTheme();
   const { user, initialize } = useAuthStore();
-  const { checkout } = useLocalSearchParams<{ checkout?: string }>();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>((user?.subscription as PlanId) || 'free');
   const [isLoading, setIsLoading] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const currentPlan = user?.subscription || 'free';
-
-  // Handle checkout return from Stripe
-  useEffect(() => {
-    if (checkout === 'success') {
-      initialize().then(() => {
-        alert.success('Subscription Updated', 'Your subscription has been activated!');
-      });
-    }
-  }, [checkout]);
 
   const plans = useMemo(() => [
     {
@@ -96,9 +86,15 @@ export default function SubscriptionScreen() {
     try {
       const result = await subscriptionService.purchaseSubscription(`${planId}_monthly`);
       if (result.success && result.url) {
-        await WebBrowser.openBrowserAsync(result.url);
-        // Refresh user data after returning from browser
-        await initialize();
+        const browserResult = await WebBrowser.openBrowserAsync(result.url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        });
+
+        // Always refresh when browser closes (whether user completed or cancelled)
+        if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+          await initialize();
+        }
       } else if (result.error) {
         await alert.error('Error', result.error);
       }
@@ -114,9 +110,15 @@ export default function SubscriptionScreen() {
     try {
       const result = await subscriptionService.createPortalSession();
       if (result.success && result.url) {
-        await WebBrowser.openBrowserAsync(result.url);
-        // Refresh user data after returning from portal
-        await initialize();
+        const browserResult = await WebBrowser.openBrowserAsync(result.url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        });
+
+        // Always refresh when browser closes
+        if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+          await initialize();
+        }
       } else if (result.error) {
         await alert.error('Error', result.error);
       }
