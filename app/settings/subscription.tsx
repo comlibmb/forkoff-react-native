@@ -3,28 +3,32 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Check, Zap, Star, Users, ArrowRight, Settings } from 'lucide-react-native';
+import { ArrowLeft, Check, Zap, Star, ArrowRight, Settings, Crown, Calendar } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 import { subscriptionService } from '@/services/subscription.service';
 
-type PlanId = 'free' | 'pro' | 'team';
+type PlanId = 'free' | 'pro';
 
 export default function SubscriptionScreen() {
   const { theme } = useTheme();
-  const { user, initialize } = useAuthStore();
+  // Use specific selector to ensure component re-renders when subscription changes
+  const user = useAuthStore((state) => state.user);
+  const initialize = useAuthStore((state) => state.initialize);
   const [selectedPlan, setSelectedPlan] = useState<PlanId>((user?.subscription as PlanId) || 'free');
   const [isLoading, setIsLoading] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const currentPlan = user?.subscription || 'free';
+  const currentPlan = (user?.subscription || 'free') as PlanId;
+  const isPro = currentPlan === 'pro';
+  const renewalDate = user?.stripeCurrentPeriodEnd ? new Date(user.stripeCurrentPeriodEnd) : null;
 
   const plans = useMemo(() => [
     {
-      id: 'free',
+      id: 'free' as const,
       name: 'Free',
       price: '$0',
       period: 'forever',
@@ -42,7 +46,7 @@ export default function SubscriptionScreen() {
       ],
     },
     {
-      id: 'pro',
+      id: 'pro' as const,
       name: 'Pro',
       price: '$9.99',
       period: 'per month',
@@ -56,24 +60,6 @@ export default function SubscriptionScreen() {
         'Terminal access',
         'Push notifications',
         'Priority support',
-      ],
-      limitations: [],
-    },
-    {
-      id: 'team',
-      name: 'Team',
-      price: '$29.99',
-      period: 'per month',
-      icon: Users,
-      color: theme.warning,
-      features: [
-        'Unlimited devices',
-        'Everything in Pro',
-        'Team collaboration',
-        'Shared projects',
-        'Admin dashboard',
-        'SSO support',
-        'Dedicated support',
       ],
       limitations: [],
     },
@@ -99,6 +85,8 @@ export default function SubscriptionScreen() {
         // Check if subscription was updated and show feedback
         const updatedUser = useAuthStore.getState().user;
         if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentPlan) {
+          // Update selected plan to match new subscription
+          setSelectedPlan(updatedUser.subscription as PlanId);
           await alert.success('Welcome to Pro!', 'Your subscription is now active');
         }
       } else if (result.error) {
@@ -168,8 +156,54 @@ export default function SubscriptionScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.pageTitle}>Choose Your Plan</Text>
-        <Text style={styles.pageSubtitle}>Unlock more features with a premium subscription</Text>
+        <Text style={styles.pageTitle}>{isPro ? 'Your Subscription' : 'Choose Your Plan'}</Text>
+        <Text style={styles.pageSubtitle}>
+          {isPro ? 'Manage your Pro subscription' : 'Unlock more features with a premium subscription'}
+        </Text>
+
+        {/* Active Subscription Status */}
+        {isPro && (
+          <View style={[styles.section, { borderColor: theme.primary, borderWidth: 2, marginBottom: 20 }]}>
+            <View style={styles.sectionContent}>
+              <View style={styles.statusHeader}>
+                <View style={[styles.planIcon, { backgroundColor: theme.primary + '20' }]}>
+                  <Crown size={24} color={theme.primary} />
+                </View>
+                <View style={styles.statusInfo}>
+                  <View style={styles.planNameRow}>
+                    <Text style={styles.planName}>Pro Plan</Text>
+                    <View style={[styles.currentBadge, { backgroundColor: theme.success + '20' }]}>
+                      <Text style={[styles.currentBadgeText, { color: theme.success }]}>Active</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.statusPrice}>$9.99 / month</Text>
+                </View>
+              </View>
+
+              {renewalDate && (
+                <View style={styles.renewalInfo}>
+                  <Calendar size={16} color={theme.textSecondary} />
+                  <Text style={styles.renewalText}>
+                    Renews on {renewalDate.toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={handleManageSubscription}
+                disabled={isLoading}
+                style={[styles.manageButtonInline, isLoading && styles.subscribeButtonDisabled]}
+              >
+                <Settings size={16} color="#fff" />
+                <Text style={styles.manageButtonInlineText}>Manage Subscription</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Plans */}
         {plans.map((plan) => {
@@ -235,34 +269,24 @@ export default function SubscriptionScreen() {
           );
         })}
 
-        {/* Subscribe Button */}
-        <TouchableOpacity
-          onPress={() => handleSubscribe(selectedPlan)}
-          disabled={selectedPlan === currentPlan || isLoading}
-          style={[
-            styles.subscribeButton,
-            (selectedPlan === currentPlan || isLoading) && styles.subscribeButtonDisabled,
-          ]}
-        >
-          <Text style={styles.subscribeButtonText}>
-            {isLoading
-              ? 'Processing...'
-              : selectedPlan === currentPlan
-              ? 'Current Plan'
-              : `Upgrade to ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)}`}
-          </Text>
-          {!isLoading && selectedPlan !== currentPlan && <ArrowRight size={18} color="#fff" />}
-        </TouchableOpacity>
-
-        {/* Manage Subscription Button */}
-        {currentPlan !== 'free' && (
+        {/* Subscribe Button - only show for free users */}
+        {!isPro && (
           <TouchableOpacity
-            onPress={handleManageSubscription}
-            disabled={isLoading}
-            style={[styles.manageButton, isLoading && styles.subscribeButtonDisabled]}
+            onPress={() => handleSubscribe(selectedPlan)}
+            disabled={selectedPlan === currentPlan || isLoading}
+            style={[
+              styles.subscribeButton,
+              (selectedPlan === currentPlan || isLoading) && styles.subscribeButtonDisabled,
+            ]}
           >
-            <Settings size={18} color={theme.primary} />
-            <Text style={styles.manageButtonText}>Manage Subscription</Text>
+            <Text style={styles.subscribeButtonText}>
+              {isLoading
+                ? 'Processing...'
+                : selectedPlan === currentPlan
+                ? 'Current Plan'
+                : `Upgrade to Pro`}
+            </Text>
+            {!isLoading && selectedPlan !== currentPlan && <ArrowRight size={18} color="#fff" />}
           </TouchableOpacity>
         )}
 
@@ -460,5 +484,47 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     textAlign: 'center' as const,
     fontSize: 12,
     marginTop: 16,
+  },
+  // Subscription status
+  statusHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+  },
+  statusInfo: {
+    flex: 1,
+  },
+  statusPrice: {
+    color: theme.textTertiary,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  renewalInfo: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  renewalText: {
+    color: theme.textSecondary,
+    fontSize: 14,
+  },
+  manageButtonInline: {
+    backgroundColor: theme.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+  },
+  manageButtonInlineText: {
+    color: '#fff',
+    fontWeight: '600' as const,
+    fontSize: 15,
   },
 });
