@@ -86,14 +86,20 @@ export default function SubscriptionScreen() {
     try {
       const result = await subscriptionService.purchaseSubscription(`${planId}_monthly`);
       if (result.success && result.url) {
-        const browserResult = await WebBrowser.openBrowserAsync(result.url, {
+        // Open checkout in browser
+        await WebBrowser.openBrowserAsync(result.url, {
           dismissButtonStyle: 'close',
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
         });
 
-        // Always refresh when browser closes (whether user completed or cancelled)
-        if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-          await initialize();
+        // Always refresh after browser closes (user may have completed checkout)
+        setIsLoading(true);
+        await initialize();
+
+        // Check if subscription was updated and show feedback
+        const updatedUser = useAuthStore.getState().user;
+        if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentPlan) {
+          await alert.success('Welcome to Pro!', 'Your subscription is now active');
         }
       } else if (result.error) {
         await alert.error('Error', result.error);
@@ -117,7 +123,14 @@ export default function SubscriptionScreen() {
 
         // Always refresh when browser closes
         if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+          // Force refresh user data and trigger re-render
           await initialize();
+
+          // Force component to re-read from store
+          const updatedUser = useAuthStore.getState().user;
+          if (updatedUser?.subscription !== currentPlan) {
+            await alert.success('Subscription Updated', 'Your subscription has been updated');
+          }
         }
       } else if (result.error) {
         await alert.error('Error', result.error);

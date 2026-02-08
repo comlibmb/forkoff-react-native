@@ -88,7 +88,7 @@ export function PaywallModal({
             dismissButtonStyle: 'close',
             presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
           });
-          // Close modal when browser dismisses (user will see updated subscription on return)
+          // Close modal - user data will be refreshed by the subscription screen
           onClose();
         }
       } catch {
