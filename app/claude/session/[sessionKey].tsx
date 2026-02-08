@@ -134,6 +134,12 @@ export default function ClaudeSessionScreen() {
   // Track if we've done initial load
   const initialLoadDoneRef = useRef(false);
 
+  // Stable transcript path ref — prevents effect re-runs when session object updates
+  const transcriptPathRef = useRef(session?.transcriptPath);
+  if (session?.transcriptPath && session.transcriptPath !== transcriptPathRef.current) {
+    transcriptPathRef.current = session.transcriptPath;
+  }
+
   // Animate thinking indicator with simple interval
   useEffect(() => {
     if (!isThinking) {
@@ -702,13 +708,14 @@ export default function ClaudeSessionScreen() {
     });
 
     // Subscribe and fetch based on mode
-    if (session?.transcriptPath && session.transcriptPath.length > 0) {
+    const transcriptPath = transcriptPathRef.current;
+    if (transcriptPath && transcriptPath.length > 0) {
       // Legacy transcript watching mode - subscribe and fetch from file
-      console.log('[Session] Subscribing to transcript:', sessionKey, session.transcriptPath);
+      console.log('[Session] Subscribing to transcript:', sessionKey, transcriptPath);
       wsService.emit('transcript_subscribe', {
         deviceId,
         sessionKey,
-        transcriptPath: session.transcriptPath,
+        transcriptPath,
       });
 
       // Fetch initial history - get last 400 entries (reverse=true by default)
@@ -716,7 +723,7 @@ export default function ClaudeSessionScreen() {
         wsService.emit('transcript_fetch', {
           deviceId,
           sessionKey,
-          transcriptPath: session.transcriptPath,
+          transcriptPath,
           offset: 0,
           limit: INITIAL_LOAD,
           reverse: true,
@@ -762,7 +769,7 @@ export default function ClaudeSessionScreen() {
         clearTimeout(loadingTimeout);
       }
       // Unsubscribe from whichever mode we were in
-      if (session?.transcriptPath && session.transcriptPath.length > 0) {
+      if (transcriptPath && transcriptPath.length > 0) {
         wsService.emit('transcript_unsubscribe', { deviceId, sessionKey });
       } else {
         wsService.emit('transcript_unsubscribe_sdk', { deviceId, sessionKey });
@@ -771,7 +778,7 @@ export default function ClaudeSessionScreen() {
       unsubSdkHistory();
       unsubUpdate();
     };
-  }, [sessionKey, deviceId, session?.transcriptPath]);
+  }, [sessionKey, deviceId]);
 
   // Listen for session lifecycle when taken over
   useEffect(() => {
