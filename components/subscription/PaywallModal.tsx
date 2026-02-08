@@ -84,7 +84,11 @@ export function PaywallModal({
       try {
         const result = await subscriptionService.createCheckoutSession(plan.stripePriceId);
         if (result.success && result.url) {
-          await WebBrowser.openBrowserAsync(result.url);
+          await WebBrowser.openBrowserAsync(result.url, {
+            dismissButtonStyle: 'close',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          });
+          // Close modal when browser dismisses (user will see updated subscription on return)
           onClose();
         }
       } catch {

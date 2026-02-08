@@ -128,7 +128,11 @@ export function LimitPaywallModal({
       try {
         const result = await subscriptionService.createCheckoutSession(proPriceId);
         if (result.success && result.url) {
-          await WebBrowser.openBrowserAsync(result.url);
+          await WebBrowser.openBrowserAsync(result.url, {
+            dismissButtonStyle: 'close',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          });
+          // Close modal when browser dismisses
           onClose();
           return;
         }
