@@ -7,116 +7,79 @@ import {
   Terminal,
   Clock,
   ChevronRight,
-  ChevronDown,
   Laptop,
   FolderOpen,
-  MessageSquare,
 } from 'lucide-react-native';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
 import { ClaudeSession } from '@/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
+import { formatTimeAgo } from '@/components/project/SessionListItem';
 import { colors } from '@/theme/colors';
 
-// Memoized utility function (outside component to avoid recreation)
-const formatTimeAgo = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = Date.now();
-  const diffMs = now - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+// Folder status colors
+const FOLDER_COLOR_ACTIVE = '#8b5cf6';   // purple (primary)
+const FOLDER_COLOR_INACTIVE = '#6e7681'; // gray
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
+// Compute unique short display names for a list of directory paths.
+// Uses just the final folder name when unique, otherwise adds parent
+// segments until every name is distinct.
+const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
+  const pathSegments = directories.map(dir => ({
+    dir,
+    segments: dir.replace(/\\/g, '/').split('/').filter(Boolean),
+  }));
+
+  const segmentCounts = new Map<string, number>();
+  for (const { dir } of pathSegments) {
+    segmentCounts.set(dir, 1);
+  }
+
+  let hasDuplicates = true;
+  while (hasDuplicates) {
+    hasDuplicates = false;
+
+    const nameToDirectories = new Map<string, string[]>();
+    for (const { dir, segments } of pathSegments) {
+      const count = segmentCounts.get(dir)!;
+      const name = segments.slice(-count).join('/');
+      if (!nameToDirectories.has(name)) {
+        nameToDirectories.set(name, []);
+      }
+      nameToDirectories.get(name)!.push(dir);
+    }
+
+    for (const [, dirs] of nameToDirectories) {
+      if (dirs.length > 1) {
+        hasDuplicates = true;
+        for (const d of dirs) {
+          const { segments } = pathSegments.find(p => p.dir === d)!;
+          const current = segmentCounts.get(d)!;
+          if (current < segments.length) {
+            segmentCounts.set(d, current + 1);
+          }
+        }
+      }
+    }
+  }
+
+  const result = new Map<string, string>();
+  for (const { dir, segments } of pathSegments) {
+    const count = segmentCounts.get(dir)!;
+    result.set(dir, segments.slice(-count).join('/'));
+  }
+  return result;
 };
 
-// Memoized session item component
-const SessionItem = memo(({
-  session,
-  deviceId,
-  isLast,
-  onPress,
-  theme,
-}: {
-  session: ClaudeSession;
-  deviceId: string;
-  isLast: boolean;
-  onPress: (deviceId: string, session: ClaudeSession) => void;
-  theme: ReturnType<typeof useTheme>['theme'];
-}) => {
-  const isActive = session.state?.toUpperCase() === 'ACTIVE';
-
-  const handlePress = useCallback(() => {
-    onPress(deviceId, session);
-  }, [deviceId, session, onPress]);
-
-  return (
-    <TouchableOpacity
-      onPress={handlePress}
-      style={[
-        styles.sessionItem,
-        !isLast && { borderBottomWidth: 1, borderBottomColor: theme.backgroundSecondary },
-      ]}
-    >
-      <View style={styles.sessionContent}>
-        <View
-          style={[
-            styles.sessionIcon,
-            {
-              backgroundColor: theme.backgroundSecondary,
-              borderColor: theme.backgroundTertiary,
-            },
-          ]}
-        >
-          <MessageSquare
-            size={14}
-            color={isActive ? theme.primary : theme.textTertiary}
-          />
-        </View>
-        <View style={styles.sessionInfo}>
-          <View style={styles.sessionTitleRow}>
-            {isActive && (
-              <View style={[styles.activeDotSmall, { backgroundColor: theme.primary }]} />
-            )}
-            <Text
-              style={[styles.sessionKey, { color: theme.textSecondary }]}
-              numberOfLines={1}
-            >
-              {session.sessionKey}
-            </Text>
-          </View>
-          <View style={styles.sessionMeta}>
-            <Clock size={10} color={theme.border} />
-            <Text style={[styles.sessionTime, { color: theme.border }]}>
-              {formatTimeAgo(session.lastUsedAt)}
-            </Text>
-            {isActive && (
-              <>
-                <Text style={[styles.metaDot, { color: theme.backgroundTertiary }]}>
-                  {'\u2022'}
-                </Text>
-                <Text style={[styles.activeLabel, { color: theme.primary }]}>Active</Text>
-              </>
-            )}
-          </View>
-        </View>
-      </View>
-      <ChevronRight size={16} color={theme.border} />
-    </TouchableOpacity>
-  );
-});
+// formatTimeAgo is now imported from @/components/project/SessionListItem
 
 // Memoized project card component
 const ProjectCard = memo(({
   project,
   deviceId,
-  isExpanded,
-  onToggle,
-  onSessionPress,
+  displayName,
+  deviceName,
   theme,
 }: {
   project: {
@@ -126,46 +89,46 @@ const ProjectCard = memo(({
     hasActive: boolean;
   };
   deviceId: string;
-  isExpanded: boolean;
-  onToggle: (key: string) => void;
-  onSessionPress: (deviceId: string, session: ClaudeSession) => void;
+  displayName: string;
+  deviceName: string;
   theme: ReturnType<typeof useTheme>['theme'];
 }) => {
-  const projectKey = `${deviceId}:${project.directory}`;
-  const directoryName = useMemo(() =>
-    project.directory.split('/').pop() ||
-    project.directory.split('\\').pop() ||
-    project.directory,
-    [project.directory]
-  );
   const sessionCount = project.sessions.length;
+  const folderColor = project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE;
 
-  const handleToggle = useCallback(() => {
-    onToggle(projectKey);
-  }, [onToggle, projectKey]);
+  const handlePress = useCallback(() => {
+    router.push({
+      pathname: '/project-hub',
+      params: {
+        deviceId,
+        directory: project.directory,
+        deviceName,
+      },
+    });
+  }, [deviceId, project.directory, deviceName]);
 
   return (
     <View style={[styles.projectCard, { backgroundColor: theme.backgroundSecondary }]}>
       {project.hasActive && (
-        <View style={[styles.glowEffect, { backgroundColor: theme.primary }]} />
+        <View style={[styles.glowEffect, { backgroundColor: FOLDER_COLOR_ACTIVE }]} />
       )}
 
-      <TouchableOpacity onPress={handleToggle} style={styles.projectHeader}>
+      <TouchableOpacity onPress={handlePress} style={styles.projectHeader}>
         <View style={styles.projectHeaderRow}>
           <View style={styles.projectHeaderLeft}>
-            <View style={[styles.folderIcon, { backgroundColor: theme.backgroundTertiary }]}>
+            <View style={[styles.folderIcon, { backgroundColor: folderColor + '18' }]}>
               <Folder
                 size={20}
-                color={project.hasActive ? theme.primary : theme.textTertiary}
+                color={folderColor}
               />
             </View>
             <View style={styles.projectTitleContainer}>
               <View style={styles.projectTitleRow}>
                 {project.hasActive && (
-                  <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />
+                  <View style={[styles.activeDot, { backgroundColor: FOLDER_COLOR_ACTIVE }]} />
                 )}
                 <Text style={[styles.projectName, { color: theme.text }]} numberOfLines={1}>
-                  {directoryName}
+                  {displayName}
                 </Text>
               </View>
               <Text
@@ -189,36 +152,9 @@ const ProjectCard = memo(({
               </View>
             </View>
           </View>
-          {isExpanded ? (
-            <ChevronDown size={20} color={theme.textTertiary} />
-          ) : (
-            <ChevronRight size={20} color={theme.textTertiary} />
-          )}
+          <ChevronRight size={20} color={theme.textTertiary} />
         </View>
       </TouchableOpacity>
-
-      {isExpanded && (
-        <View
-          style={[
-            styles.sessionList,
-            {
-              borderTopColor: theme.backgroundTertiary,
-              backgroundColor: theme.backgroundTertiary,
-            },
-          ]}
-        >
-          {project.sessions.map((session, index) => (
-            <SessionItem
-              key={session.sessionKey}
-              session={session}
-              deviceId={deviceId}
-              isLast={index === project.sessions.length - 1}
-              onPress={onSessionPress}
-              theme={theme}
-            />
-          ))}
-        </View>
-      )}
     </View>
   );
 });
@@ -226,9 +162,6 @@ const ProjectCard = memo(({
 // Memoized device group component - styled as macOS window
 const DeviceGroup = memo(({
   deviceGroup,
-  expandedProjects,
-  onToggleProject,
-  onSessionPress,
   theme,
 }: {
   deviceGroup: {
@@ -240,12 +173,14 @@ const DeviceGroup = memo(({
       hasActive: boolean;
     }[];
   };
-  expandedProjects: Set<string>;
-  onToggleProject: (key: string) => void;
-  onSessionPress: (deviceId: string, session: ClaudeSession) => void;
   theme: ReturnType<typeof useTheme>['theme'];
 }) => {
   const hasActiveProject = deviceGroup.projects.some(p => p.hasActive);
+
+  const projectDisplayNames = useMemo(() =>
+    getUniqueProjectNames(deviceGroup.projects.map(p => p.directory)),
+    [deviceGroup.projects]
+  );
 
   return (
     <View
@@ -292,9 +227,8 @@ const DeviceGroup = memo(({
             key={project.directory}
             project={project}
             deviceId={deviceGroup.device.id}
-            isExpanded={expandedProjects.has(`${deviceGroup.device.id}:${project.directory}`)}
-            onToggle={onToggleProject}
-            onSessionPress={onSessionPress}
+            displayName={projectDisplayNames.get(project.directory) || project.directory}
+            deviceName={deviceGroup.device.name}
             theme={theme}
           />
         ))}
@@ -346,7 +280,6 @@ export default function ProjectsScreen() {
   const fetchDevices = useDeviceStore((state) => state.fetchDevices);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(true);
@@ -535,28 +468,6 @@ export default function ProjectsScreen() {
     setRefreshing(false);
   }, [fetchDevices, fetchSessions, devices]);
 
-  const toggleProject = useCallback((projectKey: string) => {
-    setExpandedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(projectKey)) {
-        next.delete(projectKey);
-      } else {
-        next.add(projectKey);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleOpenSession = useCallback((deviceId: string, session: ClaudeSession) => {
-    router.push({
-      pathname: '/claude/session/[sessionKey]',
-      params: {
-        sessionKey: session.sessionKey,
-        deviceId: deviceId,
-      },
-    });
-  }, []);
-
   const totalProjects = useMemo(() =>
     deviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
     [deviceProjects]
@@ -566,12 +477,9 @@ export default function ProjectsScreen() {
   const renderDeviceGroup = useCallback(({ item }: { item: typeof deviceProjects[0] }) => (
     <DeviceGroup
       deviceGroup={item}
-      expandedProjects={expandedProjects}
-      onToggleProject={toggleProject}
-      onSessionPress={handleOpenSession}
       theme={theme}
     />
-  ), [expandedProjects, toggleProject, handleOpenSession, theme]);
+  ), [theme]);
 
   const keyExtractor = useCallback((item: typeof deviceProjects[0]) => item.device.id, []);
 
@@ -780,12 +688,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 8,
   },
-  activeDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 8,
-  },
   projectName: {
     fontWeight: 'bold',
   },
@@ -804,57 +706,6 @@ const styles = StyleSheet.create({
   },
   projectMetaDot: {
     marginHorizontal: 8,
-  },
-  sessionList: {
-    borderTopWidth: 1,
-  },
-  sessionItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sessionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  sessionIcon: {
-    width: 32,
-    height: 32,
-    borderWidth: 1,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionKey: {
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
-  sessionMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  sessionTime: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  metaDot: {
-    marginHorizontal: 8,
-  },
-  activeLabel: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   badge: {
     paddingHorizontal: 12,
