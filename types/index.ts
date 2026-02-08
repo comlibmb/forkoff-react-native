@@ -302,6 +302,7 @@ export interface ClaudeSession {
   deviceId: string;
   sessionKey: string;
   directory: string;
+  name?: string; // Auto-set from first user message as session summary
   state: ClaudeSessionState;
   lastUsedAt: string;
   transcriptPath?: string;

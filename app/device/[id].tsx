@@ -395,27 +395,37 @@ export default function DeviceDetailScreen() {
 
         {/* Connected Tools */}
         <View style={{ marginBottom: 24 }}>
-          <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 16 }}>
-            Connected Tools ({device.connectedTools?.length || 0})
-          </Text>
+          {(() => {
+            const supportedTools = (device.connectedTools || []).filter((tool) => {
+              const t = tool.type.toLowerCase();
+              return ['claude_code', 'claude-code', 'claude_terminal'].includes(t);
+            });
+            return (
+              <>
+                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 16 }}>
+                  Connected Tools ({supportedTools.length})
+                </Text>
 
-          {(device.connectedTools?.length || 0) === 0 ? (
-            <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
-              <Cpu size={48} color={theme.textTertiary} />
-              <Text style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
-                No tools connected to this device
-              </Text>
-              <Text style={{ color: theme.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
-                Install Cursor, Copilot, or Claude Terminal on your device
-              </Text>
-            </View>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {(device.connectedTools || []).map((tool) => (
-                <ToolCard key={tool.id} tool={tool} />
-              ))}
-            </View>
-          )}
+                {supportedTools.length === 0 ? (
+                  <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24, alignItems: 'center' }}>
+                    <Cpu size={48} color={theme.textTertiary} />
+                    <Text style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
+                      No tools connected to this device
+                    </Text>
+                    <Text style={{ color: theme.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+                      Run ForkOff Connect on your device to get started
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {supportedTools.map((tool) => (
+                      <ToolCard key={tool.id} tool={tool} />
+                    ))}
+                  </View>
+                )}
+              </>
+            );
+          })()}
         </View>
 
         {/* Terminal Section */}

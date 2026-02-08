@@ -34,10 +34,10 @@ export function useDevices() {
     fetchDevices();
   }, [fetchDevices]);
 
-  // Set up 45-second polling interval for background refresh
+  // Set up 45-second polling interval for background refresh (silent, no loading indicator)
   useEffect(() => {
     const pollInterval = setInterval(() => {
-      fetchDevices();
+      fetchDevices(false);
     }, 45000);
 
     return () => clearInterval(pollInterval);
