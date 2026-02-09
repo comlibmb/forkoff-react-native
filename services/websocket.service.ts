@@ -3,6 +3,7 @@ import { authService } from './auth.service';
 import { sentryService } from './sentry.service';
 import { analyticsService } from './analytics.service';
 import { DeviceStatus, ServerStatus, ApprovalRequest, CodeChange, ClaudeSession, DirectoryEntry } from '@/types';
+import { KeyExchangeInit, KeyExchangeAck, EncryptedMessage } from '@/services/crypto/types';
 
 // SECURITY: Determine if we're in development mode
 const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV === 'development';
@@ -359,6 +360,10 @@ interface EventCallbacks {
   claim_phone_session_result: EventCallback<ClaimPhoneSessionEvent>[];
   limit_reached: EventCallback<LimitReachedEvent>[];
   session_claimed: EventCallback<SessionClaimedEvent>[];
+  // E2EE events
+  encrypted_key_exchange_init: EventCallback<KeyExchangeInit>[];
+  encrypted_key_exchange_ack: EventCallback<KeyExchangeAck>[];
+  encrypted_message: EventCallback<EncryptedMessage>[];
   connected: EventCallback<void>[];
   disconnected: EventCallback<void>[];
   error: EventCallback<Error>[];
@@ -407,6 +412,9 @@ class WebSocketService {
     claim_phone_session_result: [],
     limit_reached: [],
     session_claimed: [],
+    encrypted_key_exchange_init: [],
+    encrypted_key_exchange_ack: [],
+    encrypted_message: [],
     connected: [],
     disconnected: [],
     error: [],
@@ -670,6 +678,22 @@ class WebSocketService {
     this.socket.on('session_claimed', (data) => {
       console.log('[WS] GOT session_claimed:', data?.message);
       this.emitInternal('session_claimed', data);
+    });
+
+    // E2EE events
+    this.socket.on('encrypted_key_exchange_init', (data) => {
+      console.log('[WS] GOT encrypted_key_exchange_init:', data?.senderDeviceId);
+      this.emitInternal('encrypted_key_exchange_init', data);
+    });
+
+    this.socket.on('encrypted_key_exchange_ack', (data) => {
+      console.log('[WS] GOT encrypted_key_exchange_ack:', data?.recipientDeviceId);
+      this.emitInternal('encrypted_key_exchange_ack', data);
+    });
+
+    this.socket.on('encrypted_message', (data) => {
+      console.log('[WS] GOT encrypted_message:', data?.senderDeviceId);
+      this.emitInternal('encrypted_message', data);
     });
   }
 

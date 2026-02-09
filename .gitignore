@@ -42,7 +42,8 @@ yarn-error.*
 /android
 
 # Claude local settings
-.claude/settings.local.json
+.claude/
+CLAUDE.md
 
 # Misc
 nul
