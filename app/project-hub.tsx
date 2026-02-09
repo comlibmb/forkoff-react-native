@@ -32,6 +32,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 import { SessionListItem, formatTimeAgo } from '@/components/project/SessionListItem';
 import { QuickActionGrid, QuickAction } from '@/components/project/QuickActionGrid';
+import { wsService } from '@/services/websocket.service';
 
 const STATUS_CHECK_PROMPT = 'Quick status — git status, failing tests, recent changes. Keep it brief.';
 const BRAINSTORM_PROMPT = 'Top 3 improvements, missing features, or tech debt items for this project. Be concise.';
@@ -99,6 +100,12 @@ export default function ProjectHubScreen() {
   const lastEntries = activityData?.lastEntries || [];
   const tasks = activityData?.tasks || [];
 
+  // Ensure we're subscribed to the device room so read_file_response reaches us
+  useEffect(() => {
+    if (!deviceId) return;
+    wsService.subscribeToDevice(deviceId);
+  }, [deviceId]);
+
   // Fetch data on mount
   useEffect(() => {
     if (!deviceId || !directory) return;
@@ -138,17 +145,6 @@ export default function ProjectHubScreen() {
       if (!deviceId) return;
 
       switch (actionId) {
-        case 'continue': {
-          if (!mostRecentSession) return;
-          router.push({
-            pathname: '/claude/session/[sessionKey]',
-            params: {
-              sessionKey: mostRecentSession.sessionKey,
-              deviceId,
-            },
-          });
-          break;
-        }
         case 'status_check': {
           if (!isDeviceOnline) return;
           const terminalId = `status-${Date.now()}`;
@@ -400,8 +396,6 @@ export default function ProjectHubScreen() {
             <QuickActionGrid
               onAction={handleQuickAction}
               disabled={false}
-              hasMostRecentSession={!!mostRecentSession}
-              hasTasks={tasks.length > 0}
             />
           </View>
 
