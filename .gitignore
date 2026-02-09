@@ -46,3 +46,6 @@ yarn-error.*
 
 # Misc
 nul
+
+# E2EE design document (internal only)
+docs/E2EE-DESIGN.md
