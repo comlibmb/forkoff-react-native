@@ -1,14 +1,14 @@
 import { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Play, BarChart3, Lightbulb, CheckSquare, Zap } from 'lucide-react-native';
+import { BarChart3, Lightbulb, CheckSquare, Zap } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 
 export interface QuickAction {
-  id: 'continue' | 'status_check' | 'brainstorm' | 'view_todos';
+  id: 'status_check' | 'brainstorm' | 'view_todos';
   label: string;
-  icon: typeof Play;
+  icon: typeof BarChart3;
   accentColor: string;
   usesTokens: boolean;
   disabled?: boolean;
@@ -16,13 +16,6 @@ export interface QuickAction {
 }
 
 const DEFAULT_ACTIONS: QuickAction[] = [
-  {
-    id: 'continue',
-    label: 'Continue',
-    icon: Play,
-    accentColor: colors.success[300],
-    usesTokens: false,
-  },
   {
     id: 'status_check',
     label: 'Status Check',
@@ -50,8 +43,6 @@ interface QuickActionGridProps {
   onAction: (actionId: QuickAction['id']) => void;
   disabled?: boolean;
   disabledReason?: string;
-  hasMostRecentSession?: boolean;
-  hasTasks?: boolean;
 }
 
 const ActionCard = memo(({
@@ -111,31 +102,11 @@ export const QuickActionGrid = memo(({
   onAction,
   disabled,
   disabledReason,
-  hasMostRecentSession = true,
-  hasTasks = false,
 }: QuickActionGridProps) => {
-  const actions = DEFAULT_ACTIONS.map((action) => {
-    if (action.id === 'continue' && !hasMostRecentSession) {
-      return { ...action, disabled: true, disabledReason: 'No recent session' };
-    }
-    return action;
-  });
-
   return (
     <View style={styles.grid}>
       <View style={styles.row}>
-        {actions.slice(0, 2).map((action) => (
-          <ActionCard
-            key={action.id}
-            action={action}
-            onPress={onAction}
-            globalDisabled={disabled}
-            globalDisabledReason={disabledReason}
-          />
-        ))}
-      </View>
-      <View style={styles.row}>
-        {actions.slice(2, 4).map((action) => (
+        {DEFAULT_ACTIONS.map((action) => (
           <ActionCard
             key={action.id}
             action={action}

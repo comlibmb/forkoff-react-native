@@ -893,6 +893,17 @@ export default function ClaudeSessionScreen() {
     // Mark as taken over so the session lifecycle hooks work
     setIsTakingOver(true);
     setHasTakenOver(true);
+
+    // Fallback: mark session as ready if no confirmation arrives
+    const fallback = setTimeout(() => {
+      if (!isSessionReady) {
+        console.log('[Session] Auto-prompt: fallback marking session as ready');
+        setIsSessionReady(true);
+        setIsTakingOver(false);
+      }
+    }, 5000);
+
+    return () => clearTimeout(fallback);
   }, [autoPrompt, autoDirectory, deviceId, sessionKey]);
 
   // Send auto-prompt when session becomes ready
