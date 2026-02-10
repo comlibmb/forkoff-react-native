@@ -61,6 +61,7 @@ export default function ProjectHubScreen() {
   } = useProjectHubStore();
 
   const [showTodos, setShowTodos] = useState(false);
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Get device info
@@ -460,20 +461,23 @@ export default function ProjectHubScreen() {
                   },
                 ]}
               >
-                {projectSessions.slice(0, 5).map((session, index) => (
+                {(showAllSessions ? projectSessions : projectSessions.slice(0, 5)).map((session, index) => (
                   <SessionListItem
                     key={session.sessionKey}
                     session={session}
                     deviceId={deviceId!}
-                    isLast={index === Math.min(projectSessions.length, 5) - 1}
+                    isLast={index === (showAllSessions ? projectSessions.length : Math.min(projectSessions.length, 5)) - 1}
                     onPress={handleSessionPress}
                   />
                 ))}
               </View>
             )}
 
-            {projectSessions.length > 5 && (
-              <TouchableOpacity style={styles.seeAllButton}>
+            {projectSessions.length > 5 && !showAllSessions && (
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={() => setShowAllSessions(true)}
+              >
                 <Text style={[styles.seeAllText, { color: theme.primary }]}>
                   See all {projectSessions.length} sessions
                 </Text>
