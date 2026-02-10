@@ -533,6 +533,15 @@ export default function ClaudeSessionScreen() {
       }
     });
 
+    // Listen for tool activity (non-blocking status updates from CLI)
+    const unsubToolActivity = wsService.on('tool_activity', (data) => {
+      if (data.sessionKey && data.sessionKey !== sessionKey) return;
+      const activity = getActivityFromTool(data.toolName);
+      const detail = getActivityDetail(data.toolName, { file_path: data.inputSummary?.replace('File: ', ''), command: data.inputSummary?.replace('Command: ', '') });
+      setActivityState(activity);
+      setActivityDetail(detail);
+    });
+
     // Listen for limit reached events (server-side enforcement)
     const unsubLimitReached = wsService.on('limit_reached', (data) => {
       console.log('[Session] limit_reached:', data.limitType, data.currentUsage, data.limit);
@@ -567,6 +576,7 @@ export default function ClaudeSessionScreen() {
       unsubThinkingContent();
       unsubTokenUsage();
       unsubTaskProgress();
+      unsubToolActivity();
       unsubLimitReached();
     };
   }, [sessionKey, deviceId]);

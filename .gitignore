@@ -48,5 +48,6 @@ CLAUDE.md
 # Misc
 nul
 
-# E2EE design document (internal only)
-docs/E2EE-DESIGN.md
+# Internal documentation (keep out of repo, except README)
+docs/*.md
+!docs/README.md
