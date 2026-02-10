@@ -822,6 +822,7 @@ class WebSocketService {
       sessionKey?: string;
       permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
       model?: string;
+      directory?: string;
     }
   ): void {
     // SECURITY: Never log message content
@@ -830,6 +831,7 @@ class WebSocketService {
       deviceId,
       message,
       sessionKey: options?.sessionKey,
+      directory: options?.directory,
       mode: options ? {
         permissionMode: options.permissionMode,
         model: options.model,
