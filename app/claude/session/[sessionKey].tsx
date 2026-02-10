@@ -887,62 +887,38 @@ export default function ClaudeSessionScreen() {
     }
   };
 
-  // Auto-prompt: Start a new session and send the prompt when ready
+  // Auto-prompt: Send user_message directly with directory so CLI spawns a fresh session
   // Used by quick actions from the Project Hub (Status Check, Brainstorm, Initialize)
   useEffect(() => {
     if (!autoPrompt || !autoDirectory || !deviceId) return;
     if (autoPromptSentRef.current) return;
-
-    // Start a new Claude session in the specified directory
-    console.log('[Session] Auto-prompt: starting new session in', autoDirectory);
-    const { startNewSession } = useClaudeStore.getState();
-    startNewSession(deviceId, autoDirectory, sessionKey!).catch((err) => {
-      console.error('[Session] Auto-prompt: failed to start session:', err);
-    });
-
-    // Mark as taken over so the session lifecycle hooks work
-    setIsTakingOver(true);
-    setHasTakenOver(true);
-
-    // Fallback: mark session as ready if no confirmation arrives
-    const fallback = setTimeout(() => {
-      if (!isSessionReady) {
-        console.log('[Session] Auto-prompt: fallback marking session as ready');
-        setIsSessionReady(true);
-        setIsTakingOver(false);
-      }
-    }, 5000);
-
-    return () => clearTimeout(fallback);
-  }, [autoPrompt, autoDirectory, deviceId, sessionKey]);
-
-  // Send auto-prompt when session becomes ready
-  useEffect(() => {
-    if (!autoPrompt || !deviceId || !isSessionReady) return;
-    if (autoPromptSentRef.current) return;
     autoPromptSentRef.current = true;
 
-    console.log('[Session] Auto-prompt: sending prompt');
+    console.log('[Session] Auto-prompt: sending message with directory', autoDirectory);
     setAutoPromptSent(true);
 
-    // Small delay to let the session fully initialize
-    setTimeout(() => {
-      wsService.sendUserMessage(deviceId, autoPrompt, {
-        sessionKey: sessionKey,
-      });
-      setIsWaitingForResponse(true);
+    // Mark as taken over so the session lifecycle hooks work
+    setIsTakingOver(false);
+    setHasTakenOver(true);
+    setIsSessionReady(true);
 
-      // Add optimistic user message
-      const optimisticEntry: TranscriptEntry = {
-        id: `auto-${Date.now()}`,
-        type: 'user',
-        timestamp: new Date().toISOString(),
-        lineNumber: 0,
-        content: { text: autoPrompt, role: 'user' },
-      };
-      setEntries((prev) => [...prev, optimisticEntry]);
-    }, 500);
-  }, [autoPrompt, deviceId, isSessionReady, sessionKey]);
+    // Send user_message with directory — CLI will spawn fresh claude + write message in one step
+    wsService.sendUserMessage(deviceId, autoPrompt, {
+      sessionKey: sessionKey,
+      directory: autoDirectory,
+    });
+    setIsWaitingForResponse(true);
+
+    // Add optimistic user message
+    const optimisticEntry: TranscriptEntry = {
+      id: `auto-${Date.now()}`,
+      type: 'user',
+      timestamp: new Date().toISOString(),
+      lineNumber: 0,
+      content: { text: autoPrompt, role: 'user' },
+    };
+    setEntries((prev) => [...prev, optimisticEntry]);
+  }, [autoPrompt, autoDirectory, deviceId, sessionKey]);
 
   const handleTakeOver = async () => {
     if (!session || !deviceId) return;
