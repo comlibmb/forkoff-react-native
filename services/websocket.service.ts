@@ -174,6 +174,17 @@ interface ClaudeApprovalRequestEvent {
   timestamp: string;
 }
 
+// Tool activity event (non-blocking notification of tool execution)
+export interface ToolActivityEvent {
+  deviceId?: string;
+  terminalSessionId: string;
+  sessionKey?: string;
+  toolName: string;
+  toolId: string;
+  inputSummary: string;
+  timestamp: string;
+}
+
 // RPC request event
 interface RpcRequestEvent {
   deviceId: string;
@@ -341,6 +352,7 @@ interface EventCallbacks {
   thinking_state: EventCallback<ThinkingStateEvent>[];
   permission_request: EventCallback<PermissionRequestEvent>[];
   claude_approval_request: EventCallback<ClaudeApprovalRequestEvent>[];
+  tool_activity: EventCallback<ToolActivityEvent>[];
   rpc_request: EventCallback<RpcRequestEvent>[];
   rpc_response: EventCallback<RpcResponseEvent>[];
   session_connected: EventCallback<SessionConnectedEvent>[];
@@ -393,6 +405,7 @@ class WebSocketService {
     thinking_state: [],
     permission_request: [],
     claude_approval_request: [],
+    tool_activity: [],
     rpc_request: [],
     rpc_response: [],
     session_connected: [],
@@ -571,6 +584,12 @@ class WebSocketService {
     this.socket.on('claude_approval_request', (data) => {
       console.log('[WS] GOT claude_approval_request:', data?.approvalId, data?.promptText?.substring(0, 50));
       this.emitInternal('claude_approval_request', data);
+    });
+
+    // Tool activity notifications (non-blocking)
+    this.socket.on('tool_activity', (data) => {
+      console.log('[WS] GOT tool_activity:', data?.toolName, data?.inputSummary?.substring(0, 50));
+      this.emitInternal('tool_activity', data);
     });
 
     // RPC events

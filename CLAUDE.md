@@ -92,3 +92,9 @@ Navigated to from the Projects tab with `deviceId`, `directory`, `deviceName` pa
 - **Cache with TTL**: `project-hub.store` caches CLAUDE.md and activity data for 5 minutes per project
 - **Device room subscription**: Mobile must call `wsService.subscribeToDevice(deviceId)` to join a device's Socket.io room and receive events routed to `device:<id>`
 - **Session-scoped routing**: Some events route through `transcript:<sessionKey>` rooms instead of device rooms
+
+## Reference Documentation
+Always check `docs/` for detailed documentation:
+- `docs/PERMISSION-MODEL.md` — Permission modes, approval flow, SDK behavior
+- `docs/WEBSOCKET-EVENTS.md` — All WebSocket events, payloads, routing
+- `docs/BUG-FIXES.md` — Known bugs found and how they were fixed
