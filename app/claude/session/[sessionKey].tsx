@@ -1086,6 +1086,8 @@ export default function ClaudeSessionScreen() {
     console.log('[Session] Sending user message:', message.substring(0, 50));
     wsService.sendUserMessage(deviceId, message, {
       sessionKey: sessionKey,
+      directory: session?.directory,
+      permissionMode: sessionUnrestricted ? 'bypassPermissions' : undefined,
     });
 
     // Reset sending state after response arrives or timeout
