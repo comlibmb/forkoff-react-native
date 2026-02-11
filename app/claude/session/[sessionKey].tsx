@@ -102,6 +102,9 @@ export default function ClaudeSessionScreen() {
   const [autoPromptSent, setAutoPromptSent] = useState(false);
   const autoPromptSentRef = useRef(false);
 
+  // Track which permission requestIds are from the hook system (vs legacy RPC)
+  const hookPromptIdsRef = useRef<Set<string>>(new Set());
+
   // Unrestricted mode - per-session override, defaults to global setting
   const globalUnrestricted = useSessionSettingsStore((s) => s.unrestrictedMode);
   const globalHasSeenWarning = useSessionSettingsStore((s) => s.hasSeenWarning);
@@ -431,7 +434,7 @@ export default function ClaudeSessionScreen() {
       }
     });
 
-    // Listen for permission requests
+    // Listen for permission requests (legacy RPC-based)
     const unsubPermission = wsService.on('permission_request', (data) => {
       if (data.sessionKey === sessionKey) {
         console.log('[Session] permission_request:', data.type, data.toolName);
@@ -444,6 +447,47 @@ export default function ClaudeSessionScreen() {
         });
         setShowPermissionModal(true);
       }
+    });
+
+    // Listen for interactive permission prompts (hook-based approval system)
+    const unsubPermissionPrompt = wsService.on('permission_prompt', (data) => {
+      if (data.sessionKey && data.sessionKey !== sessionKey) return;
+      console.log('[Session] permission_prompt:', data.toolName, data.promptId);
+
+      // Convert tool info to a PermissionRequestData for the modal
+      const toolName = data.toolName || 'Unknown';
+      const toolInput = data.toolInput || {};
+      let description = `Claude wants to use ${toolName}`;
+      let type: 'tool_use' | 'file_write' | 'bash_command' = 'tool_use';
+
+      if (toolName === 'Bash') {
+        type = 'bash_command';
+        description = toolInput.command
+          ? `Run: ${String(toolInput.command).substring(0, 200)}`
+          : 'Execute a terminal command';
+      } else if (toolName === 'Write') {
+        type = 'file_write';
+        description = toolInput.file_path
+          ? `Create file: ${toolInput.file_path}`
+          : 'Create a new file';
+      } else if (toolName === 'Edit') {
+        type = 'file_write';
+        description = toolInput.file_path
+          ? `Edit file: ${toolInput.file_path}`
+          : 'Edit an existing file';
+      }
+
+      // Track this as a hook-based prompt so we send the right response type
+      hookPromptIdsRef.current.add(data.promptId);
+
+      setPermissionRequest({
+        requestId: data.promptId, // Use promptId as requestId for the modal
+        type,
+        toolName,
+        description,
+        details: toolInput,
+      });
+      setShowPermissionModal(true);
     });
 
     // Listen for session events (ready, switch, etc.)
@@ -571,6 +615,7 @@ export default function ClaudeSessionScreen() {
       unsubClaudeMessage();
       unsubThinking();
       unsubPermission();
+      unsubPermissionPrompt();
       unsubSessionEvent();
       unsubSessionConnected();
       unsubThinkingContent();
@@ -1064,11 +1109,22 @@ export default function ClaudeSessionScreen() {
     setShowPermissionModal(false);
     setPermissionRequest(null);
 
-    // Send approval response via RPC
-    wsService.emit('rpc_response', {
-      requestId,
-      result: { approved: true, remember },
-    });
+    // Check if this is a hook-based prompt or legacy RPC
+    if (hookPromptIdsRef.current.has(requestId)) {
+      hookPromptIdsRef.current.delete(requestId);
+      // Send via interactive permission response (hook system)
+      wsService.respondToPermissionPrompt(requestId, 'allow', {
+        reason: 'User approved via mobile',
+        deviceId: deviceId as string,
+        sessionKey: sessionKey as string,
+      });
+    } else {
+      // Legacy: Send approval response via RPC
+      wsService.emit('rpc_response', {
+        requestId,
+        result: { approved: true, remember },
+      });
+    }
   };
 
   const handlePermissionDeny = (requestId: string, remember: boolean) => {
@@ -1087,11 +1143,22 @@ export default function ClaudeSessionScreen() {
     setShowPermissionModal(false);
     setPermissionRequest(null);
 
-    // Send denial response via RPC
-    wsService.emit('rpc_response', {
-      requestId,
-      result: { approved: false, remember },
-    });
+    // Check if this is a hook-based prompt or legacy RPC
+    if (hookPromptIdsRef.current.has(requestId)) {
+      hookPromptIdsRef.current.delete(requestId);
+      // Send via interactive permission response (hook system)
+      wsService.respondToPermissionPrompt(requestId, 'deny', {
+        reason: 'User denied via mobile',
+        deviceId: deviceId as string,
+        sessionKey: sessionKey as string,
+      });
+    } else {
+      // Legacy: Send denial response via RPC
+      wsService.emit('rpc_response', {
+        requestId,
+        result: { approved: false, remember },
+      });
+    }
   };
 
   const toggleToolExpand = (id: string) => {

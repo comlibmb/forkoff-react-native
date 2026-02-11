@@ -185,6 +185,18 @@ export interface ToolActivityEvent {
   timestamp: string;
 }
 
+// Permission prompt event (interactive approval from CLI hook system)
+export interface PermissionPromptEvent {
+  promptId: string;
+  deviceId?: string;
+  terminalSessionId: string;
+  sessionKey?: string;
+  toolName: string;
+  toolInput: any;
+  toolUseId: string;
+  timestamp: string;
+}
+
 // RPC request event
 interface RpcRequestEvent {
   deviceId: string;
@@ -353,6 +365,7 @@ interface EventCallbacks {
   permission_request: EventCallback<PermissionRequestEvent>[];
   claude_approval_request: EventCallback<ClaudeApprovalRequestEvent>[];
   tool_activity: EventCallback<ToolActivityEvent>[];
+  permission_prompt: EventCallback<PermissionPromptEvent>[];
   rpc_request: EventCallback<RpcRequestEvent>[];
   rpc_response: EventCallback<RpcResponseEvent>[];
   session_connected: EventCallback<SessionConnectedEvent>[];
@@ -406,6 +419,7 @@ class WebSocketService {
     permission_request: [],
     claude_approval_request: [],
     tool_activity: [],
+    permission_prompt: [],
     rpc_request: [],
     rpc_response: [],
     session_connected: [],
@@ -590,6 +604,12 @@ class WebSocketService {
     this.socket.on('tool_activity', (data) => {
       console.log('[WS] GOT tool_activity:', data?.toolName, data?.inputSummary?.substring(0, 50));
       this.emitInternal('tool_activity', data);
+    });
+
+    // Permission prompt (interactive approval from CLI hook system)
+    this.socket.on('permission_prompt', (data) => {
+      console.log('[WS] GOT permission_prompt:', data?.promptId, data?.toolName);
+      this.emitInternal('permission_prompt', data);
     });
 
     // RPC events
@@ -861,6 +881,26 @@ class WebSocketService {
   // Respond to approval request
   respondToApproval(requestId: string, approved: boolean): void {
     this.socket?.emit('approval_response', { requestId, approved });
+  }
+
+  // Respond to interactive permission prompt (hook-based approval system)
+  respondToPermissionPrompt(
+    promptId: string,
+    decision: 'allow' | 'deny',
+    options?: {
+      reason?: string;
+      deviceId?: string;
+      sessionKey?: string;
+    }
+  ): void {
+    console.log(`[WS] Sending permission_response: ${promptId} -> ${decision}`);
+    this.socket?.emit('permission_response', {
+      promptId,
+      decision,
+      reason: options?.reason,
+      deviceId: options?.deviceId,
+      sessionKey: options?.sessionKey,
+    });
   }
 
   // Respond to Claude approval request (yes/no/plan prompts)
