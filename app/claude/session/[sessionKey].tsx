@@ -488,6 +488,9 @@ export default function ClaudeSessionScreen() {
         details: toolInput,
       });
       setShowPermissionModal(true);
+      // Claude is blocked waiting for permission — override activity state
+      setActivityState('waiting');
+      setActivityDetail(`Waiting for approval: ${toolName}`);
     });
 
     // Listen for session events (ready, switch, etc.)
@@ -1108,6 +1111,9 @@ export default function ClaudeSessionScreen() {
 
     setShowPermissionModal(false);
     setPermissionRequest(null);
+    // Reset activity state — tool will execute and transcript updates will take over
+    setActivityState('formulating');
+    setActivityDetail(undefined);
 
     // Check if this is a hook-based prompt or legacy RPC
     if (hookPromptIdsRef.current.has(requestId)) {
@@ -1142,6 +1148,9 @@ export default function ClaudeSessionScreen() {
 
     setShowPermissionModal(false);
     setPermissionRequest(null);
+    // Reset activity state — tool was denied, Claude will formulate next step
+    setActivityState('formulating');
+    setActivityDetail(undefined);
 
     // Check if this is a hook-based prompt or legacy RPC
     if (hookPromptIdsRef.current.has(requestId)) {
