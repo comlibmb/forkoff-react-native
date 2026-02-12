@@ -10,6 +10,7 @@ import {
   Sun,
   ChevronRight,
   ShieldOff,
+  Shield,
   LogOut,
   HelpCircle,
   MessageCircle,
@@ -288,6 +289,14 @@ export default function SettingsScreen() {
               }
             />
           </View>
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Shield}
+            title="Permission Rules"
+            subtitle="Configure tool approval rules"
+            onPress={() => router.push('/settings/permissions')}
+            theme={theme}
+          />
           <View style={[styles.divider, { backgroundColor: theme.divider }]} />
           <SettingsItem
             icon={Compass}

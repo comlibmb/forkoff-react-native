@@ -24,11 +24,13 @@ import { alert } from '@/components/ui/AlertModal';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useUsageStore } from '@/stores/usage.store';
 import { useSessionSettingsStore } from '@/stores/session-settings.store';
+import { usePermissionRulesStore } from '@/stores/permission-rules.store';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
-import PermissionRequest, { PermissionRequestData } from '@/components/claude/PermissionRequest';
+import { PermissionRequestData } from '@/components/claude/PermissionRequest';
+import { PermissionQueue } from '@/components/claude/PermissionQueue';
 import { ThinkingBlock, ThinkingIndicator } from '@/components/claude/ThinkingBlock';
 import { TaskProgress } from '@/components/claude/TaskProgress';
 import { TokenUsageDisplay, TokenUsageInline } from '@/components/claude/TokenUsageDisplay';
@@ -51,6 +53,43 @@ function AnimatedConnectDots() {
     return () => clearInterval(interval);
   }, []);
   return <Text style={{ color: theme.primaryLight, fontFamily: 'monospace', fontSize: 13, width: 20 }}>{dots}</Text>;
+}
+
+/** Convert a permission_prompt or pending_permissions_sync prompt to PermissionRequestData */
+function convertPromptToPermissionData(data: {
+  promptId: string;
+  toolName?: string;
+  toolInput?: any;
+}): PermissionRequestData {
+  const toolName = data.toolName || 'Unknown';
+  const toolInput = data.toolInput || {};
+  let description = `Claude wants to use ${toolName}`;
+  let type: 'tool_use' | 'file_write' | 'bash_command' = 'tool_use';
+
+  if (toolName === 'Bash') {
+    type = 'bash_command';
+    description = toolInput.command
+      ? `Run: ${String(toolInput.command).substring(0, 200)}`
+      : 'Execute a terminal command';
+  } else if (toolName === 'Write') {
+    type = 'file_write';
+    description = toolInput.file_path
+      ? `Create file: ${toolInput.file_path}`
+      : 'Create a new file';
+  } else if (toolName === 'Edit') {
+    type = 'file_write';
+    description = toolInput.file_path
+      ? `Edit file: ${toolInput.file_path}`
+      : 'Edit an existing file';
+  }
+
+  return {
+    requestId: data.promptId,
+    type,
+    toolName,
+    description,
+    details: toolInput,
+  };
 }
 
 export default function ClaudeSessionScreen() {
@@ -80,8 +119,7 @@ export default function ClaudeSessionScreen() {
   const [totalEntries, setTotalEntries] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [permissionRequest, setPermissionRequest] = useState<PermissionRequestData | null>(null);
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [permissionQueue, setPermissionQueue] = useState<PermissionRequestData[]>([]);
   const [thinkingOpacity, setThinkingOpacity] = useState(1);
 
   // New state for thinking, tokens, and tasks
@@ -438,59 +476,51 @@ export default function ClaudeSessionScreen() {
     const unsubPermission = wsService.on('permission_request', (data) => {
       if (data.sessionKey === sessionKey) {
         console.log('[Session] permission_request:', data.type, data.toolName);
-        setPermissionRequest({
-          requestId: data.requestId,
-          type: data.type,
-          toolName: data.toolName,
-          description: data.description,
-          details: data.details,
+        setPermissionQueue(prev => {
+          if (prev.some(p => p.requestId === data.requestId)) return prev;
+          return [...prev, {
+            requestId: data.requestId,
+            type: data.type,
+            toolName: data.toolName,
+            description: data.description,
+            details: data.details,
+          }];
         });
-        setShowPermissionModal(true);
       }
     });
 
     // Listen for interactive permission prompts (hook-based approval system)
     const unsubPermissionPrompt = wsService.on('permission_prompt', (data) => {
-      if (data.sessionKey && data.sessionKey !== sessionKey) return;
+      if (data.sessionKey && data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
       console.log('[Session] permission_prompt:', data.toolName, data.promptId);
 
-      // Convert tool info to a PermissionRequestData for the modal
-      const toolName = data.toolName || 'Unknown';
-      const toolInput = data.toolInput || {};
-      let description = `Claude wants to use ${toolName}`;
-      let type: 'tool_use' | 'file_write' | 'bash_command' = 'tool_use';
-
-      if (toolName === 'Bash') {
-        type = 'bash_command';
-        description = toolInput.command
-          ? `Run: ${String(toolInput.command).substring(0, 200)}`
-          : 'Execute a terminal command';
-      } else if (toolName === 'Write') {
-        type = 'file_write';
-        description = toolInput.file_path
-          ? `Create file: ${toolInput.file_path}`
-          : 'Create a new file';
-      } else if (toolName === 'Edit') {
-        type = 'file_write';
-        description = toolInput.file_path
-          ? `Edit file: ${toolInput.file_path}`
-          : 'Edit an existing file';
-      }
-
-      // Track this as a hook-based prompt so we send the right response type
       hookPromptIdsRef.current.add(data.promptId);
-
-      setPermissionRequest({
-        requestId: data.promptId, // Use promptId as requestId for the modal
-        type,
-        toolName,
-        description,
-        details: toolInput,
+      setPermissionQueue(prev => {
+        if (prev.some(p => p.requestId === data.promptId)) return prev; // dedupe
+        return [...prev, convertPromptToPermissionData(data)];
       });
-      setShowPermissionModal(true);
-      // Claude is blocked waiting for permission — override activity state
       setActivityState('waiting');
-      setActivityDetail(`Waiting for approval: ${toolName}`);
+      setActivityDetail(`Waiting for approval: ${data.toolName || 'Unknown'}`);
+    });
+
+    // Listen for pending permissions sync (catches up mobile on take-over)
+    const unsubPermissionsSync = wsService.on('pending_permissions_sync', (syncData) => {
+      if (syncData.sessionKey !== sessionKey) return;
+      console.log('[Session] pending_permissions_sync:', syncData.prompts?.length, 'prompts');
+
+      if (syncData.prompts && syncData.prompts.length > 0) {
+        setPermissionQueue(prev => {
+          const newPrompts = syncData.prompts
+            .filter(p => !prev.some(q => q.requestId === p.promptId))
+            .map(p => {
+              hookPromptIdsRef.current.add(p.promptId);
+              return convertPromptToPermissionData(p);
+            });
+          if (newPrompts.length === 0) return prev;
+          return [...prev, ...newPrompts];
+        });
+        setActivityState('waiting');
+      }
     });
 
     // Listen for session events (ready, switch, etc.)
@@ -520,7 +550,7 @@ export default function ClaudeSessionScreen() {
 
     // Listen for thinking content (extended thinking text)
     const unsubThinkingContent = wsService.on('thinking_content', (data: ThinkingContentEvent) => {
-      if (data.sessionKey !== sessionKey) return;
+      if (data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
       console.log('[Session] thinking_content:', data.thinkingId, data.partial ? '(streaming)' : '(complete)');
 
       if (data.partial) {
@@ -558,14 +588,14 @@ export default function ClaudeSessionScreen() {
 
     // Listen for token usage
     const unsubTokenUsage = wsService.on('token_usage', (data: TokenUsageEvent) => {
-      if (data.sessionKey !== sessionKey) return;
+      if (data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
       console.log('[Session] token_usage:', data.usage.inputTokens, '/', data.usage.outputTokens);
       setTokenUsage(data.usage);
     });
 
     // Listen for task progress
     const unsubTaskProgress = wsService.on('task_progress', (data: TaskProgressEvent) => {
-      if (data.sessionKey !== sessionKey) return;
+      if (data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
       console.log('[Session] task_progress:', data.type, data.task?.subject || data.tasks?.length);
 
       if (data.type === 'list' && data.tasks) {
@@ -582,7 +612,7 @@ export default function ClaudeSessionScreen() {
 
     // Listen for tool activity (non-blocking status updates from CLI)
     const unsubToolActivity = wsService.on('tool_activity', (data) => {
-      if (data.sessionKey && data.sessionKey !== sessionKey) return;
+      if (data.sessionKey && data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
       const activity = getActivityFromTool(data.toolName);
       const detail = getActivityDetail(data.toolName, { file_path: data.inputSummary?.replace('File: ', ''), command: data.inputSummary?.replace('Command: ', '') });
       setActivityState(activity);
@@ -619,6 +649,7 @@ export default function ClaudeSessionScreen() {
       unsubThinking();
       unsubPermission();
       unsubPermissionPrompt();
+      unsubPermissionsSync();
       unsubSessionEvent();
       unsubSessionConnected();
       unsubThinkingContent();
@@ -664,11 +695,24 @@ export default function ClaudeSessionScreen() {
       if (data.sessionKey === sessionKey) {
         console.log('[Session] Received SDK session history:', data.entries?.length, 'entries');
         initialLoadDoneRef.current = true;
-        setEntries(data.entries || []);
+        const historyEntries = data.entries || [];
+
+        // Merge with existing optimistic entries (local- or auto-) to avoid wiping them
+        setEntries(prev => {
+          const optimistic = prev.filter(e =>
+            e.id.startsWith('local-') || e.id.startsWith('auto-')
+          );
+          if (optimistic.length === 0) return historyEntries;
+          // Check for content duplicates between history and optimistic entries
+          const historyTexts = new Set(historyEntries.filter(e => e.type === 'user').map(e => e.content?.text));
+          const uniqueOptimistic = optimistic.filter(e => !historyTexts.has(e.content?.text));
+          return [...historyEntries, ...uniqueOptimistic];
+        });
+
         setIsLoading(false);
         setTotalEntries(data.totalEntries || 0);
         setHasMore(data.hasMore || false);
-        setCurrentOffset(data.entries?.length || 0);
+        setCurrentOffset(historyEntries.length);
 
         // Scroll to bottom after loading history
         setTimeout(() => {
@@ -794,13 +838,13 @@ export default function ClaudeSessionScreen() {
         });
       }
 
-      // Fallback: if no response in 3 seconds, stop loading
+      // Fallback: if no response in 10 seconds, stop loading
       loadingTimeout = setTimeout(() => {
         if (!initialLoadDoneRef.current) {
           console.log('[Session] Loading timeout - stopping loader');
           setIsLoading(false);
         }
-      }, 3000);
+      }, 10000);
     } else {
       // SDK streaming mode - join room and fetch history from database
       console.log('[Session] SDK streaming mode - joining transcript room for:', sessionKey);
@@ -815,17 +859,18 @@ export default function ClaudeSessionScreen() {
         deviceId,
         sessionKey,
         claudeSessionId: session?.claudeSessionId, // Pass claude session ID if we have it
+        directory: session?.directory, // Used by CLI to filter fallback sessions
         limit: INITIAL_LOAD,
         offset: 0,
       });
 
-      // Fallback: if no response in 3 seconds, stop loading
+      // Fallback: if no response in 10 seconds, stop loading
       loadingTimeout = setTimeout(() => {
         if (!initialLoadDoneRef.current) {
           console.log('[Session] Loading timeout - stopping loader');
           setIsLoading(false);
         }
-      }, 3000);
+      }, 10000);
     }
 
     return () => {
@@ -950,10 +995,22 @@ export default function ClaudeSessionScreen() {
     setHasTakenOver(true);
     setIsSessionReady(true);
 
+    // Sync permission rules to CLI before starting session
+    if (!sessionUnrestricted) {
+      const rules = usePermissionRulesStore.getState().rules;
+      wsService.emit('permission_rules_sync', {
+        deviceId,
+        sessionKey,
+        terminalSessionId: sessionKey,
+        rules,
+      });
+    }
+
     // Send user_message with directory — CLI will spawn fresh claude + write message in one step
     wsService.sendUserMessage(deviceId, autoPrompt, {
       sessionKey: sessionKey,
       directory: autoDirectory,
+      interactivePermissions: !sessionUnrestricted,
     });
     setIsWaitingForResponse(true);
 
@@ -997,7 +1054,19 @@ export default function ClaudeSessionScreen() {
       directory: session.directory,
       terminalSessionId: sessionKey, // Use sessionKey as the process identifier
       dangerouslySkipPermissions: sessionUnrestricted,
+      interactivePermissions: !sessionUnrestricted, // Enable hook-based approval when not unrestricted
     });
+
+    // Sync permission rules to CLI so the hook script uses user's configuration
+    if (!sessionUnrestricted) {
+      const rules = usePermissionRulesStore.getState().rules;
+      wsService.emit('permission_rules_sync', {
+        deviceId,
+        sessionKey,
+        terminalSessionId: sessionKey,
+        rules,
+      });
+    }
 
     // Mark as taken over - isTakingOver will be set false when session is ready
     // (via session_connected or claude_session_event ready)
@@ -1088,6 +1157,7 @@ export default function ClaudeSessionScreen() {
       sessionKey: sessionKey,
       directory: session?.directory,
       permissionMode: sessionUnrestricted ? 'bypassPermissions' : undefined,
+      interactivePermissions: !sessionUnrestricted,
     });
 
     // Reset sending state after response arrives or timeout
@@ -1098,78 +1168,76 @@ export default function ClaudeSessionScreen() {
     }, 1000); // 1 second cooldown
   };
 
-  const handlePermissionApprove = (requestId: string, remember: boolean) => {
-    console.log('[Session] Permission approved:', requestId, 'remember:', remember);
-
-    // Track permission approved
-    analyticsService.track('claude_permission_approved', {
-      sessionKey,
-      deviceId,
-      requestId,
-      remember,
-      permissionType: permissionRequest?.type,
-      toolName: permissionRequest?.toolName,
-    });
-
-    setShowPermissionModal(false);
-    setPermissionRequest(null);
-    // Reset activity state — tool will execute and transcript updates will take over
-    setActivityState('formulating');
-    setActivityDetail(undefined);
-
-    // Check if this is a hook-based prompt or legacy RPC
+  const sendPermissionResponse = (requestId: string, decision: 'allow' | 'deny') => {
     if (hookPromptIdsRef.current.has(requestId)) {
       hookPromptIdsRef.current.delete(requestId);
-      // Send via interactive permission response (hook system)
-      wsService.respondToPermissionPrompt(requestId, 'allow', {
-        reason: 'User approved via mobile',
+      wsService.respondToPermissionPrompt(requestId, decision, {
+        reason: `User ${decision === 'allow' ? 'approved' : 'denied'} via mobile`,
         deviceId: deviceId as string,
         sessionKey: sessionKey as string,
       });
     } else {
-      // Legacy: Send approval response via RPC
       wsService.emit('rpc_response', {
         requestId,
-        result: { approved: true, remember },
+        result: { approved: decision === 'allow', remember: false },
       });
     }
   };
 
-  const handlePermissionDeny = (requestId: string, remember: boolean) => {
-    console.log('[Session] Permission denied:', requestId, 'remember:', remember);
+  const handlePermissionApprove = (requestId: string) => {
+    console.log('[Session] Permission approved:', requestId);
+    const request = permissionQueue.find(p => p.requestId === requestId);
 
-    // Track permission denied
+    analyticsService.track('claude_permission_approved', {
+      sessionKey,
+      deviceId,
+      requestId,
+      permissionType: request?.type,
+      toolName: request?.toolName,
+    });
+
+    setPermissionQueue(prev => prev.filter(p => p.requestId !== requestId));
+    setActivityState('formulating');
+    setActivityDetail(undefined);
+    sendPermissionResponse(requestId, 'allow');
+  };
+
+  const handlePermissionDeny = (requestId: string) => {
+    console.log('[Session] Permission denied:', requestId);
+    const request = permissionQueue.find(p => p.requestId === requestId);
+
     analyticsService.track('claude_permission_denied', {
       sessionKey,
       deviceId,
       requestId,
-      remember,
-      permissionType: permissionRequest?.type,
-      toolName: permissionRequest?.toolName,
+      permissionType: request?.type,
+      toolName: request?.toolName,
     });
 
-    setShowPermissionModal(false);
-    setPermissionRequest(null);
-    // Reset activity state — tool was denied, Claude will formulate next step
+    setPermissionQueue(prev => prev.filter(p => p.requestId !== requestId));
     setActivityState('formulating');
     setActivityDetail(undefined);
+    sendPermissionResponse(requestId, 'deny');
+  };
 
-    // Check if this is a hook-based prompt or legacy RPC
-    if (hookPromptIdsRef.current.has(requestId)) {
-      hookPromptIdsRef.current.delete(requestId);
-      // Send via interactive permission response (hook system)
-      wsService.respondToPermissionPrompt(requestId, 'deny', {
-        reason: 'User denied via mobile',
-        deviceId: deviceId as string,
-        sessionKey: sessionKey as string,
-      });
-    } else {
-      // Legacy: Send denial response via RPC
-      wsService.emit('rpc_response', {
-        requestId,
-        result: { approved: false, remember },
-      });
+  const handlePermissionApproveAll = () => {
+    console.log('[Session] Approve all permissions:', permissionQueue.length);
+    for (const request of permissionQueue) {
+      sendPermissionResponse(request.requestId, 'allow');
     }
+    setPermissionQueue([]);
+    setActivityState('formulating');
+    setActivityDetail(undefined);
+  };
+
+  const handlePermissionDenyAll = () => {
+    console.log('[Session] Deny all permissions:', permissionQueue.length);
+    for (const request of permissionQueue) {
+      sendPermissionResponse(request.requestId, 'deny');
+    }
+    setPermissionQueue([]);
+    setActivityState('formulating');
+    setActivityDetail(undefined);
   };
 
   const toggleToolExpand = (id: string) => {
@@ -1474,12 +1542,15 @@ export default function ClaudeSessionScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      {/* Permission Request Modal */}
-      <PermissionRequest
-        visible={showPermissionModal}
-        request={permissionRequest}
+      {/* Permission Queue Modal */}
+      <PermissionQueue
+        visible={permissionQueue.length > 0}
+        queue={permissionQueue}
         onApprove={handlePermissionApprove}
         onDeny={handlePermissionDeny}
+        onApproveAll={handlePermissionApproveAll}
+        onDenyAll={handlePermissionDenyAll}
+        onDismiss={() => {}}
       />
       {/* Limit Paywall Modal */}
       <LimitPaywallModal
@@ -1583,6 +1654,8 @@ export default function ClaudeSessionScreen() {
           {/* Terminal-style output */}
           {isLoading ? (
             <TerminalLoader variant="boot" directory={directoryName} />
+          ) : entries.length === 0 && (isWaitingForResponse || autoPromptSent || isTakingOver) ? (
+            <TerminalLoader variant="minimal" message="Waiting for Claude" />
           ) : entries.length === 0 ? (
             <TerminalLoader variant="empty" />
           ) : (

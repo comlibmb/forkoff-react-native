@@ -197,6 +197,14 @@ export interface PermissionPromptEvent {
   timestamp: string;
 }
 
+// Pending permissions sync event (sent on take-over to catch up mobile with pending prompts)
+export interface PendingPermissionsSyncEvent {
+  deviceId?: string;
+  sessionKey: string;
+  terminalSessionId: string;
+  prompts: PermissionPromptEvent[];
+}
+
 // RPC request event
 interface RpcRequestEvent {
   deviceId: string;
@@ -243,6 +251,7 @@ interface ClaudeSessionEventData {
 // Thinking content event (extended thinking text)
 export interface ThinkingContentEvent {
   sessionKey?: string;
+  terminalSessionId?: string;
   thinkingId: string;
   content: string;
   partial: boolean;
@@ -251,6 +260,7 @@ export interface ThinkingContentEvent {
 // Token usage event
 export interface TokenUsageEvent {
   sessionKey?: string;
+  terminalSessionId?: string;
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -268,6 +278,7 @@ export interface TaskInfo {
 // Task progress event
 export interface TaskProgressEvent {
   sessionKey?: string;
+  terminalSessionId?: string;
   type: 'created' | 'updated' | 'completed' | 'list';
   task?: TaskInfo;
   tasks?: TaskInfo[];
@@ -366,6 +377,7 @@ interface EventCallbacks {
   claude_approval_request: EventCallback<ClaudeApprovalRequestEvent>[];
   tool_activity: EventCallback<ToolActivityEvent>[];
   permission_prompt: EventCallback<PermissionPromptEvent>[];
+  pending_permissions_sync: EventCallback<PendingPermissionsSyncEvent>[];
   rpc_request: EventCallback<RpcRequestEvent>[];
   rpc_response: EventCallback<RpcResponseEvent>[];
   session_connected: EventCallback<SessionConnectedEvent>[];
@@ -420,6 +432,7 @@ class WebSocketService {
     claude_approval_request: [],
     tool_activity: [],
     permission_prompt: [],
+    pending_permissions_sync: [],
     rpc_request: [],
     rpc_response: [],
     session_connected: [],
@@ -610,6 +623,12 @@ class WebSocketService {
     this.socket.on('permission_prompt', (data) => {
       console.log('[WS] GOT permission_prompt:', data?.promptId, data?.toolName);
       this.emitInternal('permission_prompt', data);
+    });
+
+    // Pending permissions sync (on take-over)
+    this.socket.on('pending_permissions_sync', (data) => {
+      console.log('[WS] GOT pending_permissions_sync:', data?.prompts?.length, 'prompts');
+      this.emitInternal('pending_permissions_sync', data);
     });
 
     // RPC events
@@ -843,6 +862,7 @@ class WebSocketService {
       permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
       model?: string;
       directory?: string;
+      interactivePermissions?: boolean;
     }
   ): void {
     // SECURITY: Never log message content
@@ -852,6 +872,7 @@ class WebSocketService {
       message,
       sessionKey: options?.sessionKey,
       directory: options?.directory,
+      interactivePermissions: options?.interactivePermissions,
       mode: options ? {
         permissionMode: options.permissionMode,
         model: options.model,
