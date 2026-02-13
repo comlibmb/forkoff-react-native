@@ -412,6 +412,8 @@ class WebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  // Track subscriptions so we can re-subscribe after reconnect
+  private subscribedDevices = new Set<string>();
   private callbacks: EventCallbacks = {
     device_status: [],
     terminal_output: [],
@@ -494,6 +496,7 @@ class WebSocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
+      const wasReconnect = this.reconnectAttempts > 0;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
       console.log('[WS] Mobile app connected to WebSocket');
@@ -506,6 +509,12 @@ class WebSocketService {
 
       // Track session connected
       analyticsService.track('websocket_connected');
+
+      // Re-subscribe to device rooms after reconnect (room memberships are lost)
+      if (wasReconnect) {
+        console.log('[WS] Reconnected — re-subscribing to rooms');
+        this.resubscribeAll();
+      }
 
       this.emitInternal('connected');
     });
@@ -826,11 +835,21 @@ class WebSocketService {
 
   // Subscribe to specific device updates
   subscribeToDevice(deviceId: string): void {
+    this.subscribedDevices.add(deviceId);
     this.socket?.emit('subscribe_device', { deviceId });
   }
 
   unsubscribeFromDevice(deviceId: string): void {
+    this.subscribedDevices.delete(deviceId);
     this.socket?.emit('unsubscribe_device', { deviceId });
+  }
+
+  // Re-subscribe to all tracked rooms (called after reconnect)
+  private resubscribeAll(): void {
+    for (const deviceId of this.subscribedDevices) {
+      console.log('[WS] Re-subscribing to device:', deviceId);
+      this.socket?.emit('subscribe_device', { deviceId });
+    }
   }
 
   // Subscribe to terminal output
