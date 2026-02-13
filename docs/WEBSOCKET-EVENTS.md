@@ -105,6 +105,8 @@ Streamed SDK message from Claude.
 | `message.toolInput` | any? | Tool input (for tool_use) |
 | `message.partial` | boolean? | Whether this is a partial (streaming) message |
 
+> **Tool Rendering:** Messages with `type: 'tool_use'` are rendered by `ToolUseBlock` in the mobile app. Plan mode tools (`EnterPlanMode`/`ExitPlanMode`) receive special banner treatment instead of the standard collapsible block. See `docs/TOOL-RENDERING.md` for the full component mapping.
+
 ---
 
 ## Tool Activity Events

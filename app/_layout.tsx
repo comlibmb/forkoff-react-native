@@ -48,6 +48,15 @@ const queryClient = new QueryClient({
   },
 });
 
+function ThemedRoot({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
+      {children}
+    </GestureHandlerRootView>
+  );
+}
+
 // Separate component that uses theme context (must be inside ThemeProvider)
 function ThemedApp({
   currentApproval,
@@ -390,7 +399,7 @@ export default function RootLayout() {
         >
           <PostHogBridge>
             <AlertProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
+              <ThemedRoot>
                 <QueryClientProvider client={queryClient}>
                   <ScreenTracker>
                   <ThemedApp
@@ -408,7 +417,7 @@ export default function RootLayout() {
                 {showSplash && (
                   <AnimatedSplash onComplete={() => setShowSplash(false)} />
                 )}
-              </GestureHandlerRootView>
+              </ThemedRoot>
             </AlertProvider>
           </PostHogBridge>
         </PostHogProvider>

@@ -103,7 +103,7 @@ export function TaskProgress({ tasks, isCollapsed = true, onToggleCollapse }: Ta
   );
 }
 
-function TaskStatusIcon({ status }: { status: TaskInfo['status'] }) {
+export function TaskStatusIcon({ status }: { status: TaskInfo['status'] }) {
   switch (status) {
     case 'completed':
       return <CheckCircle2 size={18} color={colors.success[400]} />;
