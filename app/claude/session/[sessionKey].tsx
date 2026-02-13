@@ -166,6 +166,9 @@ export default function ClaudeSessionScreen() {
   const viewportHeightRef = useRef(0);
   const scrollToBottomOpacity = useRef(new Animated.Value(0)).current;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadDividerIndexRef = useRef<number | null>(null);
+  const isAtBottomRef = useRef(true);
 
   // Premium input state & animations
   const [isFocused, setIsFocused] = useState(false);
@@ -457,10 +460,20 @@ export default function ClaudeSessionScreen() {
         setIsWaitingForResponse(false);
       }
 
-      // Auto-scroll on new messages
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      // Auto-scroll on new messages (only if user is at bottom)
+      if (isAtBottomRef.current) {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      } else {
+        setUnreadCount(c => c + 1);
+        if (unreadDividerIndexRef.current === null) {
+          setEntries(prev => {
+            unreadDividerIndexRef.current = prev.length - 1;
+            return prev;
+          });
+        }
+      }
     });
 
     // Listen for thinking state changes
@@ -811,10 +824,20 @@ export default function ClaudeSessionScreen() {
           setActivityDetail(undefined);
         }
 
-        // Auto-scroll
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        // Auto-scroll only if user is at bottom
+        if (isAtBottomRef.current) {
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        } else {
+          setUnreadCount(c => c + 1);
+          if (unreadDividerIndexRef.current === null) {
+            setEntries(prev => {
+              unreadDividerIndexRef.current = prev.length - 1;
+              return prev;
+            });
+          }
+        }
       }
     });
 
@@ -928,6 +951,8 @@ export default function ClaudeSessionScreen() {
       if (nextState === 'active') {
         console.log('[Session] App foregrounded — re-fetching transcript');
         refetchTranscript();
+        setUnreadCount(0);
+        unreadDividerIndexRef.current = null;
       }
     });
 
@@ -935,6 +960,8 @@ export default function ClaudeSessionScreen() {
     const unsubReconnect = wsService.on('connected', () => {
       console.log('[Session] WebSocket reconnected — re-subscribing and re-fetching');
       refetchTranscript();
+      setUnreadCount(0);
+      unreadDividerIndexRef.current = null;
     });
 
     return () => {
@@ -992,15 +1019,22 @@ export default function ClaudeSessionScreen() {
     viewportHeightRef.current = layoutMeasurement.height;
     const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
     const shouldShow = distanceFromBottom > 100;
+    isAtBottomRef.current = !shouldShow;
     if (shouldShow !== showScrollToBottom) {
       setShowScrollToBottom(shouldShow);
+    }
+
+    // Clear unread when user scrolls to bottom
+    if (!shouldShow && unreadCount > 0) {
+      setUnreadCount(0);
+      unreadDividerIndexRef.current = null;
     }
 
     // Load more when scrolled near top (within 100px)
     if (contentOffset.y < 100 && hasMore && !isLoadingMore) {
       loadMore();
     }
-  }, [hasMore, isLoadingMore, loadMore, showScrollToBottom]);
+  }, [hasMore, isLoadingMore, loadMore, showScrollToBottom, unreadCount]);
 
   useEffect(() => {
     Animated.timing(scrollToBottomOpacity, {
@@ -1638,6 +1672,15 @@ export default function ClaudeSessionScreen() {
               >
                 {entries.map((entry, index) => (
                   <React.Fragment key={`${entry.id}-${entry.lineNumber}-${index}`}>
+                    {index === unreadDividerIndexRef.current && unreadCount > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8, paddingHorizontal: 12 }}>
+                        <View style={{ flex: 1, height: 1, backgroundColor: colors.primary[500] }} />
+                        <Text style={{ color: colors.primary[400], fontSize: 12, fontWeight: '600', marginHorizontal: 8 }}>
+                          {unreadCount} new update{unreadCount !== 1 ? 's' : ''}
+                        </Text>
+                        <View style={{ flex: 1, height: 1, backgroundColor: colors.primary[500] }} />
+                      </View>
+                    )}
                     {renderEntry(entry)}
                   </React.Fragment>
                 ))}
@@ -1652,7 +1695,11 @@ export default function ClaudeSessionScreen() {
                 }}
               >
                 <TouchableOpacity
-                  onPress={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                  onPress={() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                    setUnreadCount(0);
+                    unreadDividerIndexRef.current = null;
+                  }}
                   activeOpacity={0.7}
                   style={{
                     width: 38, height: 38, borderRadius: 19,
@@ -1665,6 +1712,18 @@ export default function ClaudeSessionScreen() {
                 >
                   <ChevronDown size={18} color={colors.dark[100]} />
                 </TouchableOpacity>
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -6, right: -6,
+                    backgroundColor: colors.primary[500], borderRadius: 10,
+                    minWidth: 20, height: 20, paddingHorizontal: 4,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
+                      {unreadCount}
+                    </Text>
+                  </View>
+                )}
               </Animated.View>
             </View>
           )}
