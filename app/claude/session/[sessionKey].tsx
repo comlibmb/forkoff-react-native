@@ -13,6 +13,7 @@ import {
   Switch,
   Animated,
   Easing,
+  AppState,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -890,6 +891,57 @@ export default function ClaudeSessionScreen() {
       unsubUpdate();
     };
   }, [sessionKey, deviceId]);
+
+  // Re-subscribe and re-fetch when app returns from background or WebSocket reconnects
+  useEffect(() => {
+    if (!sessionKey || !deviceId) return;
+
+    const refetchTranscript = () => {
+      const transcriptPath = transcriptPathRef.current;
+      if (transcriptPath && transcriptPath.length > 0) {
+        // Re-subscribe to transcript room (room membership is lost on reconnect)
+        wsService.emit('transcript_subscribe', { deviceId, sessionKey, transcriptPath });
+        // Re-fetch latest entries
+        wsService.emit('transcript_fetch', {
+          deviceId,
+          sessionKey,
+          transcriptPath,
+          offset: 0,
+          limit: INITIAL_LOAD,
+          reverse: true,
+        });
+      } else {
+        wsService.emit('transcript_subscribe_sdk', { deviceId, sessionKey });
+        wsService.emit('sdk_session_history', {
+          deviceId,
+          sessionKey,
+          claudeSessionId: session?.claudeSessionId,
+          directory: session?.directory,
+          limit: INITIAL_LOAD,
+          offset: 0,
+        });
+      }
+    };
+
+    // Re-fetch when app comes back to foreground
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        console.log('[Session] App foregrounded — re-fetching transcript');
+        refetchTranscript();
+      }
+    });
+
+    // Re-fetch when WebSocket reconnects (room memberships are lost)
+    const unsubReconnect = wsService.on('connected', () => {
+      console.log('[Session] WebSocket reconnected — re-subscribing and re-fetching');
+      refetchTranscript();
+    });
+
+    return () => {
+      appStateSub.remove();
+      unsubReconnect();
+    };
+  }, [sessionKey, deviceId, session?.claudeSessionId, session?.directory]);
 
   // Listen for session lifecycle when taken over
   useEffect(() => {
