@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,15 +32,18 @@ import { colors } from '@/theme/colors';
 import { PermissionRequestData } from '@/components/claude/PermissionRequest';
 import { PermissionQueue } from '@/components/claude/PermissionQueue';
 import { ThinkingBlock, ThinkingIndicator } from '@/components/claude/ThinkingBlock';
-import { TaskProgress } from '@/components/claude/TaskProgress';
+import { TaskIndicator } from '@/components/claude/TaskIndicator';
+import { TaskListModal } from '@/components/claude/TaskListModal';
 import { TokenUsageDisplay, TokenUsageInline } from '@/components/claude/TokenUsageDisplay';
 import { LocalCommandBlock, parseLocalCommandTags, isLocalCommandText } from '@/components/claude/LocalCommandBlock';
 import { SystemReminderBlock, parseSystemReminderTags, stripSystemReminderTags, hasSystemReminderTags } from '@/components/claude/SystemReminderBlock';
 import { StatusBar, ActivityState, getActivityFromTool, getActivityDetail } from '@/components/claude/StatusBar';
+import { ToolUseBlock } from '@/components/claude/tools/ToolUseBlock';
+import { PlanModeBanner } from '@/components/claude/PlanModeBanner';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
 import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
 
-const INITIAL_LOAD = 400;
+const INITIAL_LOAD = 200;
 const LOAD_MORE_COUNT = 200;
 
 function AnimatedConnectDots() {
@@ -126,7 +129,7 @@ export default function ClaudeSessionScreen() {
   const [thinkingContent, setThinkingContent] = useState<{ id: string; content: string; isStreaming: boolean } | null>(null);
   const [tokenUsage, setTokenUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
-  const [showTasksPanel, setShowTasksPanel] = useState(false);
+  const [showTaskListModal, setShowTaskListModal] = useState(false);
 
   // Limit reached state (server-side enforcement)
   const [isLimitReached, setIsLimitReached] = useState(false);
@@ -602,7 +605,6 @@ export default function ClaudeSessionScreen() {
         setTasks(data.tasks);
       } else if (data.type === 'created' && data.task) {
         setTasks((prev) => [...prev, data.task!]);
-        setShowTasksPanel(true);
       } else if ((data.type === 'updated' || data.type === 'completed') && data.task) {
         setTasks((prev) =>
           prev.map((t) => (t.id === data.task!.id ? { ...t, ...data.task } : t))
@@ -1155,7 +1157,6 @@ export default function ClaudeSessionScreen() {
     console.log('[Session] Sending user message:', message.substring(0, 50));
     wsService.sendUserMessage(deviceId, message, {
       sessionKey: sessionKey,
-      directory: session?.directory,
       permissionMode: sessionUnrestricted ? 'bypassPermissions' : undefined,
       interactivePermissions: !sessionUnrestricted,
     });
@@ -1295,65 +1296,6 @@ export default function ClaudeSessionScreen() {
     );
   };
 
-  // Render new file content as additions (like a diff for new files)
-  const renderNewFileContent = (content: string, filePath?: string) => {
-    const lines = content.split('\n');
-    const fileName = filePath?.split(/[/\\]/).pop() || 'new file';
-    const lineCount = lines.length;
-
-    return (
-      <View style={{ marginTop: 8, borderRadius: 4, backgroundColor: theme.background, overflow: 'hidden' }}>
-        {/* Header showing it's a new file */}
-        <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
-          <Text style={{ fontFamily: 'monospace', fontSize: 12, color: colors.success[400] }}>
-            +++ {fileName} (new file, {lineCount} lines)
-          </Text>
-        </View>
-        {/* Content as additions */}
-        <View style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-          {lines.slice(0, 50).map((line, index) => (
-            <View key={index} style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}>
-              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: colors.success[400] }}>
-                +{line}
-              </Text>
-            </View>
-          ))}
-          {lines.length > 50 && (
-            <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 4 }}>
-              <Text style={{ fontFamily: 'monospace', fontSize: 12, color: theme.textTertiary }}>
-                ... and {lines.length - 50} more lines
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  // Parse tool input to extract file content for Write operations
-  const parseWriteToolInput = (toolInput: any): { filePath?: string; content?: string } => {
-    if (!toolInput) return {};
-
-    // Handle string input (JSON)
-    if (typeof toolInput === 'string') {
-      try {
-        const parsed = JSON.parse(toolInput);
-        return {
-          filePath: parsed.file_path,
-          content: parsed.content,
-        };
-      } catch {
-        return {};
-      }
-    }
-
-    // Handle object input
-    return {
-      filePath: toolInput.file_path,
-      content: toolInput.content,
-    };
-  };
-
   const renderEntry = (item: TranscriptEntry) => {
     const isUser = item.type === 'user';
     const isToolUse = item.type === 'tool_use';
@@ -1411,54 +1353,14 @@ export default function ClaudeSessionScreen() {
       );
     }
 
-    // Tool use - collapsible with special handling for Write
+    // Tool use - routed to specialized components via ToolUseBlock
     if (isToolUse) {
-      const toolName = item.content?.toolName?.toLowerCase() || '';
-      const isWrite = toolName === 'write';
-      const isEdit = toolName === 'edit';
-
-      // Parse Write tool input for file content
-      const writeData = isWrite ? parseWriteToolInput(item.content?.toolInput || item.content?.text) : null;
-      const hasFileContent = writeData?.content && writeData.content.length > 0;
-
-      // Get file path for display
-      const filePath = writeData?.filePath || item.content?.toolInput?.file_path;
-      const fileName = filePath?.split(/[/\\]/).pop();
-
       return (
-        <View style={{ marginBottom: 6, backgroundColor: colors.dark[800], borderRadius: 8, overflow: 'hidden' }}>
-          <TouchableOpacity
-            onPress={() => toggleToolExpand(item.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10 }}
-          >
-            {isExpanded ? (
-              <ChevronDown size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
-            ) : (
-              <ChevronRight size={14} color={isWrite ? colors.primary[400] : colors.dark[300]} />
-            )}
-            <Text style={{ fontFamily: 'monospace', fontSize: 12, marginLeft: 8, color: isWrite ? colors.primary[400] : colors.dark[200], fontWeight: '500' }}>
-              {item.content?.toolName}
-            </Text>
-            {fileName && (
-              <Text style={{ color: colors.dark[300], fontFamily: 'monospace', fontSize: 12, marginLeft: 8 }}>
-                {fileName}
-              </Text>
-            )}
-          </TouchableOpacity>
-          {isExpanded && (
-            <View style={{ marginLeft: 16, paddingLeft: 10, paddingBottom: 8, paddingRight: 10, borderLeftWidth: 1, borderLeftColor: colors.dark[600] }}>
-              {/* Show file content as diff for Write operations */}
-              {isWrite && hasFileContent ? (
-                renderNewFileContent(writeData!.content!, filePath)
-              ) : item.content?.text ? (
-                <Text style={{ color: theme.textTertiary, fontFamily: 'monospace', fontSize: 12 }}>
-                  {item.content.text.substring(0, 500)}
-                  {item.content.text.length > 500 ? '...' : ''}
-                </Text>
-              ) : null}
-            </View>
-          )}
-        </View>
+        <ToolUseBlock
+          entry={item}
+          isExpanded={isExpanded}
+          onToggleExpand={() => toggleToolExpand(item.id)}
+        />
       );
     }
 
@@ -1534,6 +1436,15 @@ export default function ClaudeSessionScreen() {
     );
   };
 
+  const isPlanMode = useMemo(() => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const name = entries[i].content?.toolName;
+      if (name === 'EnterPlanMode') return true;
+      if (name === 'ExitPlanMode') return false;
+    }
+    return false;
+  }, [entries]);
+
   const directoryName =
     session?.directory.split('/').pop() ||
     session?.directory.split('\\').pop() ||
@@ -1551,6 +1462,12 @@ export default function ClaudeSessionScreen() {
         onApproveAll={handlePermissionApproveAll}
         onDenyAll={handlePermissionDenyAll}
         onDismiss={() => {}}
+      />
+      {/* Task List Modal */}
+      <TaskListModal
+        visible={showTaskListModal}
+        tasks={tasks}
+        onClose={() => setShowTaskListModal(false)}
       />
       {/* Limit Paywall Modal */}
       <LimitPaywallModal
@@ -1604,22 +1521,12 @@ export default function ClaudeSessionScreen() {
                   style="header"
                 />
               )}
-              <Text style={{ color: colors.dark[400], fontFamily: 'monospace', fontSize: 11 }}>
-                {entries.length}/{totalEntries}
-              </Text>
+              <TaskIndicator tasks={tasks} onPress={() => setShowTaskListModal(true)} />
             </View>
           </View>
 
-          {/* Task Progress Panel */}
-          {tasks.length > 0 && (
-            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <TaskProgress
-                tasks={tasks}
-                isCollapsed={!showTasksPanel}
-                onToggleCollapse={() => setShowTasksPanel(!showTasksPanel)}
-              />
-            </View>
-          )}
+          {/* Plan Mode Banner */}
+          <PlanModeBanner isActive={isPlanMode} />
 
           {/* Streaming thinking indicator */}
           {thinkingContent?.isStreaming && (

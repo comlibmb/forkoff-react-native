@@ -87,6 +87,8 @@ The most complex screen. Handles:
 - Thinking content: extended thinking blocks streamed in real-time
 - Token usage and task progress tracking
 - Session key matching: events match on both `sessionKey` (Claude's internal ID) and `terminalSessionId` (mobile-generated key) since they may differ
+- Rich tool rendering: `ToolUseBlock` orchestrator in `components/claude/tools/` routes each tool_use entry to a specialized display component (Bash, Edit, Read, Search, Write, Task, PlanMode, or Generic fallback)
+- Plan mode: tracks `isPlanMode` state via `useMemo` scanning entries; shows inline `PlanModeBlock` banners and a session-level `PlanModeBanner` panel
 
 ### Permission System (`components/claude/PermissionQueue.tsx`)
 Modal queue that shows pending permission requests from the CLI's PreToolUse hook. Each request shows the tool name, description, and details. Users can approve/deny individually or batch approve/deny all. Requests are tracked by `promptId` and routed through the hook IPC system (temp files) rather than the legacy RPC system.
@@ -109,3 +111,4 @@ Always check `docs/` for detailed documentation:
 - `docs/WEBSOCKET-EVENTS.md` — All WebSocket events, payloads, routing
 - `docs/BUG-FIXES.md` — Known bugs found and how they were fixed
 - `docs/INTERACTIVE-APPROVALS-PLAN.md` — Original design doc for the hook-based approval system (implemented)
+- `docs/TOOL-RENDERING.md` — Tool rendering architecture, component mapping, adding new tool renderers

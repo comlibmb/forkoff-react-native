@@ -28,6 +28,7 @@ import {
   Code,
   ArrowUp,
   ArrowDown,
+  ClipboardList,
 } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 
@@ -41,7 +42,8 @@ export type ActivityState =
   | 'searching'
   | 'running'
   | 'responding'
-  | 'waiting';
+  | 'waiting'
+  | 'planning';
 
 interface StatusBarProps {
   activity: ActivityState;
@@ -119,6 +121,12 @@ const activityConfig: Record<ActivityState, {
     text: 'Waiting',
     color: colors.dark[300],
     bgColor: 'rgba(100, 100, 100, 0.1)',
+  },
+  planning: {
+    icon: ClipboardList,
+    text: 'Planning',
+    color: colors.info[300],
+    bgColor: 'rgba(96, 165, 250, 0.1)',
   },
 };
 
@@ -267,6 +275,7 @@ export function getActivityFromTool(toolName?: string): ActivityState {
 
   const name = toolName.toLowerCase();
 
+  if (name === 'enterplanmode' || name === 'exitplanmode') return 'planning';
   if (name === 'read' || name.includes('read')) return 'reading';
   if (name === 'write') return 'writing';
   if (name === 'edit') return 'editing';
