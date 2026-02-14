@@ -1,8 +1,14 @@
 import { createClient, SupabaseClient, AuthError, Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import * as Crypto from 'expo-crypto';
+import { Platform } from 'react-native';
 import { User, LoginCredentials, RegisterCredentials } from '@/types';
 import { useVersionStore } from '@/stores/version.store';
+
+// Warm up the web browser for faster OAuth flow
+WebBrowser.maybeCompleteAuthSession();
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -648,45 +654,166 @@ class AuthService {
     }
   }
 
-  async signInWithGitHub(): Promise<{ url: string }> {
-    console.log('[Auth] signInWithGitHub called, useMocks:', this.useMocks);
+  async signInWithGoogle(): Promise<User> {
+    console.log('[Auth] signInWithGoogle called, useMocks:', this.useMocks);
 
     if (this.useMocks) {
-      return { url: 'https://github.com/login/oauth/authorize?mock=true' };
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.mockSession = true;
+      const user = { ...MOCK_USER, name: 'Google User' };
+      this.notifyListeners(user);
+      return user;
     }
 
-    // For Expo Go development, we need to use a redirect that Supabase accepts
-    // In production (native build), use the app scheme
+    // Use the same redirect pattern that works in both Expo Go and native builds
     const redirectUri = AuthSession.makeRedirectUri({
       scheme: 'forkoff',
       preferLocalhost: false,
     });
 
-    console.log('[Auth] GitHub OAuth redirect URI:', redirectUri);
+    console.log('[Auth] Google OAuth redirect URI:', redirectUri);
 
     const { data, error } = await this.supabase!.auth.signInWithOAuth({
-      provider: 'github',
+      provider: 'google',
       options: {
         redirectTo: redirectUri,
-        scopes: 'read:user user:email',
-        skipBrowserRedirect: false,
+        skipBrowserRedirect: true,
       },
     });
 
-    console.log('[Auth] GitHub OAuth response:', { data, error });
-
     if (error) {
-      console.error('[Auth] GitHub OAuth error:', error.message, error);
+      console.error('[Auth] Google OAuth error:', error.message);
       throw this.formatError(error);
     }
 
     if (!data.url) {
-      console.error('[Auth] GitHub OAuth no URL returned');
-      throw new Error('Failed to get OAuth URL');
+      throw new Error('Failed to get Google OAuth URL');
     }
 
-    console.log('[Auth] GitHub OAuth URL obtained:', data.url.substring(0, 50) + '...');
-    return { url: data.url };
+    console.log('[Auth] Opening Google OAuth browser session...');
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+    console.log('[Auth] Google OAuth result type:', result.type);
+
+    if (result.type !== 'success' || !result.url) {
+      throw new Error('Google sign in was cancelled');
+    }
+
+    console.log('[Auth] Google OAuth success URL:', result.url.substring(0, 80) + '...');
+
+    // Extract tokens from the redirect URL fragment (#access_token=...&refresh_token=...)
+    const hashIndex = result.url.indexOf('#');
+    if (hashIndex === -1) {
+      throw new Error('No tokens returned from Google sign in');
+    }
+
+    const params = new URLSearchParams(result.url.substring(hashIndex + 1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (!accessToken || !refreshToken) {
+      throw new Error('Failed to extract tokens from Google sign in');
+    }
+
+    // Set the session in Supabase
+    const { data: sessionData, error: sessionError } = await this.supabase!.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (sessionError) {
+      throw this.formatError(sessionError);
+    }
+
+    if (!sessionData.user) {
+      throw new Error('Failed to complete Google sign in');
+    }
+
+    const user = await this.getCurrentUser();
+    if (!user) {
+      throw new Error('Failed to get user after Google sign in');
+    }
+
+    return user;
+  }
+
+  async signInWithApple(): Promise<User> {
+    console.log('[Auth] signInWithApple called, useMocks:', this.useMocks);
+
+    if (this.useMocks) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.mockSession = true;
+      const user = { ...MOCK_USER, name: 'Apple User' };
+      this.notifyListeners(user);
+      return user;
+    }
+
+    if (Platform.OS !== 'ios') {
+      throw new Error('Apple Sign In is only available on iOS');
+    }
+
+    // Dynamic import to avoid crash in Expo Go where the native module isn't available
+    let AppleAuthentication: typeof import('expo-apple-authentication');
+    try {
+      AppleAuthentication = require('expo-apple-authentication');
+    } catch {
+      throw new Error('Apple Sign In requires a development build. It is not available in Expo Go.');
+    }
+
+    // Check if Apple Sign In is available on this device
+    const isAvailable = await AppleAuthentication.isAvailableAsync();
+    if (!isAvailable) {
+      throw new Error('Apple Sign In is not available on this device. A development build is required.');
+    }
+
+    // Generate a cryptographic nonce for security
+    // Raw nonce goes to Supabase, hashed nonce goes to Apple
+    const rawNonce = Math.random().toString(36).substring(2, 34);
+    const hashedNonce = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      rawNonce
+    );
+
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+
+    if (!credential.identityToken) {
+      throw new Error('No identity token from Apple Sign In');
+    }
+
+    const { data, error } = await this.supabase!.auth.signInWithIdToken({
+      provider: 'apple',
+      token: credential.identityToken,
+      nonce: rawNonce,
+    });
+
+    if (error) {
+      throw this.formatError(error);
+    }
+
+    if (!data.user) {
+      throw new Error('Failed to complete Apple sign in');
+    }
+
+    // Update user name from Apple credential if provided (only on first sign-in)
+    if (credential.fullName?.givenName) {
+      const name = [credential.fullName.givenName, credential.fullName.familyName]
+        .filter(Boolean)
+        .join(' ');
+      await this.supabase!.auth.updateUser({ data: { name } });
+    }
+
+    const user = await this.getCurrentUser();
+    if (!user) {
+      throw new Error('Failed to get user after Apple sign in');
+    }
+
+    return user;
   }
 
   private notifyListeners(user: User | null): void {
@@ -727,8 +854,8 @@ class AuthService {
       'Password should be at least 6 characters': 'Password must be at least 6 characters.',
       'Token has expired or is invalid': 'Invalid or expired verification code.',
       'OTP has expired': 'Verification code has expired. Please request a new one.',
-      'Provider not enabled': 'GitHub login is not enabled. Please contact support.',
-      'OAuth provider not enabled': 'GitHub login is not enabled. Please contact support.',
+      'Provider not enabled': 'This login method is not enabled. Please contact support.',
+      'OAuth provider not enabled': 'This login method is not enabled. Please contact support.',
     };
 
     const message = errorMessages[error.message] || error.message;

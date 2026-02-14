@@ -38,7 +38,8 @@ interface AuthState {
   clearOtpState: () => void;
 
   // OAuth actions
-  signInWithGitHub: () => Promise<{ url: string }>;
+  signInWithGoogle: () => Promise<User>;
+  signInWithApple: () => Promise<User>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -484,28 +485,67 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  // GitHub OAuth login
-  signInWithGitHub: async () => {
+  // Google OAuth login
+  signInWithGoogle: async () => {
     try {
       set({ isLoading: true, error: null });
 
-      const result = await authService.signInWithGitHub();
+      analyticsService.track('oauth_initiated', { provider: 'google' });
 
-      analyticsService.track('oauth_initiated', {
-        provider: 'github',
+      const user = await authService.signInWithGoogle();
+
+      analyticsService.identifyWithCountry(user.id, {
+        email: user.email,
+        name: user.name,
+        country: user.country,
       });
+      sentryService.setUser({ id: user.id, email: user.email, name: user.name });
+      analyticsService.track('user_signed_in', { method: 'google', country: user.country });
 
-      set({ isLoading: false });
-      return result;
+      set({ user, isAuthenticated: true, isLoading: false });
+      return user;
     } catch (error) {
-      sentryService.captureException(error, { context: 'sign_in_with_github' });
+      sentryService.captureException(error, { context: 'sign_in_with_google' });
       analyticsService.track('oauth_failed', {
-        provider: 'github',
+        provider: 'google',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'GitHub sign in failed',
+        error: error instanceof Error ? error.message : 'Google sign in failed',
+      });
+      throw error;
+    }
+  },
+
+  // Apple Sign In
+  signInWithApple: async () => {
+    try {
+      set({ isLoading: true, error: null });
+
+      analyticsService.track('oauth_initiated', { provider: 'apple' });
+
+      const user = await authService.signInWithApple();
+
+      analyticsService.identifyWithCountry(user.id, {
+        email: user.email,
+        name: user.name,
+        country: user.country,
+      });
+      sentryService.setUser({ id: user.id, email: user.email, name: user.name });
+      analyticsService.track('user_signed_in', { method: 'apple', country: user.country });
+
+      set({ user, isAuthenticated: true, isLoading: false });
+      return user;
+    } catch (error) {
+      sentryService.captureException(error, { context: 'sign_in_with_apple' });
+      analyticsService.track('oauth_failed', {
+        provider: 'apple',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Apple sign in failed',
       });
       throw error;
     }

@@ -14,20 +14,17 @@ import {
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, User, ArrowRight, Github, Check } from 'lucide-react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { Mail, User, ArrowRight, Check } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 
-WebBrowser.maybeCompleteAuthSession();
-
 export default function RegisterScreen() {
   const { theme } = useTheme();
-  const { signUpWithOtp, signInWithGitHub, isLoading, error, clearError } = useAuthStore();
+  const { signUpWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     name?: string;
@@ -76,38 +73,36 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleGitHubSignUp = async () => {
+  const handleGoogleSignUp = async () => {
+    if (!agreedToTerms) return;
     try {
-      setIsGitHubLoading(true);
+      setIsGoogleLoading(true);
       clearError();
-
-      const { url } = await signInWithGitHub();
-
-      const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'forkoff',
-        preferLocalhost: false,
-      });
-
-      console.log('[Register] Opening GitHub OAuth with redirect:', redirectUri);
-
-      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
-
-      console.log('[Register] OAuth result:', result.type);
-
-      if (result.type === 'success' && result.url) {
-        console.log('[Register] OAuth success, URL:', result.url);
-        router.replace('/auth/callback');
-      } else if (result.type === 'cancel') {
-        console.log('[Register] GitHub auth cancelled by user');
-      }
+      const user = await signInWithGoogle();
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
-      console.error('[Register] GitHub auth error:', err);
-      alert.error(
-        'GitHub Sign Up Failed',
-        error || 'Please try again'
-      );
+      if (err instanceof Error && err.message === 'Google sign in was cancelled') return;
+      alert.error('Google Sign Up Failed', error || 'Please try again');
     } finally {
-      setIsGitHubLoading(false);
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignUp = async () => {
+    if (!agreedToTerms) return;
+    try {
+      setIsAppleLoading(true);
+      clearError();
+      const user = await signInWithApple();
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('cancelled')) return;
+      const msg = err instanceof Error ? err.message : 'Please try again';
+      alert.error('Apple Sign Up Failed', msg);
+    } finally {
+      setIsAppleLoading(false);
     }
   };
 
@@ -278,7 +273,7 @@ export default function RegisterScreen() {
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleRegister}
-                disabled={isLoading || isGitHubLoading || !agreedToTerms}
+                disabled={isLoading || isGoogleLoading || isAppleLoading || !agreedToTerms}
                 style={{
                   backgroundColor: theme.primary,
                   borderRadius: 12,
@@ -292,7 +287,7 @@ export default function RegisterScreen() {
                   shadowOpacity: 0.2,
                   shadowRadius: 12,
                   elevation: 5,
-                  opacity: isLoading || isGitHubLoading || !agreedToTerms ? 0.7 : 1,
+                  opacity: isLoading || isGoogleLoading || isAppleLoading || !agreedToTerms ? 0.7 : 1,
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
@@ -308,32 +303,60 @@ export default function RegisterScreen() {
                 <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
               </View>
 
-              {/* GitHub Sign Up */}
-              <TouchableOpacity
-                onPress={handleGitHubSignUp}
-                disabled={isGitHubLoading || isLoading || !agreedToTerms}
-                style={{
-                  backgroundColor: theme.backgroundSecondary,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  borderRadius: 12,
-                  padding: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 12,
-                  opacity: isGitHubLoading || isLoading || !agreedToTerms ? 0.7 : 1,
-                }}
-              >
-                {isGitHubLoading ? (
-                  <ActivityIndicator size="small" color={theme.text} />
-                ) : (
-                  <Github size={20} color={theme.text} />
+              {/* Google Sign Up */}
+              <View style={{ gap: 12 }}>
+                <TouchableOpacity
+                  onPress={handleGoogleSignUp}
+                  disabled={isGoogleLoading || isAppleLoading || isLoading || !agreedToTerms}
+                  style={{
+                    backgroundColor: theme.backgroundSecondary,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: 12,
+                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    opacity: isGoogleLoading || isAppleLoading || isLoading || !agreedToTerms ? 0.7 : 1,
+                  }}
+                >
+                  {isGoogleLoading ? (
+                    <ActivityIndicator size="small" color={theme.text} />
+                  ) : (
+                    <Text style={{ fontSize: 18, fontWeight: 'bold' }}>G</Text>
+                  )}
+                  <Text style={{ color: theme.text, fontWeight: '500' }}>
+                    {isGoogleLoading ? 'Connecting...' : 'Sign up with Google'}
+                  </Text>
+                </TouchableOpacity>
+
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity
+                    onPress={handleAppleSignUp}
+                    disabled={isAppleLoading || isGoogleLoading || isLoading || !agreedToTerms}
+                    style={{
+                      backgroundColor: theme.text,
+                      borderRadius: 12,
+                      padding: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 12,
+                      opacity: isAppleLoading || isGoogleLoading || isLoading || !agreedToTerms ? 0.7 : 1,
+                    }}
+                  >
+                    {isAppleLoading ? (
+                      <ActivityIndicator size="small" color={theme.background} />
+                    ) : (
+                      <Text style={{ fontSize: 20, color: theme.background }}>&#xF8FF;</Text>
+                    )}
+                    <Text style={{ color: theme.background, fontWeight: '500' }}>
+                      {isAppleLoading ? 'Connecting...' : 'Sign up with Apple'}
+                    </Text>
+                  </TouchableOpacity>
                 )}
-                <Text style={{ color: theme.text, fontWeight: '500' }}>
-                  {isGitHubLoading ? 'Connecting...' : 'Sign up with GitHub'}
-                </Text>
-              </TouchableOpacity>
+              </View>
             </View>
 
             {/* Footer */}
