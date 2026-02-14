@@ -17,6 +17,71 @@ Comprehensive UX audit conducted across all screens, evaluated from 5 user perso
 
 ---
 
+## Login (`app/(auth)/login.tsx`)
+
+- [ ] **P1** — No social proof or value proposition on the login screen. Just "Welcome back" + email field. First-time visitors who land here (e.g., from a deep link) have no idea what ForkOff is. Add a brief tagline or feature highlights.
+- [ ] **P2** — OTP-only auth (no password option). While secure and modern, some users (especially Jordan) may be confused by "no password". The info box helps but is easy to miss below the fold.
+- [ ] **P2** — Email validation regex (`/\S+@\S+\.\S+/`) is too permissive — accepts `a@b.c`. Use a stricter pattern or validate on blur with better feedback.
+- [ ] **P2** — GitHub OAuth opens an external browser then redirects to `/auth/callback`. If the redirect fails (deep link not registered), user is stuck in the browser. No fallback or timeout.
+- [ ] **P3** — No "Remember me" or saved email. Returning users must re-type their email every time.
+- [ ] **P3** — Logo image is 187x187px rendered in an 80x80 container with `overflow: visible`. May cause layout issues on smaller screens.
+
+---
+
+## Register (`app/(auth)/register.tsx`)
+
+- [ ] **P1** — Terms checkbox blocks both email AND GitHub sign-up. But for GitHub OAuth, agreeing to terms before seeing the OAuth screen feels premature. Consider: allow GitHub to proceed, then show terms on return.
+- [ ] **P2** — No password strength indicator or password field — this is by design (OTP-only), but "No password required!" might confuse users who expect one. Consider rephrasing to "We use secure email verification instead of passwords."
+- [ ] **P2** — Name field only asks for a single "Name" with no first/last split. Fine for simplicity, but the label "Name" is ambiguous (display name? full name? username?). Change to "Display Name" or "Full Name".
+- [ ] **P3** — Terms of Service and Privacy Policy links open external URLs via `Linking.openURL`. If the user doesn't have a default browser configured, this could fail silently. Consider in-app WebView.
+- [ ] **P3** — No indication of what the name is used for. Users might enter a joke name not realizing it's shown in the app.
+
+---
+
+## Onboarding Flow (Overall Structure)
+
+- [ ] **P1** — 4 screens before reaching the product (Welcome → Add Device → Connect GitHub → Referral Code). Only 1 step is essential (Add Device). GitHub and Referral are optional but presented as mandatory steps in the flow. This creates unnecessary friction — especially for Alex and Jordan who just want to try the app.
+- [ ] **P1** — No progress indicator. Users don't know they're on step 1 of 4 or how much is left. Add a step indicator or progress bar at the top.
+- [ ] **P2** — Every screen has a "Skip" option but it's styled as a low-contrast tertiary text link at the bottom. Users who want to skip might not notice it. Make skip more visible.
+
+---
+
+## Onboarding: Welcome (`app/(onboarding)/index.tsx`)
+
+- [ ] **P2** — Feature cards are static text with no animation or interactivity. For a first impression screen, this feels flat. Consider subtle entrance animations or an illustration.
+- [ ] **P2** — "Add Your First Device" is the primary CTA, but the user hasn't been told what a "device" is in this context. Is it their phone? Their laptop? Add a brief sentence: "Connect your laptop to control Claude Code from your phone."
+- [ ] **P3** — "Skip for now" uses `router.replace('/(tabs)')` which skips the entire onboarding. If the user skips, they land on Projects tab with 0 projects, 0 devices — a completely empty app. Consider at minimum routing to Devices tab.
+- [ ] **P3** — The "F" logo is a plain text character in a colored square. For a brand-first impression, this feels generic. Consider using the actual logo image (used on login/register screens).
+
+---
+
+## Onboarding: Add Device (`app/(onboarding)/add-device.tsx`)
+
+- [ ] **P2** — QR scanning opens a separate full screen (`/device/pair`) via `router.push`. The user has to navigate away from onboarding, pair, then come back. The back detection hack (`devices.length > deviceCountOnMount`) works but is fragile.
+- [ ] **P2** — The QR code placeholder (big QrCode icon + "Camera access required") is shown before the user taps anything. This looks like a broken/empty state. Should only appear after the user selects QR method.
+- [ ] **P3** — Code entry uses `forkoff pair` in the instruction box but the welcome screen and other places say `npx forkoff pair`. Inconsistent CLI command references.
+- [ ] **P3** — Success state "Continue" goes to Connect GitHub. No option to skip straight to the app after pairing. Sam who just wants to use the app must go through GitHub and Referral screens.
+
+---
+
+## Onboarding: Connect GitHub (`app/(onboarding)/connect-github.tsx`)
+
+- [ ] **P2** — GitHub connection during onboarding is confusing. Users just created an account (possibly with GitHub OAuth) and now are asked to "Connect GitHub" again. If they signed up with GitHub, this should auto-detect and skip or show "GitHub already connected".
+- [ ] **P2** — Benefits listed ("Browse and clone repos", "Create new repos", "View commit history", "Manage pull requests") oversell what the app currently does. If any of these aren't fully implemented, this sets wrong expectations.
+- [ ] **P3** — OAuth callback `forkoff://auth/callback` is the same as the login flow. If the deep link handler doesn't distinguish between login and GitHub-connect contexts, it could redirect incorrectly.
+- [ ] **P3** — No indication of what GitHub permissions/scopes are requested. Privacy-conscious users (Maya, Priya) want to know before authorizing.
+
+---
+
+## Onboarding: Referral Code (`app/(onboarding)/referral-code.tsx`)
+
+- [ ] **P2** — Referral code is a full onboarding step, but most users won't have one. This creates a "dead" screen where the majority just tap Skip. Consider making this a banner or prompt inside the app instead of a dedicated onboarding step.
+- [ ] **P3** — No indication of what the referral code gives you. "If a friend invited you, enter their code to get started" — but what's the reward? Free month? Extra features? Users need an incentive.
+- [ ] **P3** — Code validation requires exactly 8 characters. No real-time feedback on format — user types 7 characters and the button stays disabled with no explanation.
+- [ ] **P3** — "Get Started" after applying goes to `router.replace('/(tabs)')`. Same empty-app problem if the user skipped device pairing earlier.
+
+---
+
 ## Tab Bar (`app/(tabs)/_layout.tsx`)
 
 - [ ] **P1** — Tab order puts Projects first but new users have 0 projects. Consider making Devices the first tab for users with 0 paired devices, then auto-switch to Projects once they pair.
