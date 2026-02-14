@@ -276,9 +276,9 @@ const DeviceGroup = memo(
             />
           </View>
           <View style={styles.deviceTitleContent}>
-            <Laptop size={14} color={theme.textTertiary} />
+            <Laptop size={14} color={deviceGroup.device.status?.toUpperCase() === 'ONLINE' ? theme.primary : theme.textTertiary} />
             <Text
-              style={[styles.deviceTitleText, { color: theme.textSecondary }]}
+              style={[styles.deviceTitleText, { color: deviceGroup.device.status?.toUpperCase() === 'ONLINE' ? theme.primary : theme.textSecondary }]}
             >
               {deviceGroup.device.name}
             </Text>
@@ -809,7 +809,7 @@ export default function ProjectsScreen() {
 
       if (projects.length > 0) {
         result.push({
-          device: { id: device.id, name: device.name },
+          device: { id: device.id, name: device.name, status: device.status },
           projects,
         });
       }
