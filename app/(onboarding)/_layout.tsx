@@ -14,7 +14,6 @@ export default function OnboardingLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="add-device" />
-      <Stack.Screen name="connect-github" />
       <Stack.Screen name="referral-code" />
     </Stack>
   );

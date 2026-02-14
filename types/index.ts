@@ -78,7 +78,6 @@ export interface Project {
   lastModified?: string;
   deviceId: string;
   device?: Device;
-  githubRepo?: GitHubRepo;
   tools?: ToolConfig[];
   terminals?: Terminal[];
   servers?: Server[];
@@ -94,39 +93,6 @@ export interface ToolConfig {
   toolType: ToolType;
   enabled: boolean;
   settings: Record<string, unknown>;
-}
-
-// GitHub Types
-export interface GitHubRepo {
-  id: number;
-  name: string;
-  fullName: string;
-  description?: string;
-  private: boolean;
-  defaultBranch: string;
-  language?: string;
-  url: string;
-  cloneUrl: string;
-  stars: number;
-  forks: number;
-  updatedAt: string;
-}
-
-export interface GitHubBranch {
-  name: string;
-  commit: string;
-  protected: boolean;
-}
-
-export interface GitHubUser {
-  id: number;
-  login: string;
-  name: string;
-  avatarUrl: string;
-  email?: string;
-  bio?: string;
-  publicRepos?: number;
-  followers?: number;
 }
 
 // Chat Types

@@ -35,7 +35,7 @@ export default function AuthCallbackScreen() {
           name: user.name,
         });
         analyticsService.track('user_signed_in', {
-          method: 'github',
+          method: 'oauth',
         });
         sentryService.setUser({
           id: user.id,

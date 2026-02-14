@@ -13,20 +13,16 @@ import {
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, Github, ArrowRight } from 'lucide-react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { Mail, ArrowRight } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTheme } from '@/theme/ThemeProvider';
 
-// Warm up the browser for faster OAuth flow
-WebBrowser.maybeCompleteAuthSession();
-
 export default function LoginScreen() {
   const { theme } = useTheme();
-  const { signInWithOtp, signInWithGitHub, isLoading, error, clearError } = useAuthStore();
+  const { signInWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError } = useAuthStore();
   const [email, setEmail] = useState('');
-  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     email?: string;
   }>({});
@@ -62,41 +58,34 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGitHubLogin = async () => {
+  const handleGoogleLogin = async () => {
     try {
-      setIsGitHubLoading(true);
+      setIsGoogleLoading(true);
       clearError();
-
-      const { url } = await signInWithGitHub();
-
-      // Get the redirect URI that matches what we sent to Supabase
-      const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'forkoff',
-        preferLocalhost: false,
-      });
-
-      console.log('[Login] Opening GitHub OAuth with redirect:', redirectUri);
-
-      // Open the OAuth URL in a browser
-      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
-
-      console.log('[Login] OAuth result:', result.type);
-
-      if (result.type === 'success' && result.url) {
-        // Extract the URL and navigate to callback handler
-        console.log('[Login] OAuth success, URL:', result.url);
-        router.replace('/auth/callback');
-      } else if (result.type === 'cancel') {
-        console.log('[Login] GitHub auth cancelled by user');
-      }
+      const user = await signInWithGoogle();
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
-      console.error('[Login] GitHub auth error:', err);
-      alert.error(
-        'GitHub Sign In Failed',
-        error || 'Please try again'
-      );
+      if (err instanceof Error && err.message === 'Google sign in was cancelled') return;
+      alert.error('Google Sign In Failed', error || 'Please try again');
     } finally {
-      setIsGitHubLoading(false);
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      setIsAppleLoading(true);
+      clearError();
+      const user = await signInWithApple();
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('cancelled')) return;
+      const msg = err instanceof Error ? err.message : 'Please try again';
+      alert.error('Apple Sign In Failed', msg);
+    } finally {
+      setIsAppleLoading(false);
     }
   };
 
@@ -225,31 +214,59 @@ export default function LoginScreen() {
             </View>
 
             {/* Social Login */}
-            <TouchableOpacity
-              onPress={handleGitHubLogin}
-              disabled={isGitHubLoading || isLoading}
-              style={{
-                backgroundColor: theme.backgroundSecondary,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 12,
-                padding: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 12,
-                opacity: isGitHubLoading || isLoading ? 0.7 : 1,
-              }}
-            >
-              {isGitHubLoading ? (
-                <ActivityIndicator size="small" color={theme.text} />
-              ) : (
-                <Github size={20} color={theme.text} />
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity
+                onPress={handleGoogleLogin}
+                disabled={isGoogleLoading || isAppleLoading || isLoading}
+                style={{
+                  backgroundColor: theme.backgroundSecondary,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 12,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  opacity: isGoogleLoading || isAppleLoading || isLoading ? 0.7 : 1,
+                }}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color={theme.text} />
+                ) : (
+                  <Text style={{ fontSize: 18, fontWeight: 'bold' }}>G</Text>
+                )}
+                <Text style={{ color: theme.text, fontWeight: '500' }}>
+                  {isGoogleLoading ? 'Connecting...' : 'Continue with Google'}
+                </Text>
+              </TouchableOpacity>
+
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  onPress={handleAppleLogin}
+                  disabled={isAppleLoading || isGoogleLoading || isLoading}
+                  style={{
+                    backgroundColor: theme.text,
+                    borderRadius: 12,
+                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    opacity: isAppleLoading || isGoogleLoading || isLoading ? 0.7 : 1,
+                  }}
+                >
+                  {isAppleLoading ? (
+                    <ActivityIndicator size="small" color={theme.background} />
+                  ) : (
+                    <Text style={{ fontSize: 20, color: theme.background }}>&#xF8FF;</Text>
+                  )}
+                  <Text style={{ color: theme.background, fontWeight: '500' }}>
+                    {isAppleLoading ? 'Connecting...' : 'Continue with Apple'}
+                  </Text>
+                </TouchableOpacity>
               )}
-              <Text style={{ color: theme.text, fontWeight: '500' }}>
-                {isGitHubLoading ? 'Connecting...' : 'Continue with GitHub'}
-              </Text>
-            </TouchableOpacity>
+            </View>
 
             {/* Footer */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 'auto', paddingTop: 32 }}>

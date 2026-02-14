@@ -88,7 +88,7 @@ export default function AddDeviceScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/(onboarding)/connect-github')}
+              onPress={() => router.push('/(onboarding)/referral-code')}
               style={{
                 backgroundColor: theme.primary,
                 borderRadius: 12,
@@ -301,7 +301,7 @@ export default function AddDeviceScreen() {
 
         {/* Skip */}
         <TouchableOpacity
-          onPress={() => router.push('/(onboarding)/connect-github')}
+          onPress={() => router.push('/(onboarding)/referral-code')}
           style={{ marginTop: 16, padding: 16, alignItems: 'center' }}
         >
           <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>
