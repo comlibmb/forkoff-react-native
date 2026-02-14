@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet, Modal, Switch, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -9,9 +9,14 @@ import {
   ChevronRight,
   Laptop,
   FolderOpen,
+  SlidersHorizontal,
+  X,
+  Target,
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useDeviceStore } from '@/stores/device.store';
+import { useProjectPreferencesStore } from '@/stores/project-preferences.store';
 import { ClaudeSession } from '@/types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
@@ -270,6 +275,26 @@ const NoSessionsState = memo(({ theme }: { theme: ReturnType<typeof useTheme>['t
   </View>
 ));
 
+const NoPinnedState = memo(({ theme, onManage }: { theme: ReturnType<typeof useTheme>['theme']; onManage: () => void }) => (
+  <View style={styles.emptyStateContainer}>
+    <Target size={64} color={theme.backgroundTertiary} />
+    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
+      No projects in focus
+    </Text>
+    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
+      Choose which projects to show on this screen
+    </Text>
+    <TouchableOpacity
+      style={[styles.emptyStateButton, { backgroundColor: theme.primary }]}
+      onPress={onManage}
+      activeOpacity={0.7}
+    >
+      <Folder size={16} color="#fff" />
+      <Text style={styles.emptyStateButtonText}>Add your first project</Text>
+    </TouchableOpacity>
+  </View>
+));
+
 export default function ProjectsScreen() {
   const { theme } = useTheme();
   // Use specific selectors to minimize re-renders
@@ -279,7 +304,11 @@ export default function ProjectsScreen() {
   const devices = useDeviceStore((state) => state.devices);
   const fetchDevices = useDeviceStore((state) => state.fetchDevices);
 
+  const pinnedProjects = useProjectPreferencesStore((state) => state.pinnedProjects);
+  const togglePin = useProjectPreferencesStore((state) => state.togglePin);
+
   const [refreshing, setRefreshing] = useState(false);
+  const [manageModalVisible, setManageModalVisible] = useState(false);
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(true);
@@ -401,7 +430,7 @@ export default function ProjectsScreen() {
     };
   }, [deviceIds, fetchSessions, subscribeToUpdates, isScanning]);
 
-  // Memoized grouped projects computation
+  // Memoized grouped projects computation (all projects)
   const deviceProjects = useMemo(() => {
     const result: {
       device: { id: string; name: string };
@@ -458,6 +487,51 @@ export default function ProjectsScreen() {
     return result;
   }, [devices, sessions]);
 
+  // Filter to only pinned projects for the main view
+  const filteredDeviceProjects = useMemo(() => {
+    return deviceProjects
+      .map((group) => ({
+        ...group,
+        projects: group.projects.filter((p) =>
+          pinnedProjects.includes(`${group.device.id}:${p.directory}`)
+        ),
+      }))
+      .filter((group) => group.projects.length > 0);
+  }, [deviceProjects, pinnedProjects]);
+
+  // Flat list of all projects for the manage modal
+  const allProjects = useMemo(() => {
+    const result: {
+      deviceId: string;
+      deviceName: string;
+      directory: string;
+      displayName: string;
+      hasActive: boolean;
+      sessionCount: number;
+    }[] = [];
+
+    for (const group of deviceProjects) {
+      const names = getUniqueProjectNames(group.projects.map(p => p.directory));
+      for (const project of group.projects) {
+        result.push({
+          deviceId: group.device.id,
+          deviceName: group.device.name,
+          directory: project.directory,
+          displayName: names.get(project.directory) || project.directory,
+          hasActive: project.hasActive,
+          sessionCount: project.sessions.length,
+        });
+      }
+    }
+
+    return result;
+  }, [deviceProjects]);
+
+  const handleTogglePin = useCallback((deviceId: string, directory: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    togglePin(deviceId, directory);
+  }, [togglePin]);
+
   // Stable callbacks
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -469,8 +543,8 @@ export default function ProjectsScreen() {
   }, [fetchDevices, fetchSessions, devices]);
 
   const totalProjects = useMemo(() =>
-    deviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
-    [deviceProjects]
+    filteredDeviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
+    [filteredDeviceProjects]
   );
 
   // Render item for FlatList
@@ -483,22 +557,10 @@ export default function ProjectsScreen() {
 
   const keyExtractor = useCallback((item: typeof deviceProjects[0]) => item.device.id, []);
 
-  // Project count badge
-  const projectBadge = (
-    <View
-      style={[
-        styles.badge,
-        {
-          backgroundColor: theme.backgroundSecondary,
-          borderColor: theme.border,
-        },
-      ]}
-    >
-      <Text style={[styles.badgeText, { color: theme.textTertiary }]}>
-        {totalProjects} project{totalProjects !== 1 ? 's' : ''}
-      </Text>
-    </View>
-  );
+  const openManageModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setManageModalVisible(true);
+  }, []);
 
   // Render content based on state
   const renderContent = () => {
@@ -517,9 +579,12 @@ export default function ProjectsScreen() {
     if (deviceProjects.length === 0) {
       return <NoSessionsState theme={theme} />;
     }
+    if (filteredDeviceProjects.length === 0) {
+      return <NoPinnedState theme={theme} onManage={openManageModal} />;
+    }
     return (
       <FlatList
-        data={deviceProjects}
+        data={filteredDeviceProjects}
         renderItem={renderDeviceGroup}
         keyExtractor={keyExtractor}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -550,7 +615,30 @@ export default function ProjectsScreen() {
               Claude sessions grouped by directory
             </Text>
           </View>
-          {projectBadge}
+          <View style={styles.headerActions}>
+            {!isScanning && deviceProjects.length > 0 && (
+              <TouchableOpacity
+                style={[styles.manageButton, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
+                onPress={openManageModal}
+                activeOpacity={0.7}
+              >
+                <SlidersHorizontal size={16} color={theme.textTertiary} />
+              </TouchableOpacity>
+            )}
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.badgeText, { color: theme.textTertiary }]}>
+                {totalProjects} project{totalProjects !== 1 ? 's' : ''}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -558,6 +646,72 @@ export default function ProjectsScreen() {
       <View style={[styles.contentContainer, { backgroundColor: theme.background }]}>
         {renderContent()}
       </View>
+
+      {/* Manage Projects Modal */}
+      <Modal
+        visible={manageModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setManageModalVisible(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]} edges={['top']}>
+          {/* Modal Header */}
+          <View style={[styles.modalHeader, { borderBottomColor: theme.backgroundTertiary }]}>
+            <View>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Manage Projects</Text>
+              <Text style={[styles.modalSubtitle, { color: theme.textTertiary }]}>
+                Choose which projects appear on your main screen
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setManageModalVisible(false)}
+              style={[styles.modalCloseButton, { backgroundColor: theme.backgroundSecondary }]}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Project List */}
+          <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 32 }}>
+            {allProjects.map((project) => {
+              const key = `${project.deviceId}:${project.directory}`;
+              const isAdded = pinnedProjects.includes(key);
+              return (
+                <View
+                  key={key}
+                  style={[styles.modalProjectRow, { borderBottomColor: theme.backgroundTertiary }]}
+                >
+                  <View style={styles.modalProjectInfo}>
+                    <View style={styles.modalProjectNameRow}>
+                      <View style={[styles.modalFolderIcon, { backgroundColor: (project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE) + '18' }]}>
+                        <Folder
+                          size={16}
+                          color={project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE}
+                        />
+                      </View>
+                      <View style={styles.modalProjectText}>
+                        <Text style={[styles.modalProjectName, { color: theme.text }]} numberOfLines={1}>
+                          {project.displayName}
+                        </Text>
+                        <Text style={[styles.modalProjectMeta, { color: theme.textTertiary }]} numberOfLines={1}>
+                          {project.deviceName} · {project.sessionCount} session{project.sessionCount !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Switch
+                    value={isAdded}
+                    onValueChange={() => handleTogglePin(project.deviceId, project.directory)}
+                    trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
+                    thumbColor={theme.switchThumb}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -577,6 +731,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
@@ -584,6 +743,14 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     marginTop: 4,
+  },
+  manageButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   contentContainer: {
     flex: 1,
@@ -729,5 +896,85 @@ const styles = StyleSheet.create({
   emptyStateSubtitle: {
     textAlign: 'center',
     marginTop: 8,
+  },
+  emptyStateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  emptyStateButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Manage modal
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  modalProjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalProjectInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  modalProjectNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalFolderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  modalProjectText: {
+    flex: 1,
+  },
+  modalProjectName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalProjectMeta: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
