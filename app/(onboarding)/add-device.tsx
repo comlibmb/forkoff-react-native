@@ -187,7 +187,7 @@ export default function AddDeviceScreen() {
 
         {/* Content based on method */}
         {method === 'qr' ? (
-          <View style={{ flex: 1 }}>
+          <View>
             <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24 }}>
               <View style={{ alignItems: 'center' }}>
                 <View
@@ -230,15 +230,19 @@ export default function AddDeviceScreen() {
 
             <View style={{ marginTop: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
-                On your computer, run:{'\n'}
+                First, install ForkOff CLI:{'\n'}
                 <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
-                  npx forkoff pair
+                  npm i -g forkoff
+                </Text>
+                {'\n\n'}Then run:{'\n'}
+                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
+                  forkoff pair
                 </Text>
               </Text>
             </View>
           </View>
         ) : (
-          <View style={{ flex: 1 }}>
+          <View>
             <View style={{ marginBottom: 16 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
                 Pairing Code
@@ -268,7 +272,11 @@ export default function AddDeviceScreen() {
 
             <View style={{ marginBottom: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
-                On your computer, run:{'\n'}
+                First, install ForkOff CLI:{'\n'}
+                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
+                  npm i -g forkoff
+                </Text>
+                {'\n\n'}Then run:{'\n'}
                 <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
                   forkoff pair
                 </Text>
@@ -302,7 +310,7 @@ export default function AddDeviceScreen() {
         {/* Skip */}
         <TouchableOpacity
           onPress={() => router.push('/(onboarding)/referral-code')}
-          style={{ marginTop: 16, padding: 16, alignItems: 'center' }}
+          style={{ marginTop: 'auto', padding: 16, paddingBottom: 32, alignItems: 'center' }}
         >
           <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>
         </TouchableOpacity>

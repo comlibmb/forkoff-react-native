@@ -833,9 +833,36 @@ class AuthService {
 
     const { data } = this.supabase!.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        // Fetch full user profile from API instead of just mapping Supabase metadata
-        const user = await this.getCurrentUser();
-        callback(user);
+        // Use session data directly — calling getCurrentUser() here would deadlock
+        // because it calls getSession() while Supabase holds its internal auth lock.
+        const baseUser = this.mapSupabaseUser(session.user);
+        try {
+          const token = session.access_token;
+          if (token) {
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+            const response = await fetch(`${apiUrl}/auth/me`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (response.ok) {
+              const profile = await response.json();
+              if (profile.appConfig) {
+                useVersionStore.getState().setVersionConfig(profile.appConfig);
+              }
+              callback({
+                ...baseUser,
+                username: profile.username || baseUser.username,
+                name: profile.name || baseUser.name,
+                avatarUrl: profile.avatarUrl || baseUser.avatarUrl,
+                subscription: profile.subscription || baseUser.subscription,
+                country: profile.country,
+              });
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to enrich user in auth state change:', err);
+        }
+        callback(baseUser);
       } else {
         callback(null);
       }
