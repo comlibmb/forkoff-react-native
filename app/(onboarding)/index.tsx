@@ -1,29 +1,34 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Smartphone, Cpu, GitBranch, Terminal, ArrowRight } from 'lucide-react-native';
+import { Eye, ShieldCheck, MonitorSmartphone, Lock, ListChecks, ArrowRight } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 
 const features = [
   {
-    icon: Smartphone,
-    title: 'Remote Control',
-    description: 'Control your AI coding tools from anywhere',
+    icon: Eye,
+    title: 'Watch Claude Think',
+    description: 'Stream reasoning, code edits, and actions live',
   },
   {
-    icon: Cpu,
-    title: 'Multi-Device',
-    description: 'Connect and manage multiple workstations',
+    icon: ShieldCheck,
+    title: 'Approve from Anywhere',
+    description: 'Review and approve file changes and commands on the go',
   },
   {
-    icon: Terminal,
-    title: 'Terminal Access',
-    description: 'Run commands and manage Claude sessions',
+    icon: MonitorSmartphone,
+    title: 'All Your Machines',
+    description: 'Connect multiple workstations and switch between them',
   },
   {
-    icon: GitBranch,
-    title: 'GitHub Integration',
-    description: 'Clone repos and manage branches on the go',
+    icon: ListChecks,
+    title: 'Track Task Progress',
+    description: 'See what Claude is working on and how far along it is',
+  },
+  {
+    icon: Lock,
+    title: 'End-to-End Encryption',
+    description: 'Your code and sessions stay private and secure',
   },
 ];
 
@@ -32,114 +37,99 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 32, paddingBottom: 32 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 32 }}>
         {/* Logo & Title */}
-        <View style={{ alignItems: 'center', marginBottom: 48 }}>
+        <View style={{ alignItems: 'center', marginBottom: 40, marginTop: -10 }}>
           <View
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: 16,
+              width: 100,
+              height: 100,
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 24,
-              backgroundColor: theme.primary,
-              shadowColor: theme.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.3,
-              shadowRadius: 20,
-              elevation: 10,
+              marginBottom: 20,
             }}
           >
-            <Text style={{ color: theme.textInverse, fontSize: 36, fontWeight: 'bold' }}>F</Text>
+            <Image
+              source={require('@/assets/logo.png')}
+              style={{ width: 140, height: 140 }}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={{ fontSize: 30, fontWeight: 'bold', color: theme.text, textAlign: 'center', marginBottom: 8 }}>
+          <Text style={{ fontSize: 28, fontWeight: '800', color: theme.text, textAlign: 'center', marginBottom: 8, marginTop: -40 }}>
             Welcome to ForkOff
           </Text>
-          <Text style={{ fontSize: 16, color: theme.textSecondary, textAlign: 'center' }}>
-            Your AI coding companion in your pocket
+          <Text style={{ fontSize: 15, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+            Your AI coding sessions, controlled{'\n'}from your pocket
           </Text>
         </View>
 
         {/* Features */}
-        <View style={{ flex: 1 }}>
+        <View style={{ gap: 12, marginTop: -10, marginBottom: 'auto' }}>
           {features.map((feature, index) => (
             <View
               key={index}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                marginBottom: 16,
                 backgroundColor: theme.backgroundSecondary,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 12,
+                borderRadius: 14,
                 padding: 16,
               }}
             >
               <View
                 style={{
-                  width: 48,
-                  height: 48,
-                  backgroundColor: theme.background,
-                  borderWidth: 1,
-                  borderColor: theme.border,
+                  width: 44,
+                  height: 44,
+                  backgroundColor: theme.primary + '15',
                   borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginRight: 16,
+                  marginRight: 14,
                 }}
               >
-                <feature.icon size={24} color={theme.primary} />
+                <feature.icon size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 16 }}>
+                <Text style={{ color: theme.text, fontWeight: '600', fontSize: 15, marginBottom: 2 }}>
                   {feature.title}
                 </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{feature.description}</Text>
+                <Text style={{ color: theme.textTertiary, fontSize: 13 }}>{feature.description}</Text>
               </View>
             </View>
           ))}
         </View>
 
         {/* Actions */}
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: 12, paddingTop: 27 }}>
           <TouchableOpacity
             onPress={() => router.push('/(onboarding)/add-device')}
+            activeOpacity={0.8}
             style={{
               backgroundColor: theme.primary,
-              borderRadius: 12,
-              padding: 16,
+              borderRadius: 14,
+              paddingVertical: 16,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              shadowColor: theme.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.2,
-              shadowRadius: 12,
-              elevation: 5,
             }}
           >
-            <Text style={{ color: theme.textInverse, fontWeight: 'bold', fontSize: 16 }}>Add Your First Device</Text>
-            <ArrowRight size={18} color={theme.textInverse} />
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Get Started</Text>
+            <ArrowRight size={18} color="#fff" />
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
+            activeOpacity={0.7}
             style={{
-              backgroundColor: theme.backgroundSecondary,
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: 12,
-              padding: 16,
+              paddingVertical: 14,
               alignItems: 'center',
             }}
           >
-            <Text style={{ color: theme.textSecondary, fontWeight: '500' }}>Skip for now</Text>
+            <Text style={{ color: theme.textTertiary, fontSize: 14 }}>I'll set up later</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

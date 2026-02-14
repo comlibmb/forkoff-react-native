@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,11 +20,19 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 export default function RegisterScreen() {
   const { theme } = useTheme();
-  const { signUpWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError } = useAuthStore();
+  const { signUpWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+
+  // Reactive navigation after OAuth completes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
+    }
+  }, [isAuthenticated, user]);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{
     name?: string;

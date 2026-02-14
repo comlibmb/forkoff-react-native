@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,19 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 export default function LoginScreen() {
   const { theme } = useTheme();
-  const { signInWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError } = useAuthStore();
+  const { signInWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+
+  // Reactive navigation: when auth state changes (e.g. OAuth completes),
+  // navigate away regardless of whether the async handler finished
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const isNewUser = !user.username;
+      router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
+    }
+  }, [isAuthenticated, user]);
   const [validationErrors, setValidationErrors] = useState<{
     email?: string;
   }>({});
