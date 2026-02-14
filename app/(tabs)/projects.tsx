@@ -1,7 +1,23 @@
-import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet, Modal, Switch, ScrollView } from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useLayoutEffect, useState, useMemo, useCallback, useRef, memo } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  RefreshControl,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  ScrollView,
+  Animated,
+} from "react-native";
+import {
+  PanGestureHandler,
+  State,
+  type PanGestureHandlerGestureEvent,
+  type PanGestureHandlerStateChangeEvent,
+} from "react-native-gesture-handler";
+import { router } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Folder,
   Terminal,
@@ -9,31 +25,35 @@ import {
   ChevronRight,
   Laptop,
   FolderOpen,
-  SlidersHorizontal,
+  FolderCog,
   X,
   Target,
-} from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { useClaudeStore } from '@/stores/claude.store';
-import { useDeviceStore } from '@/stores/device.store';
-import { useProjectPreferencesStore } from '@/stores/project-preferences.store';
-import { ClaudeSession } from '@/types';
-import { useTheme } from '@/theme/ThemeProvider';
-import { TerminalLoader } from '@/components/claude/TerminalLoader';
-import { formatTimeAgo } from '@/components/project/SessionListItem';
-import { colors } from '@/theme/colors';
+  Eye,
+  EyeOff,
+  Plus,
+  GripVertical,
+} from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import { useClaudeStore } from "@/stores/claude.store";
+import { useDeviceStore } from "@/stores/device.store";
+import { useProjectPreferencesStore } from "@/stores/project-preferences.store";
+import { ClaudeSession } from "@/types";
+import { useTheme } from "@/theme/ThemeProvider";
+import { TerminalLoader } from "@/components/claude/TerminalLoader";
+import { formatTimeAgo } from "@/components/project/SessionListItem";
+import { colors } from "@/theme/colors";
 
 // Folder status colors
-const FOLDER_COLOR_ACTIVE = '#8b5cf6';   // purple (primary)
-const FOLDER_COLOR_INACTIVE = '#6e7681'; // gray
+const FOLDER_COLOR_ACTIVE = "#8b5cf6"; // purple (primary)
+const FOLDER_COLOR_INACTIVE = "#6e7681"; // gray
 
 // Compute unique short display names for a list of directory paths.
 // Uses just the final folder name when unique, otherwise adds parent
 // segments until every name is distinct.
 const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
-  const pathSegments = directories.map(dir => ({
+  const pathSegments = directories.map((dir) => ({
     dir,
-    segments: dir.replace(/\\/g, '/').split('/').filter(Boolean),
+    segments: dir.replace(/\\/g, "/").split("/").filter(Boolean),
   }));
 
   const segmentCounts = new Map<string, number>();
@@ -48,7 +68,7 @@ const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
     const nameToDirectories = new Map<string, string[]>();
     for (const { dir, segments } of pathSegments) {
       const count = segmentCounts.get(dir)!;
-      const name = segments.slice(-count).join('/');
+      const name = segments.slice(-count).join("/");
       if (!nameToDirectories.has(name)) {
         nameToDirectories.set(name, []);
       }
@@ -59,7 +79,7 @@ const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
       if (dirs.length > 1) {
         hasDuplicates = true;
         for (const d of dirs) {
-          const { segments } = pathSegments.find(p => p.dir === d)!;
+          const { segments } = pathSegments.find((p) => p.dir === d)!;
           const current = segmentCounts.get(d)!;
           if (current < segments.length) {
             segmentCounts.set(d, current + 1);
@@ -72,7 +92,7 @@ const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
   const result = new Map<string, string>();
   for (const { dir, segments } of pathSegments) {
     const count = segmentCounts.get(dir)!;
-    result.set(dir, segments.slice(-count).join('/'));
+    result.set(dir, segments.slice(-count).join("/"));
   }
   return result;
 };
@@ -80,235 +100,537 @@ const getUniqueProjectNames = (directories: string[]): Map<string, string> => {
 // formatTimeAgo is now imported from @/components/project/SessionListItem
 
 // Memoized project card component
-const ProjectCard = memo(({
-  project,
-  deviceId,
-  displayName,
-  deviceName,
-  theme,
-}: {
-  project: {
-    directory: string;
-    sessions: ClaudeSession[];
-    lastUsedAt: string;
-    hasActive: boolean;
-  };
-  deviceId: string;
-  displayName: string;
-  deviceName: string;
-  theme: ReturnType<typeof useTheme>['theme'];
-}) => {
-  const sessionCount = project.sessions.length;
-  const folderColor = project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE;
-
-  const handlePress = useCallback(() => {
-    router.push({
-      pathname: '/project-hub',
-      params: {
-        deviceId,
-        directory: project.directory,
-        deviceName,
-      },
-    });
-  }, [deviceId, project.directory, deviceName]);
-
-  return (
-    <View style={[styles.projectCard, { backgroundColor: theme.backgroundSecondary }]}>
-      {project.hasActive && (
-        <View style={[styles.glowEffect, { backgroundColor: FOLDER_COLOR_ACTIVE }]} />
-      )}
-
-      <TouchableOpacity onPress={handlePress} style={styles.projectHeader}>
-        <View style={styles.projectHeaderRow}>
-          <View style={styles.projectHeaderLeft}>
-            <View style={[styles.folderIcon, { backgroundColor: folderColor + '18' }]}>
-              <Folder
-                size={20}
-                color={folderColor}
-              />
-            </View>
-            <View style={styles.projectTitleContainer}>
-              <View style={styles.projectTitleRow}>
-                {project.hasActive && (
-                  <View style={[styles.activeDot, { backgroundColor: FOLDER_COLOR_ACTIVE }]} />
-                )}
-                <Text style={[styles.projectName, { color: theme.text }]} numberOfLines={1}>
-                  {displayName}
-                </Text>
-              </View>
-              <Text
-                style={[styles.projectPath, { color: theme.textTertiary }]}
-                numberOfLines={1}
-              >
-                {project.directory}
-              </Text>
-              <View style={styles.projectMeta}>
-                <Terminal size={10} color={theme.textTertiary} />
-                <Text style={[styles.projectMetaText, { color: theme.textTertiary }]}>
-                  {sessionCount} session{sessionCount !== 1 ? 's' : ''}
-                </Text>
-                <Text style={[styles.projectMetaDot, { color: theme.border }]}>
-                  {'\u2022'}
-                </Text>
-                <Clock size={10} color={theme.textTertiary} />
-                <Text style={[styles.projectMetaText, { color: theme.textTertiary }]}>
-                  {formatTimeAgo(project.lastUsedAt)}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <ChevronRight size={20} color={theme.textTertiary} />
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-});
-
-// Memoized device group component - styled as macOS window
-const DeviceGroup = memo(({
-  deviceGroup,
-  theme,
-}: {
-  deviceGroup: {
-    device: { id: string; name: string };
-    projects: {
+const ProjectCard = memo(
+  ({
+    project,
+    deviceId,
+    displayName,
+    deviceName,
+    theme,
+  }: {
+    project: {
       directory: string;
       sessions: ClaudeSession[];
       lastUsedAt: string;
       hasActive: boolean;
-    }[];
-  };
-  theme: ReturnType<typeof useTheme>['theme'];
-}) => {
-  const hasActiveProject = deviceGroup.projects.some(p => p.hasActive);
+    };
+    deviceId: string;
+    displayName: string;
+    deviceName: string;
+    theme: ReturnType<typeof useTheme>["theme"];
+  }) => {
+    const sessionCount = project.sessions.length;
+    const folderColor = project.hasActive
+      ? FOLDER_COLOR_ACTIVE
+      : FOLDER_COLOR_INACTIVE;
 
-  const projectDisplayNames = useMemo(() =>
-    getUniqueProjectNames(deviceGroup.projects.map(p => p.directory)),
-    [deviceGroup.projects]
-  );
-
-  return (
-    <View
-      style={[
-        styles.deviceWindow,
-        {
-          backgroundColor: theme.background,
-          borderColor: theme.backgroundTertiary,
+    const handlePress = useCallback(() => {
+      router.push({
+        pathname: "/project-hub",
+        params: {
+          deviceId,
+          directory: project.directory,
+          deviceName,
         },
-      ]}
-    >
-      {/* macOS Title Bar */}
+      });
+    }, [deviceId, project.directory, deviceName]);
+
+    return (
       <View
         style={[
-          styles.deviceTitleBar,
+          styles.projectCard,
+          { backgroundColor: theme.backgroundSecondary },
+        ]}
+      >
+        {project.hasActive && (
+          <View
+            style={[
+              styles.glowEffect,
+              { backgroundColor: FOLDER_COLOR_ACTIVE },
+            ]}
+          />
+        )}
+
+        <TouchableOpacity onPress={handlePress} style={styles.projectHeader}>
+          <View style={styles.projectHeaderRow}>
+            <View style={styles.projectHeaderLeft}>
+              <View
+                style={[
+                  styles.folderIcon,
+                  { backgroundColor: folderColor + "18" },
+                ]}
+              >
+                <Folder size={20} color={folderColor} />
+              </View>
+              <View style={styles.projectTitleContainer}>
+                <View style={styles.projectTitleRow}>
+                  {project.hasActive && (
+                    <View
+                      style={[
+                        styles.activeDot,
+                        { backgroundColor: FOLDER_COLOR_ACTIVE },
+                      ]}
+                    />
+                  )}
+                  <Text
+                    style={[styles.projectName, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {displayName}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.projectPath, { color: theme.textTertiary }]}
+                  numberOfLines={1}
+                >
+                  {project.directory}
+                </Text>
+                <View style={styles.projectMeta}>
+                  <Terminal size={10} color={theme.textTertiary} />
+                  <Text
+                    style={[
+                      styles.projectMetaText,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    {sessionCount} session{sessionCount !== 1 ? "s" : ""}
+                  </Text>
+                  <Text
+                    style={[styles.projectMetaDot, { color: theme.border }]}
+                  >
+                    {"\u2022"}
+                  </Text>
+                  <Clock size={10} color={theme.textTertiary} />
+                  <Text
+                    style={[
+                      styles.projectMetaText,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    {formatTimeAgo(project.lastUsedAt)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <ChevronRight size={20} color={theme.textTertiary} />
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  },
+);
+
+// Memoized device group component - styled as macOS window
+const DeviceGroup = memo(
+  ({
+    deviceGroup,
+    theme,
+  }: {
+    deviceGroup: {
+      device: { id: string; name: string };
+      projects: {
+        directory: string;
+        sessions: ClaudeSession[];
+        lastUsedAt: string;
+        hasActive: boolean;
+      }[];
+    };
+    theme: ReturnType<typeof useTheme>["theme"];
+  }) => {
+    const hasActiveProject = deviceGroup.projects.some((p) => p.hasActive);
+
+    const projectDisplayNames = useMemo(
+      () => getUniqueProjectNames(deviceGroup.projects.map((p) => p.directory)),
+      [deviceGroup.projects],
+    );
+
+    return (
+      <View
+        style={[
+          styles.deviceWindow,
           {
-            backgroundColor: theme.backgroundSecondary,
-            borderBottomColor: theme.backgroundTertiary,
+            backgroundColor: theme.background,
+            borderColor: theme.backgroundTertiary,
           },
         ]}
       >
-        <View style={styles.trafficLights}>
-          <View style={[styles.trafficDot, { backgroundColor: theme.error }]} />
-          <View style={[styles.trafficDot, { backgroundColor: theme.warning }]} />
-          <View style={[styles.trafficDot, { backgroundColor: theme.success }]} />
+        {/* macOS Title Bar */}
+        <View
+          style={[
+            styles.deviceTitleBar,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderBottomColor: theme.backgroundTertiary,
+            },
+          ]}
+        >
+          <View style={styles.trafficLights}>
+            <View
+              style={[styles.trafficDot, { backgroundColor: theme.error }]}
+            />
+            <View
+              style={[styles.trafficDot, { backgroundColor: theme.warning }]}
+            />
+            <View
+              style={[styles.trafficDot, { backgroundColor: theme.success }]}
+            />
+          </View>
+          <View style={styles.deviceTitleContent}>
+            <Laptop size={14} color={theme.textTertiary} />
+            <Text
+              style={[styles.deviceTitleText, { color: theme.textSecondary }]}
+            >
+              {deviceGroup.device.name}
+            </Text>
+          </View>
+          <View style={styles.deviceTitleRight}>
+            <Text style={[styles.projectCount, { color: theme.textTertiary }]}>
+              {deviceGroup.projects.length} project
+              {deviceGroup.projects.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
         </View>
-        <View style={styles.deviceTitleContent}>
-          <Laptop size={14} color={theme.textTertiary} />
-          <Text style={[styles.deviceTitleText, { color: theme.textSecondary }]}>
-            {deviceGroup.device.name}
-          </Text>
-        </View>
-        <View style={styles.deviceTitleRight}>
-          <Text style={[styles.projectCount, { color: theme.textTertiary }]}>
-            {deviceGroup.projects.length} project{deviceGroup.projects.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      </View>
 
-      {/* Projects Content */}
-      <View style={styles.deviceContent}>
-        {deviceGroup.projects.map((project) => (
-          <ProjectCard
-            key={project.directory}
-            project={project}
-            deviceId={deviceGroup.device.id}
-            displayName={projectDisplayNames.get(project.directory) || project.directory}
-            deviceName={deviceGroup.device.name}
-            theme={theme}
-          />
-        ))}
-      </View>
+        {/* Projects Content */}
+        <View style={styles.deviceContent}>
+          {deviceGroup.projects.map((project) => (
+            <ProjectCard
+              key={project.directory}
+              project={project}
+              deviceId={deviceGroup.device.id}
+              displayName={
+                projectDisplayNames.get(project.directory) || project.directory
+              }
+              deviceName={deviceGroup.device.name}
+              theme={theme}
+            />
+          ))}
+        </View>
 
-      {/* Accent bar */}
-      <View
-        style={[
-          styles.deviceAccentBar,
-          { backgroundColor: hasActiveProject ? theme.primary : theme.backgroundTertiary },
-        ]}
-      />
-    </View>
-  );
-});
+        {/* Accent bar */}
+        <View
+          style={[
+            styles.deviceAccentBar,
+            {
+              backgroundColor: hasActiveProject
+                ? theme.primary
+                : theme.backgroundTertiary,
+            },
+          ]}
+        />
+      </View>
+    );
+  },
+);
 
 // Empty states as memoized components
-const NoDevicesState = memo(({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }) => (
-  <View style={styles.emptyStateContainer}>
-    <Laptop size={64} color={theme.backgroundTertiary} />
-    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
-      No devices connected
-    </Text>
-    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
-      Connect a device to see Claude projects
-    </Text>
-  </View>
-));
+const NoDevicesState = memo(
+  ({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) => (
+    <View style={styles.emptyStateContainer}>
+      <Laptop size={64} color={theme.backgroundTertiary} />
+      <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
+        No devices connected
+      </Text>
+      <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
+        Head over to the Devices tab to pair your first device
+      </Text>
+      <TouchableOpacity
+        style={[styles.emptyStateButton, { backgroundColor: theme.primary }]}
+        onPress={() => router.push("/(tabs)/devices")}
+        activeOpacity={0.7}
+      >
+        <Laptop size={16} color="#fff" />
+        <Text style={styles.emptyStateButtonText}>Go to Devices</Text>
+      </TouchableOpacity>
+    </View>
+  ),
+);
 
-const NoSessionsState = memo(({ theme }: { theme: ReturnType<typeof useTheme>['theme'] }) => (
-  <View style={styles.emptyStateContainer}>
-    <FolderOpen size={64} color={theme.backgroundTertiary} />
-    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
-      No Claude sessions yet
-    </Text>
-    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
-      Start a Claude session on any device to see it here
-    </Text>
-  </View>
-));
+const NoSessionsState = memo(
+  ({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) => (
+    <View style={styles.emptyStateContainer}>
+      <FolderOpen size={64} color={theme.backgroundTertiary} />
+      <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
+        No Claude sessions yet
+      </Text>
+      <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
+        Start a Claude session on any device to see it here
+      </Text>
+    </View>
+  ),
+);
 
-const NoPinnedState = memo(({ theme, onManage }: { theme: ReturnType<typeof useTheme>['theme']; onManage: () => void }) => (
-  <View style={styles.emptyStateContainer}>
-    <Target size={64} color={theme.backgroundTertiary} />
-    <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
-      No projects in focus
-    </Text>
-    <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
-      Choose which projects to show on this screen
-    </Text>
-    <TouchableOpacity
-      style={[styles.emptyStateButton, { backgroundColor: theme.primary }]}
-      onPress={onManage}
-      activeOpacity={0.7}
-    >
-      <Folder size={16} color="#fff" />
-      <Text style={styles.emptyStateButtonText}>Add your first project</Text>
-    </TouchableOpacity>
-  </View>
-));
+const NoPinnedState = memo(
+  ({
+    theme,
+    onManage,
+  }: {
+    theme: ReturnType<typeof useTheme>["theme"];
+    onManage: () => void;
+  }) => {
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.4,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }, [pulseAnim]);
+
+    return (
+      <View style={styles.emptyStateContainer}>
+        <Animated.View style={{ opacity: pulseAnim }}>
+          <Target size={64} color={theme.primary} />
+        </Animated.View>
+        <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
+          No projects in focus
+        </Text>
+        <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
+          Your projects have been scanned and detected
+        </Text>
+        <TouchableOpacity
+          style={[styles.emptyStateButton, { backgroundColor: theme.primary }]}
+          onPress={onManage}
+          activeOpacity={0.7}
+        >
+          <Folder size={16} color="#fff" />
+          <Text style={styles.emptyStateButtonText}>
+            Show your first project
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  },
+);
+
+// Draggable row for the Added section in the manage modal
+const ROW_HEIGHT = 60;
+
+const DraggableAddedRow = memo(
+  ({
+    project,
+    index,
+    totalCount,
+    draggingKey,
+    onDragStart,
+    onReorder,
+    onDragEnd,
+    onRemove,
+    theme,
+  }: {
+    project: {
+      deviceId: string;
+      deviceName: string;
+      directory: string;
+      displayName: string;
+      hasActive: boolean;
+      sessionCount: number;
+    };
+    index: number;
+    totalCount: number;
+    draggingKey: string | null;
+    onDragStart: (key: string) => void;
+    onReorder: (fromIndex: number, toIndex: number) => void;
+    onDragEnd: () => void;
+    onRemove: () => void;
+    theme: ReturnType<typeof useTheme>["theme"];
+  }) => {
+    const projectKey = `${project.deviceId}:${project.directory}`;
+    const isBeingDragged = draggingKey === projectKey;
+
+    // Dragged item follows the finger
+    const translateY = useRef(new Animated.Value(0)).current;
+    // Non-dragged items spring into their new slot when bumped
+    const bumpAnim = useRef(new Animated.Value(0)).current;
+    const combinedY = useRef(Animated.add(translateY, bumpAnim)).current;
+
+    const originalIndex = useRef(0);
+    const prevIndex = useRef(index);
+    const indexRef = useRef(index);
+    const totalRef = useRef(totalCount);
+    const onDragStartRef = useRef(onDragStart);
+    const onReorderRef = useRef(onReorder);
+    const onDragEndRef = useRef(onDragEnd);
+
+    // When this row's index changes (it got bumped by a reorder),
+    // animate it sliding from its old position to the new one
+    useLayoutEffect(() => {
+      if (!isBeingDragged && prevIndex.current !== index) {
+        const diff = (prevIndex.current - index) * ROW_HEIGHT;
+        bumpAnim.stopAnimation();
+        bumpAnim.setValue(diff);
+        Animated.timing(bumpAnim, {
+          toValue: 0,
+          duration: 650,
+          useNativeDriver: true,
+          easing: require('react-native').Easing.bezier(0.25, 0.1, 0.25, 1),
+        }).start();
+      }
+      prevIndex.current = index;
+      indexRef.current = index;
+    }, [index, isBeingDragged, bumpAnim]);
+
+    totalRef.current = totalCount;
+    onDragStartRef.current = onDragStart;
+    onReorderRef.current = onReorder;
+    onDragEndRef.current = onDragEnd;
+
+    const onGestureEvent = useCallback(
+      (event: PanGestureHandlerGestureEvent) => {
+        const { translationY: ty } = event.nativeEvent;
+
+        // Target slot = where the finger IS, relative to where we started
+        const target = Math.max(
+          0,
+          Math.min(
+            totalRef.current - 1,
+            originalIndex.current + Math.round(ty / ROW_HEIGHT),
+          ),
+        );
+
+        if (target !== indexRef.current) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onReorderRef.current(indexRef.current, target);
+          indexRef.current = target;
+        }
+
+        // Compensate for the layout shift so the row stays under the finger
+        const layoutShift =
+          (indexRef.current - originalIndex.current) * ROW_HEIGHT;
+        translateY.setValue(ty - layoutShift);
+      },
+      [translateY],
+    );
+
+    const onHandlerStateChange = useCallback(
+      (event: PanGestureHandlerStateChangeEvent) => {
+        const { state, oldState } = event.nativeEvent;
+
+        if (state === State.ACTIVE) {
+          translateY.stopAnimation();
+          translateY.setValue(0);
+          bumpAnim.setValue(0);
+          originalIndex.current = indexRef.current;
+          onDragStartRef.current(projectKey);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+
+        if (oldState === State.ACTIVE) {
+          onDragEndRef.current();
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 300,
+            friction: 25,
+          }).start();
+        }
+      },
+      [translateY, bumpAnim, projectKey],
+    );
+
+    return (
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetY={[-5, 5]}
+        enabled={draggingKey === null || isBeingDragged}
+      >
+        <Animated.View
+          style={[
+            styles.modalProjectRow,
+            {
+              backgroundColor: theme.background,
+              borderBottomColor: theme.backgroundTertiary,
+              transform: [{ translateY: combinedY }],
+              zIndex: isBeingDragged ? 10 : 1,
+              elevation: isBeingDragged ? 5 : 0,
+              opacity: isBeingDragged ? 0.9 : 1,
+            },
+          ]}
+        >
+          <View style={styles.modalProjectInfo}>
+            <View style={styles.modalProjectNameRow}>
+              <View
+                style={[
+                  styles.modalFolderIcon,
+                  { backgroundColor: theme.primary + "18" },
+                ]}
+              >
+                <Eye size={16} color={theme.primary} />
+              </View>
+              <View style={styles.modalProjectText}>
+                <Text
+                  style={[styles.modalProjectName, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {project.displayName}
+                </Text>
+                <Text
+                  style={[
+                    styles.modalProjectMeta,
+                    { color: theme.textTertiary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {project.deviceName} · {project.sessionCount}{" "}
+                  session{project.sessionCount !== 1 ? "s" : ""}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.modalRowActions}>
+            <TouchableOpacity
+              onPress={onRemove}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.modalActionButton}
+            >
+              <EyeOff size={18} color={theme.error + "aa"} />
+            </TouchableOpacity>
+            <View style={styles.dragHandle}>
+              <GripVertical size={18} color={theme.textTertiary} />
+            </View>
+          </View>
+        </Animated.View>
+      </PanGestureHandler>
+    );
+  },
+);
 
 export default function ProjectsScreen() {
   const { theme } = useTheme();
   // Use specific selectors to minimize re-renders
   const sessions = useClaudeStore((state) => state.sessions);
   const fetchSessions = useClaudeStore((state) => state.fetchSessions);
-  const subscribeToUpdates = useClaudeStore((state) => state.subscribeToUpdates);
+  const subscribeToUpdates = useClaudeStore(
+    (state) => state.subscribeToUpdates,
+  );
   const devices = useDeviceStore((state) => state.devices);
   const fetchDevices = useDeviceStore((state) => state.fetchDevices);
 
-  const pinnedProjects = useProjectPreferencesStore((state) => state.pinnedProjects);
+  const pinnedProjects = useProjectPreferencesStore(
+    (state) => state.pinnedProjects,
+  );
   const togglePin = useProjectPreferencesStore((state) => state.togglePin);
+  const reorderPinned = useProjectPreferencesStore(
+    (state) => state.reorderPinned,
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [manageModalVisible, setManageModalVisible] = useState(false);
+  const [modalScrollEnabled, setModalScrollEnabled] = useState(true);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(true);
@@ -318,32 +640,37 @@ export default function ProjectsScreen() {
   const hasInitializedRef = useRef(false);
 
   // Scan lines for the terminal loader
-  const scanLines = useMemo(() => [
-    {
-      text: 'Looking for devices',
-      color: theme.textSecondary,
-      done: scanStep > 0,
-    },
-    {
-      text: scanDeviceCount > 0
-        ? `Found ${scanDeviceCount} device${scanDeviceCount !== 1 ? 's' : ''}`
-        : 'Discovering devices',
-      color: scanDeviceCount > 0 ? colors.success[100] : theme.textTertiary,
-      done: scanStep > 1,
-    },
-    {
-      text: scanProjectCount > 0
-        ? `Scanned ${scanProjectCount} project${scanProjectCount !== 1 ? 's' : ''}`
-        : 'Scanning for projects',
-      color: scanProjectCount > 0 ? colors.success[100] : theme.textTertiary,
-      done: scanStep > 2,
-    },
-    {
-      text: 'All systems go',
-      color: colors.success[100],
-      done: scanStep > 3,
-    },
-  ], [scanStep, scanDeviceCount, scanProjectCount, theme]);
+  const scanLines = useMemo(
+    () => [
+      {
+        text: "Looking for devices",
+        color: theme.textSecondary,
+        done: scanStep > 0,
+      },
+      {
+        text:
+          scanDeviceCount > 0
+            ? `Found ${scanDeviceCount} device${scanDeviceCount !== 1 ? "s" : ""}`
+            : "Discovering devices",
+        color: scanDeviceCount > 0 ? colors.success[100] : theme.textTertiary,
+        done: scanStep > 1,
+      },
+      {
+        text:
+          scanProjectCount > 0
+            ? `Scanned ${scanProjectCount} project${scanProjectCount !== 1 ? "s" : ""}`
+            : "Scanning for projects",
+        color: scanProjectCount > 0 ? colors.success[100] : theme.textTertiary,
+        done: scanStep > 2,
+      },
+      {
+        text: "All systems go",
+        color: colors.success[100],
+        done: scanStep > 3,
+      },
+    ],
+    [scanStep, scanDeviceCount, scanProjectCount, theme],
+  );
 
   // Auto-scan on mount
   useEffect(() => {
@@ -372,10 +699,10 @@ export default function ProjectsScreen() {
       }
 
       // Step 2: Scanning projects per device
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 400));
       setScanStep(2);
 
-      const sessionPromises = foundDevices.map(d => fetchSessions(d.id));
+      const sessionPromises = foundDevices.map((d) => fetchSessions(d.id));
       await Promise.allSettled(sessionPromises);
 
       // Count projects
@@ -392,11 +719,11 @@ export default function ProjectsScreen() {
       setScanProjectCount(projectCount);
 
       // Step 3: All systems go
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
       setScanStep(3);
 
       // Done scanning
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 600));
       setIsScanning(false);
     };
 
@@ -404,7 +731,10 @@ export default function ProjectsScreen() {
   }, [fetchDevices, fetchSessions]);
 
   // Subscribe to updates and set up polling - use device IDs as dependency
-  const deviceIds = useMemo(() => devices.map(d => d.id).join(','), [devices]);
+  const deviceIds = useMemo(
+    () => devices.map((d) => d.id).join(","),
+    [devices],
+  );
 
   useEffect(() => {
     if (devices.length === 0) return;
@@ -457,7 +787,8 @@ export default function ProjectsScreen() {
 
       for (const projectSessions of grouped.values()) {
         projectSessions.sort(
-          (a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime()
+          (a, b) =>
+            new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime(),
         );
       }
 
@@ -465,10 +796,16 @@ export default function ProjectsScreen() {
         .map(([directory, projectSessions]) => ({
           directory,
           sessions: projectSessions,
-          lastUsedAt: projectSessions[0]?.lastUsedAt || new Date().toISOString(),
-          hasActive: projectSessions.some((s) => s.state?.toUpperCase() === 'ACTIVE'),
+          lastUsedAt:
+            projectSessions[0]?.lastUsedAt || new Date().toISOString(),
+          hasActive: projectSessions.some(
+            (s) => s.state?.toUpperCase() === "ACTIVE",
+          ),
         }))
-        .sort((a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime());
+        .sort(
+          (a, b) =>
+            new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime(),
+        );
 
       if (projects.length > 0) {
         result.push({
@@ -479,22 +816,32 @@ export default function ProjectsScreen() {
     }
 
     result.sort((a, b) => {
-      const aLatest = a.projects[0]?.lastUsedAt || '';
-      const bLatest = b.projects[0]?.lastUsedAt || '';
+      const aLatest = a.projects[0]?.lastUsedAt || "";
+      const bLatest = b.projects[0]?.lastUsedAt || "";
       return new Date(bLatest).getTime() - new Date(aLatest).getTime();
     });
 
     return result;
   }, [devices, sessions]);
 
-  // Filter to only pinned projects for the main view
+  // Filter to only pinned projects for the main view, sorted by pin order
   const filteredDeviceProjects = useMemo(() => {
     return deviceProjects
       .map((group) => ({
         ...group,
-        projects: group.projects.filter((p) =>
-          pinnedProjects.includes(`${group.device.id}:${p.directory}`)
-        ),
+        projects: group.projects
+          .filter((p) =>
+            pinnedProjects.includes(`${group.device.id}:${p.directory}`),
+          )
+          .sort((a, b) => {
+            const aIdx = pinnedProjects.indexOf(
+              `${group.device.id}:${a.directory}`,
+            );
+            const bIdx = pinnedProjects.indexOf(
+              `${group.device.id}:${b.directory}`,
+            );
+            return aIdx - bIdx;
+          }),
       }))
       .filter((group) => group.projects.length > 0);
   }, [deviceProjects, pinnedProjects]);
@@ -511,7 +858,9 @@ export default function ProjectsScreen() {
     }[] = [];
 
     for (const group of deviceProjects) {
-      const names = getUniqueProjectNames(group.projects.map(p => p.directory));
+      const names = getUniqueProjectNames(
+        group.projects.map((p) => p.directory),
+      );
       for (const project of group.projects) {
         result.push({
           deviceId: group.device.id,
@@ -527,10 +876,46 @@ export default function ProjectsScreen() {
     return result;
   }, [deviceProjects]);
 
-  const handleTogglePin = useCallback((deviceId: string, directory: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    togglePin(deviceId, directory);
-  }, [togglePin]);
+  const handleTogglePin = useCallback(
+    (deviceId: string, directory: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      togglePin(deviceId, directory);
+    },
+    [togglePin],
+  );
+
+  const handleDragStart = useCallback((key: string) => {
+    setDraggingKey(key);
+    setModalScrollEnabled(false);
+  }, []);
+
+  const handleReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      reorderPinned(fromIndex, toIndex);
+    },
+    [reorderPinned],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingKey(null);
+    setModalScrollEnabled(true);
+  }, []);
+
+  // Split allProjects into added (pinned) and available (not pinned)
+  const addedProjects = useMemo(() => {
+    // Return in pinned order
+    return pinnedProjects
+      .map((key) =>
+        allProjects.find((p) => `${p.deviceId}:${p.directory}` === key),
+      )
+      .filter(Boolean) as typeof allProjects;
+  }, [allProjects, pinnedProjects]);
+
+  const availableProjects = useMemo(() => {
+    return allProjects.filter(
+      (p) => !pinnedProjects.includes(`${p.deviceId}:${p.directory}`),
+    );
+  }, [allProjects, pinnedProjects]);
 
   // Stable callbacks
   const onRefresh = useCallback(async () => {
@@ -542,20 +927,23 @@ export default function ProjectsScreen() {
     setRefreshing(false);
   }, [fetchDevices, fetchSessions, devices]);
 
-  const totalProjects = useMemo(() =>
-    filteredDeviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
-    [filteredDeviceProjects]
+  const totalProjects = useMemo(
+    () => deviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
+    [deviceProjects],
   );
 
   // Render item for FlatList
-  const renderDeviceGroup = useCallback(({ item }: { item: typeof deviceProjects[0] }) => (
-    <DeviceGroup
-      deviceGroup={item}
-      theme={theme}
-    />
-  ), [theme]);
+  const renderDeviceGroup = useCallback(
+    ({ item }: { item: (typeof deviceProjects)[0] }) => (
+      <DeviceGroup deviceGroup={item} theme={theme} />
+    ),
+    [theme],
+  );
 
-  const keyExtractor = useCallback((item: typeof deviceProjects[0]) => item.device.id, []);
+  const keyExtractor = useCallback(
+    (item: (typeof deviceProjects)[0]) => item.device.id,
+    [],
+  );
 
   const openManageModal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -605,45 +993,60 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      edges={["top"]}
+    >
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.backgroundTertiary }]}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Projects</Text>
-            <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>
-              Claude sessions grouped by directory
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            {!isScanning && deviceProjects.length > 0 && (
-              <TouchableOpacity
-                style={[styles.manageButton, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
-                onPress={openManageModal}
-                activeOpacity={0.7}
-              >
-                <SlidersHorizontal size={16} color={theme.textTertiary} />
-              </TouchableOpacity>
-            )}
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: theme.backgroundSecondary,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <Text style={[styles.badgeText, { color: theme.textTertiary }]}>
-                {totalProjects} project{totalProjects !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          </View>
+      <View
+        style={[styles.header, { borderBottomColor: theme.backgroundTertiary }]}
+      >
+        <View>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            Projects
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>
+            Manage your projects and sessions here
+          </Text>
         </View>
       </View>
 
+      {/* Sub-header actions (below divider) */}
+      <View style={styles.subHeaderRow}>
+        <View
+          style={[
+            styles.badge,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.badgeText, { color: theme.success }]}>
+            {totalProjects} detected
+          </Text>
+        </View>
+        {!isScanning && deviceProjects.length > 0 && (
+          <TouchableOpacity
+            style={[
+              styles.manageButton,
+              {
+                backgroundColor: theme.backgroundSecondary,
+                borderColor: theme.border,
+              },
+            ]}
+            onPress={openManageModal}
+            activeOpacity={0.7}
+          >
+            <FolderCog size={16} color={theme.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Project List */}
-      <View style={[styles.contentContainer, { backgroundColor: theme.background }]}>
+      <View
+        style={[styles.contentContainer, { backgroundColor: theme.background }]}
+      >
         {renderContent()}
       </View>
 
@@ -654,18 +1057,33 @@ export default function ProjectsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setManageModalVisible(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]} edges={['top']}>
+        <SafeAreaView
+          style={[styles.modalContainer, { backgroundColor: theme.background }]}
+          edges={["top"]}
+        >
           {/* Modal Header */}
-          <View style={[styles.modalHeader, { borderBottomColor: theme.backgroundTertiary }]}>
+          <View
+            style={[
+              styles.modalHeader,
+              { borderBottomColor: theme.backgroundTertiary },
+            ]}
+          >
             <View>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Manage Projects</Text>
-              <Text style={[styles.modalSubtitle, { color: theme.textTertiary }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Manage Projects
+              </Text>
+              <Text
+                style={[styles.modalSubtitle, { color: theme.textTertiary }]}
+              >
                 Choose which projects appear on your main screen
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setManageModalVisible(false)}
-              style={[styles.modalCloseButton, { backgroundColor: theme.backgroundSecondary }]}
+              style={[
+                styles.modalCloseButton,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <X size={18} color={theme.textSecondary} />
@@ -673,42 +1091,126 @@ export default function ProjectsScreen() {
           </View>
 
           {/* Project List */}
-          <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 32 }}>
-            {allProjects.map((project) => {
-              const key = `${project.deviceId}:${project.directory}`;
-              const isAdded = pinnedProjects.includes(key);
-              return (
-                <View
-                  key={key}
-                  style={[styles.modalProjectRow, { borderBottomColor: theme.backgroundTertiary }]}
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 32 }}
+            scrollEnabled={modalScrollEnabled}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Added Section */}
+            {addedProjects.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.modalSectionTitle,
+                    { color: theme.textSecondary },
+                  ]}
                 >
-                  <View style={styles.modalProjectInfo}>
-                    <View style={styles.modalProjectNameRow}>
-                      <View style={[styles.modalFolderIcon, { backgroundColor: (project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE) + '18' }]}>
-                        <Folder
-                          size={16}
-                          color={project.hasActive ? FOLDER_COLOR_ACTIVE : FOLDER_COLOR_INACTIVE}
-                        />
-                      </View>
-                      <View style={styles.modalProjectText}>
-                        <Text style={[styles.modalProjectName, { color: theme.text }]} numberOfLines={1}>
-                          {project.displayName}
-                        </Text>
-                        <Text style={[styles.modalProjectMeta, { color: theme.textTertiary }]} numberOfLines={1}>
-                          {project.deviceName} · {project.sessionCount} session{project.sessionCount !== 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Switch
-                    value={isAdded}
-                    onValueChange={() => handleTogglePin(project.deviceId, project.directory)}
-                    trackColor={{ false: theme.switchTrackOff, true: theme.primary }}
-                    thumbColor={theme.switchThumb}
+                  Added
+                </Text>
+                {addedProjects.map((project, idx) => (
+                  <DraggableAddedRow
+                    key={`${project.deviceId}:${project.directory}`}
+                    project={project}
+                    index={idx}
+                    totalCount={addedProjects.length}
+                    draggingKey={draggingKey}
+                    onDragStart={handleDragStart}
+                    onReorder={handleReorder}
+                    onDragEnd={handleDragEnd}
+                    onRemove={() =>
+                      handleTogglePin(project.deviceId, project.directory)
+                    }
+                    theme={theme}
                   />
-                </View>
-              );
-            })}
+                ))}
+              </>
+            )}
+
+            {/* Available Section */}
+            {availableProjects.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.modalSectionTitle,
+                    {
+                      color: theme.textSecondary,
+                      marginTop: addedProjects.length > 0 ? 24 : 8,
+                    },
+                  ]}
+                >
+                  Available
+                </Text>
+                {availableProjects.map((project) => {
+                  const key = `${project.deviceId}:${project.directory}`;
+                  return (
+                    <View
+                      key={key}
+                      style={[
+                        styles.modalProjectRow,
+                        { borderBottomColor: theme.backgroundTertiary },
+                      ]}
+                    >
+                      <View style={styles.modalProjectInfo}>
+                        <View style={styles.modalProjectNameRow}>
+                          <View
+                            style={[
+                              styles.modalFolderIcon,
+                              {
+                                backgroundColor:
+                                  (project.hasActive
+                                    ? FOLDER_COLOR_ACTIVE
+                                    : FOLDER_COLOR_INACTIVE) + "18",
+                              },
+                            ]}
+                          >
+                            <Folder
+                              size={16}
+                              color={
+                                project.hasActive
+                                  ? FOLDER_COLOR_ACTIVE
+                                  : FOLDER_COLOR_INACTIVE
+                              }
+                            />
+                          </View>
+                          <View style={styles.modalProjectText}>
+                            <Text
+                              style={[
+                                styles.modalProjectName,
+                                { color: theme.text },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {project.displayName}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.modalProjectMeta,
+                                { color: theme.textTertiary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {project.deviceName} · {project.sessionCount}{" "}
+                              session{project.sessionCount !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleTogglePin(project.deviceId, project.directory)
+                        }
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.modalActionButton}
+                      >
+                        <Plus size={20} color={theme.success} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </>
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -726,19 +1228,17 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  subHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   headerSubtitle: {
     fontSize: 14,
@@ -749,8 +1249,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   contentContainer: {
     flex: 1,
@@ -761,19 +1261,19 @@ const styles = StyleSheet.create({
   deviceWindow: {
     borderRadius: 12,
     borderWidth: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 20,
   },
   deviceTitleBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
   },
   trafficLights: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   trafficDot: {
@@ -783,18 +1283,18 @@ const styles = StyleSheet.create({
   },
   deviceTitleContent: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginLeft: 12,
     gap: 8,
   },
   deviceTitleText: {
     fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'monospace',
+    fontWeight: "600",
+    fontFamily: "monospace",
   },
   deviceTitleRight: {
-    marginLeft: 'auto',
+    marginLeft: "auto",
   },
   projectCount: {
     fontSize: 11,
@@ -807,11 +1307,11 @@ const styles = StyleSheet.create({
   },
   projectCard: {
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 8,
   },
   glowEffect: {
-    position: 'absolute',
+    position: "absolute",
     top: -48,
     right: -48,
     width: 96,
@@ -823,13 +1323,13 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   projectHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   projectHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     marginRight: 12,
   },
@@ -837,16 +1337,16 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
   projectTitleContainer: {
     flex: 1,
   },
   projectTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 4,
   },
   activeDot: {
@@ -856,15 +1356,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   projectName: {
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   projectPath: {
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: "monospace",
   },
   projectMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 4,
   },
   projectMetaText: {
@@ -882,24 +1382,24 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   emptyStateContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 48,
   },
   emptyStateTitle: {
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 18,
   },
   emptyStateSubtitle: {
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 8,
   },
   emptyStateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 20,
     paddingHorizontal: 20,
@@ -907,18 +1407,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   emptyStateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   // Manage modal
   modalContainer: {
     flex: 1,
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
@@ -926,7 +1426,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   modalSubtitle: {
     fontSize: 13,
@@ -936,17 +1436,17 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalContent: {
     flex: 1,
     paddingHorizontal: 16,
   },
   modalProjectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -955,15 +1455,15 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   modalProjectNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   modalFolderIcon: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
   modalProjectText: {
@@ -971,10 +1471,34 @@ const styles = StyleSheet.create({
   },
   modalProjectName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalProjectMeta: {
     fontSize: 12,
     marginTop: 2,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalRowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalActionButton: {
+    padding: 6,
+  },
+  dragHandle: {
+    padding: 8,
+    marginLeft: 2,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

@@ -7,6 +7,7 @@ interface ProjectPreferencesState {
   togglePin: (deviceId: string, directory: string) => void;
   isPinned: (deviceId: string, directory: string) => boolean;
   unpinAll: () => void;
+  reorderPinned: (fromIndex: number, toIndex: number) => void;
 }
 
 const makeKey = (deviceId: string, directory: string) => `${deviceId}:${directory}`;
@@ -32,6 +33,13 @@ export const useProjectPreferencesStore = create<ProjectPreferencesState>()(
 
       unpinAll: () => {
         set({ pinnedProjects: [] });
+      },
+
+      reorderPinned: (fromIndex, toIndex) => {
+        const current = [...get().pinnedProjects];
+        const [moved] = current.splice(fromIndex, 1);
+        current.splice(toIndex, 0, moved);
+        set({ pinnedProjects: current });
       },
     }),
     {
