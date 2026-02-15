@@ -294,10 +294,15 @@ export default function SubscriptionScreen() {
         {/* Plans */}
         {plans.map((plan) => {
           const Icon = plan.icon;
-          // Match current plan: free users match 'free', pro users match by stripePriceId
+          // Match current plan: free users match 'free', pro users match by stripePriceId.
+          // If pro user has no stripePriceId (voucher/lifetime), match the first pro plan.
           const isCurrentPlan = plan.id === 'free'
             ? currentTier === 'free'
-            : isPro && !!plan.stripePriceId && plan.stripePriceId === user?.stripePriceId;
+            : isPro && (
+                user?.stripePriceId
+                  ? plan.stripePriceId === user.stripePriceId
+                  : plan === plans.find((p) => p.id !== 'free')
+              );
           const isSelected = plan.id === selectedPlan;
 
           return (
