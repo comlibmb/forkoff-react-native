@@ -3,6 +3,10 @@
  *
  * Tests the ClaudeApproval component that displays approval options
  * (yes/no/plan) for Claude requests.
+ *
+ * The component uses formatApprovalRequest() to parse prompts into
+ * structured tool-specific displays. For unrecognized prompts, it
+ * shows "Tool Request" as the title with the prompt as description.
  */
 
 import React from 'react';
@@ -56,10 +60,11 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      expect(getByText('Claude Needs Input')).toBeTruthy();
+      // Generic prompt → title is "Tool Request"
+      expect(getByText('Tool Request')).toBeTruthy();
     });
 
-    it('should display the prompt text', () => {
+    it('should display the prompt text as description for generic requests', () => {
       const request = createMockRequest({
         promptText: 'Custom prompt message here',
       });
@@ -76,9 +81,10 @@ describe('ClaudeApproval Component', () => {
       expect(getByText('Custom prompt message here')).toBeTruthy();
     });
 
-    it('should display the context/recent output when provided', () => {
+    it('should show tool-specific title for Write tool', () => {
       const request = createMockRequest({
-        context: ['Line 1 of context', 'Line 2 of context'],
+        promptText: 'Claude wants to use: Write',
+        context: ['File: /src/index.ts'],
       });
 
       const { getByText } = render(
@@ -90,9 +96,43 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      expect(getByText('Recent Output')).toBeTruthy();
-      // Context is joined with newlines
-      expect(getByText('Line 1 of context\nLine 2 of context')).toBeTruthy();
+      expect(getByText('Create File')).toBeTruthy();
+    });
+
+    it('should show tool-specific title for Bash tool', () => {
+      const request = createMockRequest({
+        promptText: 'Claude wants to use: Bash',
+        context: ['Command: npm test'],
+      });
+
+      const { getByText } = render(
+        <ClaudeApproval
+          visible={true}
+          request={request}
+          onRespond={mockOnRespond}
+          onDismiss={mockOnDismiss}
+        />
+      );
+
+      expect(getByText('Run Command')).toBeTruthy();
+    });
+
+    it('should not render context section (context is parsed, not displayed)', () => {
+      const request = createMockRequest({
+        context: ['Line 1 of context', 'Line 2 of context'],
+      });
+
+      const { queryByText } = render(
+        <ClaudeApproval
+          visible={true}
+          request={request}
+          onRespond={mockOnRespond}
+          onDismiss={mockOnDismiss}
+        />
+      );
+
+      // Context is used for parsing, not displayed as "Recent Output"
+      expect(queryByText('Recent Output')).toBeNull();
     });
 
     it('should not render context section when context is empty', () => {
@@ -114,7 +154,7 @@ describe('ClaudeApproval Component', () => {
   });
 
   describe('option rendering', () => {
-    it('should render all options as buttons', () => {
+    it('should render all options as buttons with labels', () => {
       const request = createMockRequest({
         options: ['y:yes', 'n:no', 'p:plan'],
       });
@@ -133,12 +173,12 @@ describe('ClaudeApproval Component', () => {
       expect(getByText('plan')).toBeTruthy();
     });
 
-    it('should render option keys in parentheses', () => {
+    it('should render option labels (keys are not shown in parentheses)', () => {
       const request = createMockRequest({
         options: ['y:yes', 'n:no'],
       });
 
-      const { getByText } = render(
+      const { getByText, queryByText } = render(
         <ClaudeApproval
           visible={true}
           request={request}
@@ -147,8 +187,11 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      expect(getByText('(y)')).toBeTruthy();
-      expect(getByText('(n)')).toBeTruthy();
+      // Only labels are rendered, not keys in parentheses
+      expect(getByText('yes')).toBeTruthy();
+      expect(getByText('no')).toBeTruthy();
+      expect(queryByText('(y)')).toBeNull();
+      expect(queryByText('(n)')).toBeNull();
     });
 
     it('should handle options without labels', () => {
@@ -170,12 +213,12 @@ describe('ClaudeApproval Component', () => {
       expect(getByText('z')).toBeTruthy();
     });
 
-    it('should render two options correctly', () => {
+    it('should render two option buttons', () => {
       const request = createMockRequest({
         options: ['y:yes', 'n:no'],
       });
 
-      const { getAllByText } = render(
+      const { getByText } = render(
         <ClaudeApproval
           visible={true}
           request={request}
@@ -184,11 +227,8 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      // Check that we have exactly 2 option keys rendered
-      const yKeys = getAllByText('(y)');
-      const nKeys = getAllByText('(n)');
-      expect(yKeys).toHaveLength(1);
-      expect(nKeys).toHaveLength(1);
+      expect(getByText('yes')).toBeTruthy();
+      expect(getByText('no')).toBeTruthy();
     });
   });
 
@@ -265,7 +305,7 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      fireEvent.press(getByText('Dismiss (will timeout)'));
+      fireEvent.press(getByText('Tap outside to dismiss'));
 
       expect(mockOnDismiss).toHaveBeenCalled();
       expect(mockOnRespond).not.toHaveBeenCalled();
@@ -293,7 +333,7 @@ describe('ClaudeApproval Component', () => {
   });
 
   describe('Modal behavior', () => {
-    it('should display header text', () => {
+    it('should display header text and title bar', () => {
       const request = createMockRequest();
 
       const { getByText } = render(
@@ -305,11 +345,13 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      expect(getByText('Claude Needs Input')).toBeTruthy();
-      expect(getByText('Choose an action to continue')).toBeTruthy();
+      // macOS-style title bar shows "claude-approval"
+      expect(getByText('claude-approval')).toBeTruthy();
+      // Generic prompt shows "Tool Request" as title
+      expect(getByText('Tool Request')).toBeTruthy();
     });
 
-    it('should display Prompt section', () => {
+    it('should display prompt text as description', () => {
       const request = createMockRequest();
 
       const { getByText } = render(
@@ -321,7 +363,7 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      expect(getByText('Prompt')).toBeTruthy();
+      expect(getByText('Do you want to proceed with the changes?')).toBeTruthy();
     });
   });
 
@@ -378,15 +420,14 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      // Should still render the component
-      expect(getByText('Claude Needs Input')).toBeTruthy();
+      // Empty prompt → default case: title is "Tool Request"
+      expect(getByText('Tool Request')).toBeTruthy();
     });
 
-    it('should truncate long context to last 10 lines', () => {
-      // The component uses slice(-10) for context
-      const longContext = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`);
+    it('should show tool name when parsed from prompt', () => {
       const request = createMockRequest({
-        context: longContext,
+        promptText: 'Claude wants to use: Edit',
+        context: ['File: /src/app.tsx'],
       });
 
       const { getByText } = render(
@@ -398,9 +439,8 @@ describe('ClaudeApproval Component', () => {
         />
       );
 
-      // Should show last 10 lines (6-15)
-      const expectedContext = longContext.slice(-10).join('\n');
-      expect(getByText(expectedContext)).toBeTruthy();
+      expect(getByText('Edit File')).toBeTruthy();
+      expect(getByText('Tool: Edit')).toBeTruthy();
     });
   });
 });

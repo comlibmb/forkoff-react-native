@@ -93,6 +93,7 @@ jest.mock('expo-haptics', () => ({
 
 // Mock lucide-react-native icons
 jest.mock('lucide-react-native', () => ({
+  AlertCircle: 'AlertCircle',
   AlertTriangle: 'AlertTriangle',
   ArrowLeft: 'ArrowLeft',
   ArrowUp: 'ArrowUp',
@@ -100,12 +101,14 @@ jest.mock('lucide-react-native', () => ({
   Brain: 'Brain',
   Check: 'Check',
   CheckCircle2: 'CheckCircle2',
-  ChevronRight: 'ChevronRight',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
+  ChevronUp: 'ChevronUp',
   Circle: 'Circle',
   ClipboardList: 'ClipboardList',
   Code: 'Code',
   Edit3: 'Edit3',
+  Eye: 'Eye',
   FileText: 'FileText',
   FilePlus: 'FilePlus',
   FolderSearch: 'FolderSearch',
@@ -121,6 +124,8 @@ jest.mock('lucide-react-native', () => ({
   RotateCcw: 'RotateCcw',
   Search: 'Search',
   Shield: 'Shield',
+  ShieldAlert: 'ShieldAlert',
+  ShieldCheck: 'ShieldCheck',
   Terminal: 'Terminal',
   X: 'X',
   Zap: 'Zap',

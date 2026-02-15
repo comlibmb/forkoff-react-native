@@ -3,6 +3,12 @@
  *
  * Tests the permission rules configuration UI where users can toggle
  * tool auto-approval and manage Bash command patterns.
+ *
+ * The component uses TOOL_META for friendly labels (e.g. Bash → "Terminal",
+ * Write → "Write File") and has collapsible sections:
+ * - "Sensitive Tools" (dangerous tools, always visible)
+ * - "Trusted Commands" (Bash patterns, visible when Bash is set to 'ask')
+ * - "Read-Only & Safe Tools" (collapsed by default)
  */
 
 import React from 'react';
@@ -15,9 +21,52 @@ jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn() },
 }));
 
-// Mock SafeAreaView
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: any) => children,
+// Mock SafeAreaView — must be a named function so react-native-css-interop
+// can read displayName/name without crashing in maybeHijackSafeAreaProvider.
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return { SafeAreaView: View };
+});
+
+// The permissions screen uses lucide icons not in the global mock (jest.setup.js).
+// Add the missing ones here so JSX doesn't receive undefined components.
+jest.mock('lucide-react-native', () => ({
+  AlertTriangle: 'AlertTriangle',
+  ArrowLeft: 'ArrowLeft',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+  Brain: 'Brain',
+  Check: 'Check',
+  CheckCircle2: 'CheckCircle2',
+  ChevronRight: 'ChevronRight',
+  ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
+  Circle: 'Circle',
+  ClipboardList: 'ClipboardList',
+  Code: 'Code',
+  Edit3: 'Edit3',
+  Eye: 'Eye',
+  FileText: 'FileText',
+  FilePlus: 'FilePlus',
+  FolderSearch: 'FolderSearch',
+  Globe: 'Globe',
+  Hash: 'Hash',
+  HelpCircle: 'HelpCircle',
+  ListTodo: 'ListTodo',
+  Loader: 'Loader',
+  Map: 'Map',
+  MessageSquare: 'MessageSquare',
+  Pencil: 'Pencil',
+  Plus: 'Plus',
+  RotateCcw: 'RotateCcw',
+  Search: 'Search',
+  Shield: 'Shield',
+  ShieldAlert: 'ShieldAlert',
+  ShieldCheck: 'ShieldCheck',
+  AlertCircle: 'AlertCircle',
+  Terminal: 'Terminal',
+  X: 'X',
+  Zap: 'Zap',
 }));
 
 // Mock AlertModal
@@ -36,38 +85,41 @@ describe('PermissionsScreen', () => {
     usePermissionRulesStore.getState().resetToDefaults();
   });
 
-  it('renders tool list with all default tools', () => {
+  it('renders header and tool list with sensitive tools', () => {
     const { getByText } = render(<PermissionsScreen />);
 
-    expect(getByText('Permission Rules')).toBeTruthy();
-    expect(getByText('Bash')).toBeTruthy();
-    expect(getByText('Write')).toBeTruthy();
-    expect(getByText('Edit')).toBeTruthy();
-    expect(getByText('Read')).toBeTruthy();
-    expect(getByText('Glob')).toBeTruthy();
+    expect(getByText('Tool Permissions')).toBeTruthy();
+    // Sensitive tools show their TOOL_META labels
+    expect(getByText('Terminal')).toBeTruthy();     // Bash
+    expect(getByText('Write File')).toBeTruthy();   // Write
+    expect(getByText('Edit File')).toBeTruthy();    // Edit
   });
 
   it('shows section headers', () => {
     const { getByText } = render(<PermissionsScreen />);
 
-    expect(getByText('Requires Approval')).toBeTruthy();
-    expect(getByText('Auto-Approved Tools')).toBeTruthy();
-    expect(getByText('Bash Auto-Approve Patterns')).toBeTruthy();
+    expect(getByText('Sensitive Tools')).toBeTruthy();
+    expect(getByText('Read-Only & Safe Tools')).toBeTruthy();
+    // "Trusted Commands" only visible when Bash action is 'ask' (default)
+    expect(getByText('Trusted Commands')).toBeTruthy();
   });
 
-  it('shows "Requires approval" for dangerous tools by default', () => {
+  it('shows "Ask" badges for dangerous tools by default', () => {
     const { getAllByText } = render(<PermissionsScreen />);
 
-    // There should be multiple "Requires approval" texts (Bash, Write, Edit, NotebookEdit)
-    const requiresApproval = getAllByText('Requires approval');
-    expect(requiresApproval.length).toBeGreaterThanOrEqual(3);
+    // Dangerous tools (Bash, Write, Edit, NotebookEdit) default to 'ask'
+    const askBadges = getAllByText('Ask');
+    expect(askBadges.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('shows "Auto-approved" for safe tools by default', () => {
-    const { getAllByText } = render(<PermissionsScreen />);
+  it('shows safe tools section with "Auto" badges when expanded', () => {
+    const { getByText, getAllByText } = render(<PermissionsScreen />);
 
-    const autoApproved = getAllByText('Auto-approved');
-    expect(autoApproved.length).toBeGreaterThan(5);
+    // Safe tools are collapsed by default — expand them
+    fireEvent.press(getByText('Read-Only & Safe Tools'));
+
+    const autoBadges = getAllByText('Auto');
+    expect(autoBadges.length).toBeGreaterThan(5);
   });
 
   it('renders the reset to defaults button', () => {
@@ -75,9 +127,9 @@ describe('PermissionsScreen', () => {
     expect(getByText('Reset to Defaults')).toBeTruthy();
   });
 
-  it('renders pattern hint text', () => {
+  it('renders trusted commands hint text', () => {
     const { getByText } = render(<PermissionsScreen />);
-    expect(getByText(/Commands matching these patterns/)).toBeTruthy();
+    expect(getByText(/terminal commands skip approval/)).toBeTruthy();
   });
 
   it('resets to defaults when reset button is pressed', async () => {

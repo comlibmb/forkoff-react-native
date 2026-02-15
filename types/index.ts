@@ -436,6 +436,41 @@ export interface ServerSubscriptionLimits {
   pro: SubscriptionLimits;
 }
 
+// ==================== SERVER PLAN TYPES ====================
+
+export interface ServerPlanFeature {
+  name: string;
+  included: boolean;
+}
+
+export interface ServerPlan {
+  id: string;
+  name: string;
+  tier: SubscriptionTier;
+  price: number;
+  originalPrice?: number;
+  currency: string;
+  interval: 'month' | 'year';
+  features: ServerPlanFeature[];
+  popular?: boolean;
+  badge?: string;
+  stripePriceId?: string;
+  productId: { ios: string; android: string };
+}
+
+export interface PromotionBanner {
+  text: string;
+  backgroundColor?: string;
+  textColor?: string;
+  expiresAt?: string;
+}
+
+export interface ServerPlansResponse {
+  plans: ServerPlan[];
+  promotionBanner?: PromotionBanner;
+  allowPromotionCodes: boolean;
+}
+
 // ==================== VOUCHER TYPES ====================
 
 export type VoucherType = 'LIFETIME_PRO' | 'CAMPAIGN' | 'SINGLE_USE';

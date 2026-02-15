@@ -24,8 +24,9 @@ describe('GenericToolBlock', () => {
   });
 
   it('calls onToggleExpand when pressed', () => {
+    // Must provide content so the header is wrapped in a TouchableOpacity
     const { getByText } = render(
-      <GenericToolBlock toolName="SomeTool" isExpanded={false} onToggleExpand={mockToggle} />
+      <GenericToolBlock toolName="SomeTool" content="some content" isExpanded={false} onToggleExpand={mockToggle} />
     );
     fireEvent.press(getByText('SomeTool'));
     expect(mockToggle).toHaveBeenCalledTimes(1);

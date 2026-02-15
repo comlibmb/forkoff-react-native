@@ -1,5 +1,5 @@
 import { apiClient } from './api.client';
-import { SubscriptionLimits, SubscriptionUsage } from '@/types';
+import { SubscriptionLimits, SubscriptionUsage, ServerPlansResponse, ServerPlan, PromotionBanner } from '@/types';
 import { useUsageStore } from '@/stores/usage.store';
 
 export type SubscriptionTier = 'free' | 'pro';
@@ -114,8 +114,12 @@ function getFreeLimits(): SubscriptionLimits {
   return { messagesPerDay: 10, sessionsPerMonth: 10, maxProjects: 2, maxDevices: 1, repairsPerMonth: 3, historyRetentionDays: 7 };
 }
 
+const PLANS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 class SubscriptionService {
   private isInitialized = false;
+  private serverPlans: ServerPlansResponse | null = null;
+  private plansFetchedAt = 0;
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -146,6 +150,73 @@ class SubscriptionService {
         ],
       };
     });
+  }
+
+  async fetchPlans(): Promise<ServerPlansResponse> {
+    const now = Date.now();
+    if (this.serverPlans && now - this.plansFetchedAt < PLANS_CACHE_TTL) {
+      return this.serverPlans;
+    }
+
+    try {
+      const response = await apiClient.get<ServerPlansResponse>('/app-config/plans');
+      this.serverPlans = response;
+      this.plansFetchedAt = Date.now();
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch plans from server:', error);
+      // Return cached if available, otherwise build fallback
+      if (this.serverPlans) {
+        return this.serverPlans;
+      }
+      return {
+        plans: SUBSCRIPTION_PLANS.map((p) => ({
+          id: p.id,
+          name: p.name,
+          tier: p.tier,
+          price: p.price,
+          currency: p.currency,
+          interval: p.interval,
+          features: p.features.map((f) => (typeof f === 'string' ? { name: f, included: true } : { name: f, included: true })),
+          popular: p.id === 'pro_monthly',
+          stripePriceId: p.stripePriceId,
+          productId: p.productId,
+        })),
+        allowPromotionCodes: true,
+      };
+    }
+  }
+
+  async getPlansAsync(): Promise<ServerPlan[]> {
+    const response = await this.fetchPlans();
+    const free = getFreeLimits();
+    return response.plans.map((plan) => {
+      if (plan.id !== 'free') return plan;
+      return {
+        ...plan,
+        features: [
+          { name: `${free.messagesPerDay} messages/day`, included: true },
+          { name: `${free.sessionsPerMonth} sessions/month`, included: true },
+          { name: `${free.maxProjects} active projects`, included: true },
+          { name: `${free.maxDevices} paired PC`, included: true },
+          { name: `${free.repairsPerMonth} re-pairs/month`, included: true },
+          { name: `${free.historyRetentionDays}-day history`, included: true },
+        ],
+      };
+    });
+  }
+
+  getPromotionBanner(): PromotionBanner | undefined {
+    if (!this.serverPlans?.promotionBanner) return undefined;
+    const banner = this.serverPlans.promotionBanner;
+    if (banner.expiresAt && new Date(banner.expiresAt) <= new Date()) {
+      return undefined;
+    }
+    return banner;
+  }
+
+  getCachedPlans(): ServerPlansResponse | null {
+    return this.serverPlans;
   }
 
   getPlanById(planId: string): SubscriptionPlan | undefined {
