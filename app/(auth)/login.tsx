@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { Link, router } from 'expo-router';
@@ -26,6 +27,18 @@ export default function LoginScreen() {
   const [isCheckingDevice, setIsCheckingDevice] = useState(false);
   // Ref to suppress reactive navigation while a post-OAuth device check is running
   const oauthDeviceCheckRef = useRef(false);
+
+  const showDeviceRestrictedAlert = (message?: string) => {
+    alert.show(
+      'Device Restricted',
+      message || 'This device is linked to another account.',
+      [
+        { text: 'Contact Support', style: 'cancel', onPress: () => Linking.openURL('mailto:support@forkoff.app') },
+        { text: 'OK', style: 'default' },
+      ],
+      { variant: 'warning' },
+    );
+  };
 
   // Reactive navigation: when auth state changes (e.g. OAuth completes),
   // navigate away regardless of whether the async handler finished
@@ -66,7 +79,7 @@ export default function LoginScreen() {
       const deviceCheck = await checkDeviceForLogin(email);
       if (!deviceCheck.allowed) {
         setIsCheckingDevice(false);
-        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
     } catch {
@@ -97,7 +110,7 @@ export default function LoginScreen() {
       if (!deviceCheck.allowed) {
         await signOut();
         oauthDeviceCheckRef.current = false;
-        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
 
@@ -127,7 +140,7 @@ export default function LoginScreen() {
       if (!deviceCheck.allowed) {
         await signOut();
         oauthDeviceCheckRef.current = false;
-        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
 
