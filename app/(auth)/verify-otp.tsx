@@ -96,10 +96,11 @@ export default function VerifyOtpScreen() {
     try {
       await verifyOtp(code);
 
+      // Register device fingerprint (non-blocking) — binds this device to this account
+      registerDeviceFingerprint();
+
       // Check if this is a new user (signup flow)
       if (pendingName) {
-        // Register device fingerprint for new signups (non-blocking)
-        registerDeviceFingerprint();
         router.replace('/(onboarding)');
       } else {
         router.replace('/(tabs)');

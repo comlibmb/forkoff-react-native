@@ -19,7 +19,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 export default function LoginScreen() {
   const { theme } = useTheme();
-  const { signInWithOtp, signInWithGoogle, signInWithApple, signOut, isLoading, error, clearError, isAuthenticated, user, checkDeviceForLogin } = useAuthStore();
+  const { signInWithOtp, signInWithGoogle, signInWithApple, signOut, isLoading, error, clearError, isAuthenticated, user, checkDeviceForLogin, registerDeviceFingerprint } = useAuthStore();
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
@@ -102,6 +102,8 @@ export default function LoginScreen() {
       }
 
       oauthDeviceCheckRef.current = false;
+      // Register fingerprint on login so this device is bound to this account
+      registerDeviceFingerprint().catch(() => {});
       const isNewUser = !user.username;
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
@@ -130,6 +132,8 @@ export default function LoginScreen() {
       }
 
       oauthDeviceCheckRef.current = false;
+      // Register fingerprint on login so this device is bound to this account
+      registerDeviceFingerprint().catch(() => {});
       const isNewUser = !user.username;
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
