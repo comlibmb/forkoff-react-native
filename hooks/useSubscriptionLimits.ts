@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useUsageStore, FREE_LIMITS, PRO_LIMITS } from '@/stores/usage.store';
+import { useUsageStore } from '@/stores/usage.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { LimitType, LimitCheckResult, SubscriptionLimits } from '@/types';
 import { analyticsService } from '@/services/analytics.service';
@@ -57,7 +57,9 @@ export function useSubscriptionLimits(): UseSubscriptionLimitsReturn {
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallLimitType, setPaywallLimitType] = useState<LimitType | null>(null);
 
-  const limits = useMemo(() => (isPro ? PRO_LIMITS : FREE_LIMITS), [isPro]);
+  const getLimits = useUsageStore((state) => state.getLimits);
+  const serverLimits = useUsageStore((state) => state.serverLimits);
+  const limits = useMemo(() => getLimits(), [isPro, serverLimits, getLimits]);
 
   const usage = useMemo(
     () => ({

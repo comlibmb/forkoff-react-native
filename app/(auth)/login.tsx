@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,14 +19,18 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 export default function LoginScreen() {
   const { theme } = useTheme();
-  const { signInWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
+  const { signInWithOtp, signInWithGoogle, signInWithApple, signOut, isLoading, error, clearError, isAuthenticated, user, checkDeviceForLogin } = useAuthStore();
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isCheckingDevice, setIsCheckingDevice] = useState(false);
+  // Ref to suppress reactive navigation while a post-OAuth device check is running
+  const oauthDeviceCheckRef = useRef(false);
 
   // Reactive navigation: when auth state changes (e.g. OAuth completes),
   // navigate away regardless of whether the async handler finished
   useEffect(() => {
+    if (oauthDeviceCheckRef.current) return; // Suppress during post-OAuth device check
     if (isAuthenticated && user) {
       const isNewUser = !user.username;
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
@@ -56,6 +60,20 @@ export default function LoginScreen() {
       return;
     }
 
+    // Check device fingerprint before sending OTP
+    setIsCheckingDevice(true);
+    try {
+      const deviceCheck = await checkDeviceForLogin(email);
+      if (!deviceCheck.allowed) {
+        setIsCheckingDevice(false);
+        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        return;
+      }
+    } catch {
+      // Fail open — continue with login
+    }
+    setIsCheckingDevice(false);
+
     try {
       await signInWithOtp(email);
       router.push('/(auth)/verify-otp');
@@ -71,10 +89,23 @@ export default function LoginScreen() {
     try {
       setIsGoogleLoading(true);
       clearError();
+      oauthDeviceCheckRef.current = true; // Suppress reactive navigation
       const user = await signInWithGoogle();
+
+      // Post-auth device check — if device belongs to different account, sign out
+      const deviceCheck = await checkDeviceForLogin(user.email);
+      if (!deviceCheck.allowed) {
+        await signOut();
+        oauthDeviceCheckRef.current = false;
+        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        return;
+      }
+
+      oauthDeviceCheckRef.current = false;
       const isNewUser = !user.username;
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
+      oauthDeviceCheckRef.current = false;
       if (err instanceof Error && err.message === 'Google sign in was cancelled') return;
       alert.error('Google Sign In Failed', error || 'Please try again');
     } finally {
@@ -86,10 +117,23 @@ export default function LoginScreen() {
     try {
       setIsAppleLoading(true);
       clearError();
+      oauthDeviceCheckRef.current = true; // Suppress reactive navigation
       const user = await signInWithApple();
+
+      // Post-auth device check — if device belongs to different account, sign out
+      const deviceCheck = await checkDeviceForLogin(user.email);
+      if (!deviceCheck.allowed) {
+        await signOut();
+        oauthDeviceCheckRef.current = false;
+        alert.warning('Device Restricted', deviceCheck.message || 'This device is linked to another account.');
+        return;
+      }
+
+      oauthDeviceCheckRef.current = false;
       const isNewUser = !user.username;
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
+      oauthDeviceCheckRef.current = false;
       if (err instanceof Error && err.message.includes('cancelled')) return;
       const msg = err instanceof Error ? err.message : 'Please try again';
       alert.error('Apple Sign In Failed', msg);
@@ -191,7 +235,7 @@ export default function LoginScreen() {
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleLogin}
-                disabled={isLoading}
+                disabled={isLoading || isCheckingDevice}
                 style={{
                   backgroundColor: theme.primary,
                   borderRadius: 12,
@@ -205,13 +249,13 @@ export default function LoginScreen() {
                   shadowOpacity: 0.2,
                   shadowRadius: 12,
                   elevation: 5,
-                  opacity: isLoading ? 0.7 : 1,
+                  opacity: isLoading || isCheckingDevice ? 0.7 : 1,
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
-                  {isLoading ? 'Sending...' : 'Continue'}
+                  {isCheckingDevice ? 'Checking...' : isLoading ? 'Sending...' : 'Continue'}
                 </Text>
-                {!isLoading && <ArrowRight size={18} color="#fff" />}
+                {!isLoading && !isCheckingDevice && <ArrowRight size={18} color="#fff" />}
               </TouchableOpacity>
             </View>
 

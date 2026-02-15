@@ -13,6 +13,9 @@ interface ConnectionState {
   // Map of device IDs to their online/offline status
   deviceStatuses: Record<string, DeviceStatus>;
 
+  // Whether this device was kicked by another device claiming the session
+  wasKicked: boolean;
+
   // Actions
   initialize: () => () => void;
   setPhoneOnline: (isOnline: boolean) => void;
@@ -20,12 +23,14 @@ interface ConnectionState {
   setDeviceStatus: (deviceId: string, status: DeviceStatus) => void;
   clearDeviceStatuses: () => void;
   isDeviceOnline: (deviceId: string) => boolean;
+  setWasKicked: (kicked: boolean) => void;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   isPhoneOnline: true,
   isServerConnected: false,
   deviceStatuses: {},
+  wasKicked: false,
 
   initialize: () => {
     // Subscribe to network changes
@@ -85,6 +90,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     const status = get().deviceStatuses[deviceId];
     return status === 'online' || status === 'ONLINE';
   },
+
+  setWasKicked: (kicked) => set({ wasKicked: kicked }),
 }));
 
 export default useConnectionStore;

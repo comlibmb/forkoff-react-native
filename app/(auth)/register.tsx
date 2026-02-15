@@ -20,11 +20,12 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 export default function RegisterScreen() {
   const { theme } = useTheme();
-  const { signUpWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
+  const { signUpWithOtp, signInWithGoogle, signInWithApple, isLoading, error, clearError, isAuthenticated, user, checkDeviceForRegistration, registerDeviceFingerprint } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isCheckingDevice, setIsCheckingDevice] = useState(false);
 
   // Reactive navigation after OAuth completes
   useEffect(() => {
@@ -71,9 +72,20 @@ export default function RegisterScreen() {
     }
 
     try {
+      // Check device fingerprint before starting signup
+      setIsCheckingDevice(true);
+      const deviceCheck = await checkDeviceForRegistration();
+      setIsCheckingDevice(false);
+
+      if (!deviceCheck.allowed) {
+        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        return;
+      }
+
       await signUpWithOtp(email, name);
       router.push('/(auth)/verify-otp');
     } catch (err) {
+      setIsCheckingDevice(false);
       alert.error(
         'Registration Failed',
         err instanceof Error ? err.message : 'Please try again'
@@ -86,8 +98,20 @@ export default function RegisterScreen() {
     try {
       setIsGoogleLoading(true);
       clearError();
+
+      // Check device fingerprint before starting OAuth
+      const deviceCheck = await checkDeviceForRegistration();
+      if (!deviceCheck.allowed) {
+        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        return;
+      }
+
       const user = await signInWithGoogle();
       const isNewUser = !user.username;
+      if (isNewUser) {
+        // Register device fingerprint for new OAuth signups (non-blocking)
+        registerDeviceFingerprint();
+      }
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
       if (err instanceof Error && err.message === 'Google sign in was cancelled') return;
@@ -102,8 +126,20 @@ export default function RegisterScreen() {
     try {
       setIsAppleLoading(true);
       clearError();
+
+      // Check device fingerprint before starting OAuth
+      const deviceCheck = await checkDeviceForRegistration();
+      if (!deviceCheck.allowed) {
+        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        return;
+      }
+
       const user = await signInWithApple();
       const isNewUser = !user.username;
+      if (isNewUser) {
+        // Register device fingerprint for new OAuth signups (non-blocking)
+        registerDeviceFingerprint();
+      }
       router.replace(isNewUser ? '/(onboarding)' : '/(tabs)');
     } catch (err) {
       if (err instanceof Error && err.message.includes('cancelled')) return;
@@ -281,7 +317,7 @@ export default function RegisterScreen() {
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleRegister}
-                disabled={isLoading || isGoogleLoading || isAppleLoading || !agreedToTerms}
+                disabled={isLoading || isGoogleLoading || isAppleLoading || isCheckingDevice || !agreedToTerms}
                 style={{
                   backgroundColor: theme.primary,
                   borderRadius: 12,
@@ -295,11 +331,11 @@ export default function RegisterScreen() {
                   shadowOpacity: 0.2,
                   shadowRadius: 12,
                   elevation: 5,
-                  opacity: isLoading || isGoogleLoading || isAppleLoading || !agreedToTerms ? 0.7 : 1,
+                  opacity: isLoading || isGoogleLoading || isAppleLoading || isCheckingDevice || !agreedToTerms ? 0.7 : 1,
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
-                  {isLoading ? 'Creating...' : 'Continue'}
+                  {isCheckingDevice ? 'Checking...' : isLoading ? 'Creating...' : 'Continue'}
                 </Text>
                 {!isLoading && <ArrowRight size={18} color="#fff" />}
               </TouchableOpacity>

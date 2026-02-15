@@ -27,6 +27,7 @@ export default function VerifyOtpScreen() {
     resendOtp,
     clearOtpState,
     clearError,
+    registerDeviceFingerprint,
   } = useAuthStore();
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -97,6 +98,8 @@ export default function VerifyOtpScreen() {
 
       // Check if this is a new user (signup flow)
       if (pendingName) {
+        // Register device fingerprint for new signups (non-blocking)
+        registerDeviceFingerprint();
         router.replace('/(onboarding)');
       } else {
         router.replace('/(tabs)');
