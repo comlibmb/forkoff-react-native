@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
@@ -11,20 +11,35 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 import { subscriptionService } from '@/services/subscription.service';
 
-type PlanId = 'free' | 'pro';
+type PlanId = string;
+
+interface DisplayPlan {
+  id: string;
+  name: string;
+  price: string;
+  originalPrice?: string;
+  period: string;
+  icon: any;
+  color: string;
+  popular?: boolean;
+  badge?: string;
+  features: string[];
+  limitations: string[];
+  stripePriceId?: string;
+}
 
 export default function SubscriptionScreen() {
   const { theme } = useTheme();
   // Use specific selector to ensure component re-renders when subscription changes
   const user = useAuthStore((state) => state.user);
   const initialize = useAuthStore((state) => state.initialize);
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>((user?.subscription as PlanId) || 'free');
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>('free');
   const [isLoading, setIsLoading] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const currentPlan = (user?.subscription || 'free') as PlanId;
-  const isPro = currentPlan === 'pro';
+  const currentTier = (user?.subscription || 'free') as string;
+  const isPro = currentTier === 'pro';
   const renewalDate = user?.stripeCurrentPeriodEnd ? new Date(user.stripeCurrentPeriodEnd) : null;
 
   const serverLimits = useUsageStore((state) => state.serverLimits);
@@ -37,9 +52,10 @@ export default function SubscriptionScreen() {
     return { messagesPerDay: 10, maxDevices: 1 };
   }, [serverLimits]);
 
-  const plans = useMemo(() => [
+  // Default hardcoded plans (used as fallback)
+  const defaultPlans = useMemo((): DisplayPlan[] => [
     {
-      id: 'free' as const,
+      id: 'free',
       name: 'Free',
       price: '$0',
       period: 'forever',
@@ -57,7 +73,7 @@ export default function SubscriptionScreen() {
       ],
     },
     {
-      id: 'pro' as const,
+      id: 'pro',
       name: 'Pro',
       price: '$9.99',
       period: 'per month',
@@ -76,12 +92,62 @@ export default function SubscriptionScreen() {
     },
   ], [theme, freeLimits]);
 
+  const [plans, setPlans] = useState<DisplayPlan[]>(defaultPlans);
+
+  // Fetch server-driven plans
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const serverPlans = await subscriptionService.getPlansAsync();
+        if (cancelled) return;
+
+        const mapped = serverPlans.map((sp): DisplayPlan => {
+          const isFree = sp.tier === 'free';
+          return {
+            id: sp.id,
+            name: sp.name,
+            price: isFree ? '$0' : `$${sp.price.toFixed(2)}`,
+            originalPrice: sp.originalPrice ? `$${sp.originalPrice.toFixed(2)}` : undefined,
+            period: isFree ? 'forever' : `per ${sp.interval}`,
+            icon: isFree ? Star : Zap,
+            color: isFree ? theme.textTertiary : theme.primary,
+            popular: sp.popular,
+            badge: sp.badge,
+            features: sp.features
+              .filter((f) => f.included)
+              .map((f) => f.name),
+            limitations: sp.features
+              .filter((f) => !f.included)
+              .map((f) => f.name),
+            stripePriceId: sp.stripePriceId,
+          };
+        });
+        setPlans(mapped);
+
+        // Set selected plan to user's current plan (matched by stripePriceId)
+        if (isPro && user?.stripePriceId) {
+          const match = mapped.find((p) => p.stripePriceId === user.stripePriceId);
+          if (match) setSelectedPlan(match.id);
+        }
+      } catch {
+        // Keep default plans
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [theme, freeLimits]);
+
   const handleSubscribe = async (planId: string) => {
-    if (planId === currentPlan) return;
+    if (planId === 'free') return;
 
     setIsLoading(true);
     try {
-      const result = await subscriptionService.purchaseSubscription(`${planId}_monthly`);
+      const selectedDisplayPlan = plans.find((p) => p.id === planId);
+      const result = selectedDisplayPlan?.stripePriceId
+        ? await subscriptionService.createCheckoutSession(selectedDisplayPlan.stripePriceId)
+        : await subscriptionService.purchaseSubscription(planId);
       if (result.success && result.url) {
         // Open checkout in browser
         await WebBrowser.openBrowserAsync(result.url, {
@@ -95,9 +161,9 @@ export default function SubscriptionScreen() {
 
         // Check if subscription was updated and show feedback
         const updatedUser = useAuthStore.getState().user;
-        if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentPlan) {
+        if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentTier) {
           // Update selected plan to match new subscription
-          setSelectedPlan(updatedUser.subscription as PlanId);
+          setSelectedPlan(planId);
           await alert.success('Welcome to Pro!', 'Your subscription is now active');
         }
       } else if (result.error) {
@@ -127,7 +193,7 @@ export default function SubscriptionScreen() {
 
           // Force component to re-read from store
           const updatedUser = useAuthStore.getState().user;
-          if (updatedUser?.subscription !== currentPlan) {
+          if (updatedUser?.subscription !== currentTier) {
             await alert.success('Subscription Updated', 'Your subscription has been updated');
           }
         }
@@ -182,12 +248,21 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.statusInfo}>
                   <View style={styles.planNameRow}>
-                    <Text style={styles.planName}>Pro Plan</Text>
+                    <Text style={styles.planName}>
+                      {plans.find((p) => p.stripePriceId === user?.stripePriceId)?.name || 'Pro Plan'}
+                    </Text>
                     <View style={[styles.currentBadge, { backgroundColor: theme.success + '20' }]}>
                       <Text style={[styles.currentBadgeText, { color: theme.success }]}>Active</Text>
                     </View>
                   </View>
-                  <Text style={styles.statusPrice}>$9.99 / month</Text>
+                  <Text style={styles.statusPrice}>
+                    {(() => {
+                      const activePlan = plans.find((p) => p.stripePriceId === user?.stripePriceId);
+                      return activePlan
+                        ? `${activePlan.price} / ${activePlan.period.replace('per ', '')}`
+                        : '$9.99 / month';
+                    })()}
+                  </Text>
                 </View>
               </View>
 
@@ -219,7 +294,10 @@ export default function SubscriptionScreen() {
         {/* Plans */}
         {plans.map((plan) => {
           const Icon = plan.icon;
-          const isCurrentPlan = plan.id === currentPlan;
+          // Match current plan: free users match 'free', pro users match by stripePriceId
+          const isCurrentPlan = plan.id === 'free'
+            ? currentTier === 'free'
+            : isPro && !!plan.stripePriceId && plan.stripePriceId === user?.stripePriceId;
           const isSelected = plan.id === selectedPlan;
 
           return (
@@ -228,10 +306,10 @@ export default function SubscriptionScreen() {
               onPress={() => setSelectedPlan(plan.id as PlanId)}
               activeOpacity={0.7}
             >
-              <PlanCard popular={plan.popular} color={plan.color}>
-                {plan.popular && (
+              <PlanCard popular={plan.popular || !!plan.badge} color={plan.color}>
+                {(plan.badge || plan.popular) && (
                   <View style={[styles.popularBadge, { backgroundColor: plan.color }]}>
-                    <Text style={styles.popularBadgeText}>POPULAR</Text>
+                    <Text style={styles.popularBadgeText}>{plan.badge || 'POPULAR'}</Text>
                   </View>
                 )}
                 <View style={styles.planHeader}>
@@ -248,6 +326,9 @@ export default function SubscriptionScreen() {
                       )}
                     </View>
                     <Text style={styles.planPricing}>
+                      {plan.originalPrice && (
+                        <Text style={styles.strikethroughPrice}>{plan.originalPrice} </Text>
+                      )}
                       <Text style={styles.planPrice}>{plan.price}</Text> {plan.period}
                     </Text>
                   </View>
@@ -284,20 +365,20 @@ export default function SubscriptionScreen() {
         {!isPro && (
           <TouchableOpacity
             onPress={() => handleSubscribe(selectedPlan)}
-            disabled={selectedPlan === currentPlan || isLoading}
+            disabled={selectedPlan === 'free' || isLoading}
             style={[
               styles.subscribeButton,
-              (selectedPlan === currentPlan || isLoading) && styles.subscribeButtonDisabled,
+              (selectedPlan === 'free' || isLoading) && styles.subscribeButtonDisabled,
             ]}
           >
             <Text style={styles.subscribeButtonText}>
               {isLoading
                 ? 'Processing...'
-                : selectedPlan === currentPlan
+                : selectedPlan === 'free'
                 ? 'Current Plan'
-                : `Upgrade to Pro`}
+                : `Upgrade to ${plans.find((p) => p.id === selectedPlan)?.name || 'Pro'}`}
             </Text>
-            {!isLoading && selectedPlan !== currentPlan && <ArrowRight size={18} color="#fff" />}
+            {!isLoading && selectedPlan !== 'free' && <ArrowRight size={18} color="#fff" />}
           </TouchableOpacity>
         )}
 
@@ -419,6 +500,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     color: theme.text,
     fontSize: 18,
     fontWeight: '700',
+  },
+  strikethroughPrice: {
+    color: theme.textTertiary,
+    fontSize: 14,
+    textDecorationLine: 'line-through' as const,
   },
   selectedCheck: {
     width: 24,
