@@ -27,6 +27,18 @@ export default function RegisterScreen() {
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isCheckingDevice, setIsCheckingDevice] = useState(false);
 
+  const showDeviceRestrictedAlert = (message?: string) => {
+    alert.show(
+      'Account Exists',
+      message || 'You already have an existing account. Please log in instead.',
+      [
+        { text: 'Contact Support', style: 'cancel', onPress: () => Linking.openURL('mailto:support@forkoff.app') },
+        { text: 'OK', style: 'default' },
+      ],
+      { variant: 'error' },
+    );
+  };
+
   // Reactive navigation after OAuth completes
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -78,7 +90,7 @@ export default function RegisterScreen() {
       setIsCheckingDevice(false);
 
       if (!deviceCheck.allowed) {
-        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
 
@@ -102,7 +114,7 @@ export default function RegisterScreen() {
       // Check device fingerprint before starting OAuth
       const deviceCheck = await checkDeviceForRegistration();
       if (!deviceCheck.allowed) {
-        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
 
@@ -130,7 +142,7 @@ export default function RegisterScreen() {
       // Check device fingerprint before starting OAuth
       const deviceCheck = await checkDeviceForRegistration();
       if (!deviceCheck.allowed) {
-        alert.error('Account Exists', deviceCheck.message || 'You already have an existing account. Please log in instead.');
+        showDeviceRestrictedAlert(deviceCheck.message);
         return;
       }
 
