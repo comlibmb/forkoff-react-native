@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import { versionService, VersionConfig } from '@/services/version.service';
 
+export interface CliVersionConfig {
+  minCliVersion: string;
+  updateMessage?: string;
+}
+
 interface VersionState {
   versionConfig: VersionConfig | null;
+  cliVersionConfig: CliVersionConfig | null;
   needsUpdate: boolean;
   forceUpdate: boolean;
   updateMessage: string;
@@ -10,11 +16,14 @@ interface VersionState {
 
   // Actions
   setVersionConfig: (config: VersionConfig) => void;
+  setCliVersionConfig: (config: CliVersionConfig) => void;
+  isCliVersionBlocked: (cliVersion?: string) => boolean;
   checkVersion: () => void;
 }
 
 export const useVersionStore = create<VersionState>((set, get) => ({
   versionConfig: null,
+  cliVersionConfig: null,
   needsUpdate: false,
   forceUpdate: false,
   updateMessage: '',
@@ -36,6 +45,16 @@ export const useVersionStore = create<VersionState>((set, get) => ({
         `[VersionStore] Update required: current=${get().currentVersion}, min=${config.minVersion}, force=${forceUpdate}`,
       );
     }
+  },
+
+  setCliVersionConfig: (config) => {
+    set({ cliVersionConfig: config });
+  },
+
+  isCliVersionBlocked: (cliVersion?: string) => {
+    const { cliVersionConfig } = get();
+    if (!cliVersionConfig || !cliVersion) return false;
+    return versionService.compareVersions(cliVersion, cliVersionConfig.minCliVersion) < 0;
   },
 
   checkVersion: () => {

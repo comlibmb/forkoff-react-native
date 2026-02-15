@@ -359,7 +359,7 @@ export interface SessionClaimedEvent {
 }
 
 interface EventCallbacks {
-  device_status: EventCallback<{ deviceId: string; status: DeviceStatus; lastSeenAt?: string }>[];
+  device_status: EventCallback<{ deviceId: string; status: DeviceStatus; lastSeenAt?: string; cliVersion?: string }>[];
   terminal_output: EventCallback<TerminalOutputEvent>[];
   terminal_cwd: EventCallback<TerminalCwdEvent>[];
   server_status: EventCallback<{ serverId: string; status: ServerStatus }>[];

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +34,7 @@ import { colors } from '@/theme/colors';
 import { SessionListItem, formatTimeAgo } from '@/components/project/SessionListItem';
 import { QuickActionGrid, QuickAction } from '@/components/project/QuickActionGrid';
 import { wsService } from '@/services/websocket.service';
+import { useVersionStore } from '@/stores/version.store';
 
 const STATUS_CHECK_PROMPT = 'Quick status — git status, failing tests, recent changes. Keep it brief.';
 const BRAINSTORM_PROMPT = 'Top 3 improvements, missing features, or tech debt items for this project. Be concise.';
@@ -70,6 +72,21 @@ export default function ProjectHubScreen() {
     [devices, deviceId],
   );
   const isDeviceOnline = device?.status?.toUpperCase() === 'ONLINE';
+
+  // CLI version check helper
+  const checkCliVersion = useCallback((): boolean => {
+    const { isCliVersionBlocked, cliVersionConfig } = useVersionStore.getState();
+    if (isCliVersionBlocked(device?.cliVersion)) {
+      const min = cliVersionConfig?.minCliVersion || 'unknown';
+      const msg = cliVersionConfig?.updateMessage || 'Please update the ForkOff CLI.';
+      Alert.alert(
+        'CLI Update Required',
+        `CLI v${device?.cliVersion} is outdated. Minimum required: v${min}.\n\n${msg}\n\nRun: npm update -g forkoff`,
+      );
+      return false;
+    }
+    return true;
+  }, [device?.cliVersion]);
 
   // Get project sessions (sorted by most recent)
   const projectSessions = useMemo(() => {
@@ -148,6 +165,7 @@ export default function ProjectHubScreen() {
       switch (actionId) {
         case 'status_check': {
           if (!isDeviceOnline) return;
+          if (!checkCliVersion()) return;
           const terminalId = `status-${Date.now()}`;
           router.push({
             pathname: '/claude/session/[sessionKey]',
@@ -162,6 +180,7 @@ export default function ProjectHubScreen() {
         }
         case 'brainstorm': {
           if (!isDeviceOnline) return;
+          if (!checkCliVersion()) return;
           const brainTerminalId = `brainstorm-${Date.now()}`;
           router.push({
             pathname: '/claude/session/[sessionKey]',
@@ -181,12 +200,13 @@ export default function ProjectHubScreen() {
         }
       }
     },
-    [deviceId, directory, mostRecentSession, isDeviceOnline, router],
+    [deviceId, directory, mostRecentSession, isDeviceOnline, router, checkCliVersion],
   );
 
   // Session press handler
   const handleSessionPress = useCallback(
     (devId: string, session: ClaudeSession) => {
+      if (!checkCliVersion()) return;
       router.push({
         pathname: '/claude/session/[sessionKey]',
         params: {
@@ -195,12 +215,13 @@ export default function ProjectHubScreen() {
         },
       });
     },
-    [router],
+    [router, checkCliVersion],
   );
 
   // Initialize project handler
   const handleInitialize = useCallback(() => {
     if (!deviceId || !isDeviceOnline) return;
+    if (!checkCliVersion()) return;
     const terminalId = `init-${Date.now()}`;
     router.push({
       pathname: '/claude/session/[sessionKey]',
@@ -211,7 +232,7 @@ export default function ProjectHubScreen() {
         autoDirectory: directory!,
       },
     });
-  }, [deviceId, directory, isDeviceOnline, router]);
+  }, [deviceId, directory, isDeviceOnline, router, checkCliVersion]);
 
   // Get last user message from entries for preview
   const lastUserMessage = useMemo(() => {

@@ -20,7 +20,7 @@ interface DeviceState {
   renameDevice: (id: string, name: string) => Promise<void>;
   removeDevice: (id: string) => Promise<void>;
   refreshDeviceStatus: (id: string) => Promise<void>;
-  updateDeviceStatus: (deviceId: string, status: DeviceStatus, lastSeenAt?: string) => void;
+  updateDeviceStatus: (deviceId: string, status: DeviceStatus, lastSeenAt?: string, cliVersion?: string) => void;
   updateToolStatus: (deviceId: string, toolType: string, status: 'active' | 'inactive' | 'error') => void;
   clearError: () => void;
   subscribeToDeviceUpdates: () => () => void;
@@ -183,12 +183,12 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     }
   },
 
-  updateDeviceStatus: (deviceId, status, lastSeenAt?: string) => {
+  updateDeviceStatus: (deviceId, status, lastSeenAt?: string, cliVersion?: string) => {
     const timestamp = lastSeenAt || new Date().toISOString();
     set((state) => ({
       devices: state.devices.map((d) =>
         d.id === deviceId
-          ? { ...d, status, lastSeen: timestamp, lastSeenAt: timestamp }
+          ? { ...d, status, lastSeen: timestamp, lastSeenAt: timestamp, ...(cliVersion ? { cliVersion } : {}) }
           : d
       ),
     }));
@@ -219,8 +219,8 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   subscribeToDeviceUpdates: () => {
-    const unsubscribeStatus = wsService.on('device_status', ({ deviceId, status, lastSeenAt }) => {
-      get().updateDeviceStatus(deviceId, status, lastSeenAt);
+    const unsubscribeStatus = wsService.on('device_status', ({ deviceId, status, lastSeenAt, cliVersion }) => {
+      get().updateDeviceStatus(deviceId, status, lastSeenAt, cliVersion);
     });
 
     // Subscribe to tool status updates

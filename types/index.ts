@@ -53,6 +53,7 @@ export interface Device {
   hostname?: string; // Backend field name
   connectedTools?: ConnectedTool[];
   userId?: string | null;
+  cliVersion?: string; // CLI version from device_status events
 }
 
 export interface ConnectedTool {

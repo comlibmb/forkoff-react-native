@@ -268,6 +268,9 @@ class AuthService {
           if (profile.appConfig) {
             useVersionStore.getState().setVersionConfig(profile.appConfig);
           }
+          if (profile.cliVersionConfig) {
+            useVersionStore.getState().setCliVersionConfig(profile.cliVersionConfig);
+          }
 
           // Store server-provided subscription limits
           if (profile.subscriptionLimits) {
@@ -412,6 +415,9 @@ class AuthService {
           // Handle appConfig if present
           if (profile.appConfig) {
             useVersionStore.getState().setVersionConfig(profile.appConfig);
+          }
+          if (profile.cliVersionConfig) {
+            useVersionStore.getState().setCliVersionConfig(profile.cliVersionConfig);
           }
 
           // Store server-provided subscription limits
@@ -915,6 +921,9 @@ class AuthService {
               const profile = await response.json();
               if (profile.appConfig) {
                 useVersionStore.getState().setVersionConfig(profile.appConfig);
+              }
+              if (profile.cliVersionConfig) {
+                useVersionStore.getState().setCliVersionConfig(profile.cliVersionConfig);
               }
               if (profile.subscriptionLimits) {
                 useUsageStore.getState().setServerLimits(profile.subscriptionLimits);
