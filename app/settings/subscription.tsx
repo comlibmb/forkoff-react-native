@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Check, Zap, Star, ArrowRight, Settings, Crown, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Check, Zap, Star, ArrowRight, Settings, Calendar } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '@/stores/auth.store';
 import { useUsageStore } from '@/stores/usage.store';
@@ -238,59 +238,6 @@ export default function SubscriptionScreen() {
           {isPro ? 'Manage your Pro subscription' : 'Unlock more features with a premium subscription'}
         </Text>
 
-        {/* Active Subscription Status */}
-        {isPro && (
-          <View style={[styles.section, { borderColor: theme.primary, borderWidth: 2, marginBottom: 20 }]}>
-            <View style={styles.sectionContent}>
-              <View style={styles.statusHeader}>
-                <View style={[styles.planIcon, { backgroundColor: theme.primary + '20' }]}>
-                  <Crown size={24} color={theme.primary} />
-                </View>
-                <View style={styles.statusInfo}>
-                  <View style={styles.planNameRow}>
-                    <Text style={styles.planName}>
-                      {plans.find((p) => p.stripePriceId === user?.stripePriceId)?.name || 'Pro Plan'}
-                    </Text>
-                    <View style={[styles.currentBadge, { backgroundColor: theme.success + '20' }]}>
-                      <Text style={[styles.currentBadgeText, { color: theme.success }]}>Active</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.statusPrice}>
-                    {(() => {
-                      const activePlan = plans.find((p) => p.stripePriceId === user?.stripePriceId);
-                      return activePlan
-                        ? `${activePlan.price} / ${activePlan.period.replace('per ', '')}`
-                        : '$9.99 / month';
-                    })()}
-                  </Text>
-                </View>
-              </View>
-
-              {renewalDate && (
-                <View style={styles.renewalInfo}>
-                  <Calendar size={16} color={theme.textSecondary} />
-                  <Text style={styles.renewalText}>
-                    Renews on {renewalDate.toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                onPress={handleManageSubscription}
-                disabled={isLoading}
-                style={[styles.manageButtonInline, isLoading && styles.subscribeButtonDisabled]}
-              >
-                <Settings size={16} color="#fff" />
-                <Text style={styles.manageButtonInlineText}>Manage Subscription</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* Plans */}
         {plans.map((plan) => {
           const Icon = plan.icon;
@@ -361,6 +308,32 @@ export default function SubscriptionScreen() {
                     </View>
                   ))}
                 </View>
+
+                {/* Renewal info + Manage button — inline on the current plan card */}
+                {isCurrentPlan && isPro && (
+                  <View style={{ marginTop: 16 }}>
+                    {renewalDate && (
+                      <View style={styles.renewalInfo}>
+                        <Calendar size={16} color={theme.textSecondary} />
+                        <Text style={styles.renewalText}>
+                          Renews on {renewalDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={handleManageSubscription}
+                      disabled={isLoading}
+                      style={[styles.manageButtonInline, isLoading && styles.subscribeButtonDisabled]}
+                    >
+                      <Settings size={16} color="#fff" />
+                      <Text style={styles.manageButtonInlineText}>Manage Subscription</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </PlanCard>
             </TouchableOpacity>
           );
@@ -586,20 +559,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     textAlign: 'center' as const,
     fontSize: 12,
     marginTop: 16,
-  },
-  // Subscription status
-  statusHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    marginBottom: 16,
-  },
-  statusInfo: {
-    flex: 1,
-  },
-  statusPrice: {
-    color: theme.textTertiary,
-    fontSize: 14,
-    marginTop: 2,
   },
   renewalInfo: {
     flexDirection: 'row' as const,
