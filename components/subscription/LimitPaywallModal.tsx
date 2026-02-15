@@ -276,7 +276,22 @@ export function LimitPaywallModal({
           {/* Price */}
           <View className="items-center mb-6">
             <View className="flex-row items-baseline">
-              <Text className="text-white text-4xl font-bold">$9.99</Text>
+              {(() => {
+                const cached = subscriptionService.getCachedPlans();
+                const proPlan = cached?.plans.find((p) => p.id === 'pro_monthly');
+                const price = proPlan?.price ?? 9.99;
+                const originalPrice = proPlan?.originalPrice;
+                return (
+                  <>
+                    {originalPrice != null && originalPrice > price && (
+                      <Text className="text-dark-500 text-xl mr-2" style={{ textDecorationLine: 'line-through' }}>
+                        ${originalPrice}
+                      </Text>
+                    )}
+                    <Text className="text-white text-4xl font-bold">${price}</Text>
+                  </>
+                );
+              })()}
               <Text className="text-dark-400 text-lg ml-1">/month</Text>
             </View>
             <Text className="text-dark-500 text-sm mt-1">Cancel anytime</Text>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { X, Zap, Lock, Crown, Ticket } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui';
 import { PlanCard, Plan } from './PlanCard';
 import { colors } from '@/theme/colors';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
-import { VoucherRedemptionResult } from '@/types';
+import { VoucherRedemptionResult, PromotionBanner } from '@/types';
 import { subscriptionService } from '@/services/subscription.service';
 
 interface PaywallModalProps {
@@ -18,7 +18,7 @@ interface PaywallModalProps {
 
 const STRIPE_PRO_PRICE_ID = process.env.EXPO_PUBLIC_STRIPE_PRO_PRICE_ID || '';
 
-const plans: Plan[] = [
+const defaultPlans: Plan[] = [
   {
     id: 'free',
     name: 'Free',
@@ -58,9 +58,41 @@ export function PaywallModal({
   feature,
   onSelectPlan,
 }: PaywallModalProps) {
+  const [plans, setPlans] = useState<Plan[]>(defaultPlans);
+  const [promotionBanner, setPromotionBanner] = useState<PromotionBanner | undefined>();
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherResult, setVoucherResult] = useState<VoucherRedemptionResult | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const serverPlans = await subscriptionService.getPlansAsync();
+        if (cancelled) return;
+        setPlans(
+          serverPlans.map((sp) => ({
+            id: sp.id,
+            name: sp.name,
+            price: sp.price,
+            originalPrice: sp.originalPrice,
+            interval: sp.interval,
+            features: sp.features,
+            popular: sp.popular,
+            badge: sp.badge,
+            stripePriceId: sp.stripePriceId,
+          })),
+        );
+        setPromotionBanner(subscriptionService.getPromotionBanner());
+      } catch {
+        // Keep default plans
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [visible]);
 
   const handlePlanSelect = async (plan: Plan) => {
     if (plan.stripePriceId) {
@@ -162,6 +194,18 @@ export function PaywallModal({
           contentContainerClassName="px-6 pb-8"
           showsVerticalScrollIndicator={false}
         >
+          {/* Promotion Banner */}
+          {promotionBanner && (
+            <View
+              className="mb-4 p-3 rounded-xl items-center"
+              style={{ backgroundColor: promotionBanner.backgroundColor || colors.primary[500] }}
+            >
+              <Text style={{ color: promotionBanner.textColor || '#FFFFFF', fontWeight: '600' }}>
+                {promotionBanner.text}
+              </Text>
+            </View>
+          )}
+
           <View className="gap-4">
             {plans.map((plan) => (
               <PlanCard

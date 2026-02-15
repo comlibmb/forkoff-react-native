@@ -13,9 +13,11 @@ export interface Plan {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number;
   interval: 'month' | 'year';
   features: PlanFeature[];
   popular?: boolean;
+  badge?: string;
   stripePriceId?: string;
 }
 
@@ -45,11 +47,11 @@ export function PlanCard({ plan, isCurrentPlan, onSelect }: PlanCardProps) {
           opacity: isCurrentPlan ? 0.7 : 1,
         }}
       >
-        {/* Popular Badge */}
-        {plan.popular && (
+        {/* Badge */}
+        {(plan.badge || plan.popular) && (
           <View className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-500 px-3 py-1 rounded-full">
             <Text className="text-white text-xs font-semibold">
-              Most Popular
+              {plan.badge || 'Most Popular'}
             </Text>
           </View>
         )}
@@ -59,9 +61,16 @@ export function PlanCard({ plan, isCurrentPlan, onSelect }: PlanCardProps) {
           <Text className="text-dark-400 text-sm uppercase tracking-wider mb-1">
             {plan.name}
           </Text>
-          <Text className="text-white text-3xl font-bold">
-            {formatPrice(plan.price, plan.interval)}
-          </Text>
+          <View className="flex-row items-center">
+            {plan.originalPrice != null && plan.originalPrice > plan.price && (
+              <Text className="text-dark-500 text-lg mr-2" style={{ textDecorationLine: 'line-through' }}>
+                ${plan.originalPrice}
+              </Text>
+            )}
+            <Text className="text-white text-3xl font-bold">
+              {formatPrice(plan.price, plan.interval)}
+            </Text>
+          </View>
           {plan.price > 0 && (
             <Text className="text-dark-500 text-sm">
               Billed {plan.interval}ly
