@@ -1,13 +1,13 @@
 import { create } from 'zustand';
-import { SubscriptionUsage, LimitCheckResult, LimitType, SubscriptionLimits } from '@/types';
+import { SubscriptionUsage, LimitCheckResult, LimitType, SubscriptionLimits, ServerSubscriptionLimits } from '@/types';
 import { apiClient } from '@/services/api.client';
 import { useAuthStore } from './auth.store';
 import { sentryService } from '@/services/sentry.service';
 import { analyticsService } from '@/services/analytics.service';
 
-// Limit constants
+// Hardcoded fallback limits (used when server limits haven't loaded yet)
 export const FREE_LIMITS: SubscriptionLimits = {
-  messagesPerDay: 20,
+  messagesPerDay: 10,
   sessionsPerMonth: 10,
   maxProjects: 2,
   maxDevices: 1,
@@ -25,6 +25,20 @@ export const PRO_LIMITS: SubscriptionLimits = {
   maxPhoneSessions: 1,
 };
 
+/** Map -1 → Infinity for server-provided limits */
+function mapServerLimits(limits: SubscriptionLimits): SubscriptionLimits {
+  const map = (v: number) => (v === -1 ? Infinity : v);
+  return {
+    messagesPerDay: map(limits.messagesPerDay),
+    sessionsPerMonth: map(limits.sessionsPerMonth),
+    maxProjects: map(limits.maxProjects),
+    maxDevices: map(limits.maxDevices),
+    repairsPerMonth: map(limits.repairsPerMonth),
+    historyRetentionDays: map(limits.historyRetentionDays),
+    maxPhoneSessions: limits.maxPhoneSessions != null ? map(limits.maxPhoneSessions) : undefined,
+  };
+}
+
 interface UsageState {
   // Daily (reset at midnight UTC)
   messagesUsedToday: number;
@@ -38,6 +52,9 @@ interface UsageState {
   // Real-time counts
   activeProjectCount: number;
   pairedDeviceCount: number;
+
+  // Server-provided limits (null = not yet loaded, uses hardcoded fallback)
+  serverLimits: ServerSubscriptionLimits | null;
 
   // Loading state
   isLoading: boolean;
@@ -65,6 +82,9 @@ interface UsageState {
   // Update counts
   setActiveProjectCount: (count: number) => void;
   setPairedDeviceCount: (count: number) => void;
+
+  // Server limits
+  setServerLimits: (limits: ServerSubscriptionLimits) => void;
 
   // Clear
   clearError: () => void;
@@ -99,6 +119,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   monthlyLimitResetAt: getEndOfMonthUTC(),
   activeProjectCount: 0,
   pairedDeviceCount: 0,
+  serverLimits: null,
   isLoading: false,
   error: null,
 
@@ -134,7 +155,15 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   getLimits: () => {
     const user = useAuthStore.getState().user;
     const tier = user?.subscription || 'free';
-    return tier === 'pro' || tier === 'team' ? PRO_LIMITS : FREE_LIMITS;
+    const { serverLimits } = get();
+
+    if (serverLimits) {
+      const tierKey = (tier === 'pro' || tier === 'team') ? tier : 'free';
+      return mapServerLimits(serverLimits[tierKey]);
+    }
+
+    // Fallback to hardcoded limits
+    return (tier === 'pro' || tier === 'team') ? PRO_LIMITS : FREE_LIMITS;
   },
 
   canSendMessage: () => {
@@ -309,6 +338,8 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
   setActiveProjectCount: (count) => set({ activeProjectCount: count }),
   setPairedDeviceCount: (count) => set({ pairedDeviceCount: count }),
+
+  setServerLimits: (limits) => set({ serverLimits: limits }),
 
   clearError: () => set({ error: null }),
 

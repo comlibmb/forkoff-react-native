@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Check, Zap, Star, ArrowRight, Settings, Crown, Calendar } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '@/stores/auth.store';
+import { useUsageStore } from '@/stores/usage.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/colors';
 import { subscriptionService } from '@/services/subscription.service';
@@ -26,6 +27,18 @@ export default function SubscriptionScreen() {
   const isPro = currentPlan === 'pro';
   const renewalDate = user?.stripeCurrentPeriodEnd ? new Date(user.stripeCurrentPeriodEnd) : null;
 
+  const freeLimits = useUsageStore((state) => {
+    if (state.serverLimits) {
+      const f = state.serverLimits.free;
+      const map = (v: number) => (v === -1 ? Infinity : v);
+      return {
+        messagesPerDay: map(f.messagesPerDay),
+        maxDevices: map(f.maxDevices),
+      };
+    }
+    return { messagesPerDay: 10, maxDevices: 1 };
+  });
+
   const plans = useMemo(() => [
     {
       id: 'free' as const,
@@ -35,13 +48,13 @@ export default function SubscriptionScreen() {
       icon: Star,
       color: theme.textTertiary,
       features: [
-        '1 connected device',
+        `${freeLimits.maxDevices} connected device${freeLimits.maxDevices !== 1 ? 's' : ''}`,
         'Basic chat with AI tools',
         'View code changes',
         'Community support',
       ],
       limitations: [
-        'Limited to 100 messages/day',
+        `Limited to ${freeLimits.messagesPerDay} messages/day`,
         'No priority support',
       ],
     },
@@ -54,7 +67,7 @@ export default function SubscriptionScreen() {
       color: theme.primary,
       popular: true,
       features: [
-        '5 connected devices',
+        'Unlimited connected devices',
         'Unlimited AI chat',
         'Code diff viewer',
         'Terminal access',
@@ -63,7 +76,7 @@ export default function SubscriptionScreen() {
       ],
       limitations: [],
     },
-  ], [theme]);
+  ], [theme, freeLimits]);
 
   const handleSubscribe = async (planId: string) => {
     if (planId === currentPlan) return;

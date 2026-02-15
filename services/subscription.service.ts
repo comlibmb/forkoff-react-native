@@ -1,28 +1,9 @@
 import { apiClient } from './api.client';
 import { SubscriptionLimits, SubscriptionUsage } from '@/types';
+import { useUsageStore } from '@/stores/usage.store';
 
 export type SubscriptionTier = 'free' | 'pro' | 'team';
 export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'trial';
-
-// Limit constants
-export const FREE_LIMITS: SubscriptionLimits = {
-  messagesPerDay: 20,
-  sessionsPerMonth: 10,
-  maxProjects: 2,
-  maxDevices: 1,
-  repairsPerMonth: 3,
-  historyRetentionDays: 7,
-};
-
-export const PRO_LIMITS: SubscriptionLimits = {
-  messagesPerDay: Infinity,
-  sessionsPerMonth: Infinity,
-  maxProjects: Infinity,
-  maxDevices: Infinity,
-  repairsPerMonth: Infinity,
-  historyRetentionDays: Infinity,
-  maxPhoneSessions: 1,
-};
 
 export interface Subscription {
   id: string;
@@ -79,18 +60,8 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     price: 0,
     currency: 'USD',
     interval: 'month',
-    features: [
-      `${FREE_LIMITS.messagesPerDay} messages/day`,
-      `${FREE_LIMITS.sessionsPerMonth} sessions/month`,
-      `${FREE_LIMITS.maxProjects} active projects`,
-      `${FREE_LIMITS.maxDevices} paired PC`,
-      `${FREE_LIMITS.repairsPerMonth} re-pairs/month`,
-      `${FREE_LIMITS.historyRetentionDays}-day history`,
-    ],
-    productId: {
-      ios: '',
-      android: '',
-    },
+    features: [], // Populated dynamically in getPlans()
+    productId: { ios: '', android: '' },
   },
   {
     id: 'pro_monthly',
@@ -109,10 +80,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Full history retention',
       'Single phone session',
     ],
-    productId: {
-      ios: 'com.forkoff.pro.monthly',
-      android: 'com.forkoff.pro.monthly',
-    },
+    productId: { ios: 'com.forkoff.pro.monthly', android: 'com.forkoff.pro.monthly' },
   },
   {
     id: 'pro_yearly',
@@ -122,14 +90,8 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     currency: 'USD',
     interval: 'year',
     stripePriceId: STRIPE_PRO_PRICE_ID,
-    features: [
-      'Everything in Pro Monthly',
-      '2 months free',
-    ],
-    productId: {
-      ios: 'com.forkoff.pro.yearly',
-      android: 'com.forkoff.pro.yearly',
-    },
+    features: ['Everything in Pro Monthly', '2 months free'],
+    productId: { ios: 'com.forkoff.pro.yearly', android: 'com.forkoff.pro.yearly' },
   },
   {
     id: 'team_monthly',
@@ -146,12 +108,28 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'SSO integration',
       'Dedicated support',
     ],
-    productId: {
-      ios: 'com.forkoff.team.monthly',
-      android: 'com.forkoff.team.monthly',
-    },
+    productId: { ios: 'com.forkoff.team.monthly', android: 'com.forkoff.team.monthly' },
   },
 ];
+
+/** Get the free tier limits (from server if available, otherwise hardcoded fallback) */
+function getFreeLimits(): SubscriptionLimits {
+  const { serverLimits } = useUsageStore.getState();
+  if (serverLimits) {
+    const map = (v: number) => (v === -1 ? Infinity : v);
+    const f = serverLimits.free;
+    return {
+      messagesPerDay: map(f.messagesPerDay),
+      sessionsPerMonth: map(f.sessionsPerMonth),
+      maxProjects: map(f.maxProjects),
+      maxDevices: map(f.maxDevices),
+      repairsPerMonth: map(f.repairsPerMonth),
+      historyRetentionDays: map(f.historyRetentionDays),
+      maxPhoneSessions: f.maxPhoneSessions != null ? map(f.maxPhoneSessions) : undefined,
+    };
+  }
+  return { messagesPerDay: 10, sessionsPerMonth: 10, maxProjects: 2, maxDevices: 1, repairsPerMonth: 3, historyRetentionDays: 7 };
+}
 
 class SubscriptionService {
   private isInitialized = false;
@@ -169,7 +147,22 @@ class SubscriptionService {
   }
 
   getPlans(): SubscriptionPlan[] {
-    return SUBSCRIPTION_PLANS;
+    const free = getFreeLimits();
+    // Rebuild free plan features with dynamic limits
+    return SUBSCRIPTION_PLANS.map((plan) => {
+      if (plan.id !== 'free') return plan;
+      return {
+        ...plan,
+        features: [
+          `${free.messagesPerDay} messages/day`,
+          `${free.sessionsPerMonth} sessions/month`,
+          `${free.maxProjects} active projects`,
+          `${free.maxDevices} paired PC`,
+          `${free.repairsPerMonth} re-pairs/month`,
+          `${free.historyRetentionDays}-day history`,
+        ],
+      };
+    });
   }
 
   getPlanById(planId: string): SubscriptionPlan | undefined {
@@ -325,7 +318,23 @@ class SubscriptionService {
   }
 
   getLimitsForTier(tier: SubscriptionTier): SubscriptionLimits {
-    return tier === 'pro' || tier === 'team' ? PRO_LIMITS : FREE_LIMITS;
+    const { serverLimits } = useUsageStore.getState();
+    if (serverLimits) {
+      const tierKey = (tier === 'pro' || tier === 'team') ? tier : 'free';
+      const t = serverLimits[tierKey];
+      const map = (v: number) => (v === -1 ? Infinity : v);
+      return {
+        messagesPerDay: map(t.messagesPerDay),
+        sessionsPerMonth: map(t.sessionsPerMonth),
+        maxProjects: map(t.maxProjects),
+        maxDevices: map(t.maxDevices),
+        repairsPerMonth: map(t.repairsPerMonth),
+        historyRetentionDays: map(t.historyRetentionDays),
+        maxPhoneSessions: t.maxPhoneSessions != null ? map(t.maxPhoneSessions) : undefined,
+      };
+    }
+    // Fallback to hardcoded defaults from usage store
+    return useUsageStore.getState().getLimits();
   }
 
   async fetchUsage(): Promise<SubscriptionUsage> {

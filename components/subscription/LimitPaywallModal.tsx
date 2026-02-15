@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { analyticsService } from '@/services/analytics.service';
 import { subscriptionService } from '@/services/subscription.service';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
+import { useUsageStore } from '@/stores/usage.store';
 
 interface LimitPaywallModalProps {
   visible: boolean;
@@ -25,43 +26,45 @@ interface PaywallContent {
   description: string;
 }
 
-const PAYWALL_CONTENT: Record<LimitType | 'onboarding', PaywallContent> = {
-  messages_daily: {
-    icon: MessageSquare,
-    subheading: "You're on fire today!",
-    description: "You've burned through all 20 messages. Go Pro and never hit a wall again.",
-  },
-  sessions_monthly: {
-    icon: Zap,
-    subheading: 'Session overload!',
-    description: "10 sessions this month - you're a power user. Time to upgrade?",
-  },
-  projects_max: {
-    icon: FolderOpen,
-    subheading: "Two's company...",
-    description: 'But unlimited projects is a party. Go Pro to keep building.',
-  },
-  devices_max: {
-    icon: Monitor,
-    subheading: 'One PC feeling lonely?',
-    description: "Free tier = 1 device. Pro = pair 'em all.",
-  },
-  repairs_monthly: {
-    icon: RefreshCw,
-    subheading: 'Musical chairs, eh?',
-    description: '3 re-pairs this month. Pro users can swap devices anytime.',
-  },
-  phone_session: {
-    icon: Smartphone,
-    subheading: "You're already forking somewhere else!",
-    description: 'Pro accounts work on one phone at a time. Take over this session?',
-  },
-  onboarding: {
-    icon: Gift,
-    subheading: 'Welcome to ForkOff!',
-    description: 'Start free with limits, or go Pro and code without boundaries.',
-  },
-};
+function getPaywallContent(limits: { messagesPerDay: number; sessionsPerMonth: number; maxProjects: number; maxDevices: number; repairsPerMonth: number }): Record<LimitType | 'onboarding', PaywallContent> {
+  return {
+    messages_daily: {
+      icon: MessageSquare,
+      subheading: "You're on fire today!",
+      description: `You've burned through all ${limits.messagesPerDay} messages. Go Pro and never hit a wall again.`,
+    },
+    sessions_monthly: {
+      icon: Zap,
+      subheading: 'Session overload!',
+      description: `${limits.sessionsPerMonth} sessions this month - you're a power user. Time to upgrade?`,
+    },
+    projects_max: {
+      icon: FolderOpen,
+      subheading: "Two's company...",
+      description: 'But unlimited projects is a party. Go Pro to keep building.',
+    },
+    devices_max: {
+      icon: Monitor,
+      subheading: 'One PC feeling lonely?',
+      description: `Free tier = ${limits.maxDevices} device${limits.maxDevices !== 1 ? 's' : ''}. Pro = pair 'em all.`,
+    },
+    repairs_monthly: {
+      icon: RefreshCw,
+      subheading: 'Musical chairs, eh?',
+      description: `${limits.repairsPerMonth} re-pairs this month. Pro users can swap devices anytime.`,
+    },
+    phone_session: {
+      icon: Smartphone,
+      subheading: "You're already forking somewhere else!",
+      description: 'Pro accounts work on one phone at a time. Take over this session?',
+    },
+    onboarding: {
+      icon: Gift,
+      subheading: 'Welcome to ForkOff!',
+      description: 'Start free with limits, or go Pro and code without boundaries.',
+    },
+  };
+}
 
 function formatTimeUntilReset(resetAt?: string): string | null {
   if (!resetAt) return null;
@@ -108,10 +111,28 @@ export function LimitPaywallModal({
     onClose(); // Close the paywall after successful voucher redemption
   };
 
+  // Select the raw serverLimits reference (stable — same object until setServerLimits is called)
+  const serverLimits = useUsageStore((state) => state.serverLimits);
+
+  const freeLimits = useMemo(() => {
+    if (serverLimits) {
+      const f = serverLimits.free;
+      const map = (v: number) => (v === -1 ? Infinity : v);
+      return {
+        messagesPerDay: map(f.messagesPerDay),
+        sessionsPerMonth: map(f.sessionsPerMonth),
+        maxProjects: map(f.maxProjects),
+        maxDevices: map(f.maxDevices),
+        repairsPerMonth: map(f.repairsPerMonth),
+      };
+    }
+    return { messagesPerDay: 10, sessionsPerMonth: 10, maxProjects: 2, maxDevices: 1, repairsPerMonth: 3 };
+  }, [serverLimits]);
+
   const content = useMemo(() => {
     if (!limitType) return null;
-    return PAYWALL_CONTENT[limitType];
-  }, [limitType]);
+    return getPaywallContent(freeLimits)[limitType];
+  }, [limitType, freeLimits]);
 
   const resetTimeText = useMemo(() => formatTimeUntilReset(resetAt), [resetAt]);
 

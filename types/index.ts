@@ -429,6 +429,13 @@ export interface SubscriptionLimits {
   maxPhoneSessions?: number;
 }
 
+/** Server-provided limits keyed by tier (values use -1 for unlimited) */
+export interface ServerSubscriptionLimits {
+  free: SubscriptionLimits;
+  pro: SubscriptionLimits;
+  team: SubscriptionLimits;
+}
+
 // ==================== VOUCHER TYPES ====================
 
 export type VoucherType = 'LIFETIME_PRO' | 'CAMPAIGN' | 'SINGLE_USE';

@@ -6,6 +6,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import { User, LoginCredentials, RegisterCredentials } from '@/types';
 import { useVersionStore } from '@/stores/version.store';
+import { useUsageStore } from '@/stores/usage.store';
 
 // Warm up the web browser for faster OAuth flow
 WebBrowser.maybeCompleteAuthSession();
@@ -268,6 +269,11 @@ class AuthService {
             useVersionStore.getState().setVersionConfig(profile.appConfig);
           }
 
+          // Store server-provided subscription limits
+          if (profile.subscriptionLimits) {
+            useUsageStore.getState().setServerLimits(profile.subscriptionLimits);
+          }
+
           return {
             ...baseUser,
             username: profile.username || baseUser.username,
@@ -406,6 +412,11 @@ class AuthService {
           // Handle appConfig if present
           if (profile.appConfig) {
             useVersionStore.getState().setVersionConfig(profile.appConfig);
+          }
+
+          // Store server-provided subscription limits
+          if (profile.subscriptionLimits) {
+            useUsageStore.getState().setServerLimits(profile.subscriptionLimits);
           }
 
           // Merge API profile data with Supabase user
@@ -582,6 +593,63 @@ class AuthService {
     } catch (error) {
       console.error('Username check error:', error);
       return { available: true }; // Fail open
+    }
+  }
+
+  // ==================== DEVICE FINGERPRINT ====================
+
+  /**
+   * Check if this device is allowed to register or log in (public endpoint, no auth needed).
+   * Pass `email` for login checks — allows if fingerprint belongs to that email's account.
+   * Returns { allowed, message? }. Fails open if request fails.
+   */
+  async checkDeviceRegistration(fingerprintHash: string, email?: string): Promise<{ allowed: boolean; message?: string }> {
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+      const payload: { fingerprintHash: string; email?: string } = { fingerprintHash };
+      if (email) payload.email = email;
+
+      const response = await fetch(`${apiUrl}/auth/device/check-registration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        console.warn('[Auth] Device check failed with status:', response.status);
+        return { allowed: true }; // Fail open
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('[Auth] Device registration check failed:', error);
+      return { allowed: true }; // Fail open
+    }
+  }
+
+  /**
+   * Register device fingerprint after successful signup (requires auth token).
+   */
+  async registerFingerprint(fingerprintHash: string): Promise<void> {
+    try {
+      const token = await this.getAccessToken();
+      if (!token) return;
+
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiUrl}/auth/device/register-fingerprint`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fingerprintHash }),
+      });
+
+      if (!response.ok) {
+        console.warn('[Auth] Fingerprint registration failed:', response.status);
+      }
+    } catch (error) {
+      console.error('[Auth] Failed to register fingerprint:', error);
     }
   }
 
@@ -847,6 +915,9 @@ class AuthService {
               const profile = await response.json();
               if (profile.appConfig) {
                 useVersionStore.getState().setVersionConfig(profile.appConfig);
+              }
+              if (profile.subscriptionLimits) {
+                useUsageStore.getState().setServerLimits(profile.subscriptionLimits);
               }
               callback({
                 ...baseUser,

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User, LoginCredentials, RegisterCredentials } from '@/types';
 import { authService } from '@/services/auth.service';
+import { deviceFingerprintService } from '@/services/device-fingerprint.service';
 import { sentryService } from '@/services/sentry.service';
 import { analyticsService } from '@/services/analytics.service';
 
@@ -40,6 +41,11 @@ interface AuthState {
   // OAuth actions
   signInWithGoogle: () => Promise<User>;
   signInWithApple: () => Promise<User>;
+
+  // Device fingerprint
+  checkDeviceForRegistration: () => Promise<{ allowed: boolean; message?: string }>;
+  checkDeviceForLogin: (email: string) => Promise<{ allowed: boolean; message?: string }>;
+  registerDeviceFingerprint: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -556,6 +562,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user,
       isAuthenticated: !!user,
     }),
+
+  // Check if device is allowed to register a new account
+  checkDeviceForRegistration: async () => {
+    try {
+      const hash = await deviceFingerprintService.getFingerprint();
+      if (!hash) return { allowed: true }; // Fail open if fingerprinting fails
+
+      return await authService.checkDeviceRegistration(hash);
+    } catch (error) {
+      console.error('[AuthStore] Device check failed:', error);
+      return { allowed: true }; // Fail open
+    }
+  },
+
+  // Check if device is allowed to log in with a specific email
+  checkDeviceForLogin: async (email: string) => {
+    try {
+      const hash = await deviceFingerprintService.getFingerprint();
+      if (!hash) return { allowed: true }; // Fail open if fingerprinting fails
+
+      return await authService.checkDeviceRegistration(hash, email);
+    } catch (error) {
+      console.error('[AuthStore] Device login check failed:', error);
+      return { allowed: true }; // Fail open
+    }
+  },
+
+  // Register device fingerprint after successful signup
+  registerDeviceFingerprint: async () => {
+    try {
+      const hash = await deviceFingerprintService.getFingerprint();
+      if (!hash) return;
+
+      await authService.registerFingerprint(hash);
+    } catch (error) {
+      console.error('[AuthStore] Fingerprint registration failed:', error);
+    }
+  },
 }));
 
 export default useAuthStore;

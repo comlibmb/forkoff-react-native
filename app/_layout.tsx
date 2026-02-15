@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -282,6 +282,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (isInitialized) {
       if (isAuthenticated) {
+        // Clear kicked flag on new login
+        useConnectionStore.getState().setWasKicked(false);
         wsService.connect();
 
         // Register for push notifications when authenticated
@@ -291,6 +293,38 @@ export default function RootLayout() {
       }
     }
   }, [isAuthenticated, isInitialized]);
+
+  // Handle session_claimed: another device logged in with this account
+  const isHandlingKick = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && isInitialized) {
+      const unsubscribe = wsService.on('session_claimed', async (data) => {
+        if (isHandlingKick.current) return;
+        isHandlingKick.current = true;
+
+        // Mark as kicked to prevent auto-reconnect
+        useConnectionStore.getState().setWasKicked(true);
+
+        // Disconnect WebSocket immediately
+        wsService.disconnect();
+
+        // Alert the user
+        const { alert } = await import('@/components/ui/AlertModal');
+        alert.warning(
+          'Session Ended',
+          data.message || 'Your account was signed in on another device.',
+        );
+
+        // Sign out and navigate to login
+        const { signOut } = useAuthStore.getState();
+        await signOut();
+        router.replace('/(auth)/login');
+        isHandlingKick.current = false;
+      });
+
+      return () => unsubscribe();
+    }
+  }, [isAuthenticated, isInitialized, router]);
 
   // Subscribe to approval events when WebSocket is connected
   useEffect(() => {

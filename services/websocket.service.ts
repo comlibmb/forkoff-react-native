@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import * as Device from 'expo-device';
 import { authService } from './auth.service';
 import { sentryService } from './sentry.service';
 import { analyticsService } from './analytics.service';
@@ -477,6 +478,7 @@ class WebSocketService {
         auth: {
           token,
           clientType: 'user-scoped', // Mobile is user-scoped (receives all user's session updates)
+          deviceName: Device.deviceName || Device.modelName || 'Mobile',
         },
         transports: ['websocket'],
         reconnection: true,
