@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#4424b2"
+        "backgroundColor": "#0d1117"
       },
       "edgeToEdgeEnabled": true,
       "package": "app.forkoff",

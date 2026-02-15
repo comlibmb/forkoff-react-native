@@ -239,7 +239,25 @@
       "Bash(MSYS_NO_PATHCONV=1 aws cloudwatch:*)",
       "Bash(MSYS_NO_PATHCONV=1 aws sns subscribe:*)",
       "Bash(git revert:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws sso login:*)",
+      "Bash(aws ses list-identities:*)",
+      "Bash($secrets = aws secretsmanager get-secret-value --secret-id forkoff-api --region us-east-1 --query 'SecretString' --output text)",
+      "Bash(echo:*)",
+      "Bash(aws ses get-identity-verification-attributes:*)",
+      "Bash(aws support describe-cases:*)",
+      "Bash(npx jest:*)",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:www.vibesparking.com)",
+      "Bash(claude --resume:*)",
+      "Bash(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ~/.ssh/forkoff-key.pem ec2-user@api.forkoff.app \"docker logs forkoff-api --tail 100 2>&1 | grep -i ''user_message\\\\|claude_resume\\\\|claude_start\\\\|device.*online\\\\|47575392\\\\|handleConnection\\\\|permission''\")",
+      "Bash(kill:*)",
+      "Bash(Select-String -Pattern \"PASS|FAIL|Tests:|Test Suites:\")",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:xebia.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:itnext.io)"
     ]
   }
 }

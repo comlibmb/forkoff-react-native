@@ -27,17 +27,15 @@ export default function SubscriptionScreen() {
   const isPro = currentPlan === 'pro';
   const renewalDate = user?.stripeCurrentPeriodEnd ? new Date(user.stripeCurrentPeriodEnd) : null;
 
-  const freeLimits = useUsageStore((state) => {
-    if (state.serverLimits) {
-      const f = state.serverLimits.free;
+  const serverLimits = useUsageStore((state) => state.serverLimits);
+  const freeLimits = useMemo(() => {
+    if (serverLimits) {
+      const f = serverLimits.free;
       const map = (v: number) => (v === -1 ? Infinity : v);
-      return {
-        messagesPerDay: map(f.messagesPerDay),
-        maxDevices: map(f.maxDevices),
-      };
+      return { messagesPerDay: map(f.messagesPerDay), maxDevices: map(f.maxDevices) };
     }
     return { messagesPerDay: 10, maxDevices: 1 };
-  });
+  }, [serverLimits]);
 
   const plans = useMemo(() => [
     {
