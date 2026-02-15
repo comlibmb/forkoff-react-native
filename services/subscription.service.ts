@@ -1,4 +1,6 @@
 import { apiClient } from './api.client';
+import { sentryService } from './sentry.service';
+import { analyticsService } from './analytics.service';
 import { SubscriptionLimits, SubscriptionUsage, ServerPlansResponse, ServerPlan, PromotionBanner } from '@/types';
 import { useUsageStore } from '@/stores/usage.store';
 
@@ -256,8 +258,11 @@ class SubscriptionService {
 
     try {
       const response = await apiClient.post<{ url: string }>('/stripe/checkout', { priceId });
+      analyticsService.track('checkout_session_created', { priceId });
       return { success: true, url: response.url };
     } catch (error: any) {
+      sentryService.captureException(error, { context: 'checkout_session', priceId });
+      analyticsService.track('checkout_session_failed', { priceId, error: error.message });
       return {
         success: false,
         error: error.message || 'Failed to create checkout session',
@@ -270,6 +275,7 @@ class SubscriptionService {
       const response = await apiClient.post<{ url: string }>('/stripe/portal', {});
       return { success: true, url: response.url };
     } catch (error: any) {
+      sentryService.captureException(error, { context: 'portal_session' });
       return {
         success: false,
         error: error.message || 'Failed to create portal session',
@@ -291,6 +297,7 @@ class SubscriptionService {
   }
 
   async restorePurchases(): Promise<{ success: boolean; subscription?: Subscription; error?: string }> {
+    analyticsService.track('subscription_restore_requested');
     try {
       // In a real app, this would restore via RevenueCat
       // const customerInfo = await Purchases.restorePurchases();
@@ -302,6 +309,8 @@ class SubscriptionService {
 
       return { success: true, subscription };
     } catch (error: any) {
+      sentryService.captureException(error, { context: 'restore_purchases' });
+      analyticsService.track('subscription_restore_failed', { error: error.message });
       return {
         success: false,
         error: error.message || 'Restore failed',
@@ -310,10 +319,12 @@ class SubscriptionService {
   }
 
   async cancelSubscription(): Promise<{ success: boolean; error?: string }> {
+    analyticsService.track('subscription_cancel_requested');
     try {
       await apiClient.post('/subscription/cancel', {});
       return { success: true };
     } catch (error: any) {
+      sentryService.captureException(error, { context: 'cancel_subscription' });
       return {
         success: false,
         error: error.message || 'Cancellation failed',

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PostHogProvider } from 'posthog-react-native';
+import Constants from 'expo-constants';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -243,6 +244,11 @@ export default function RootLayout() {
       analyticsService.identify(user.id, {
         email: user.email,
         name: user.name,
+      });
+      analyticsService.setUserProperties({
+        subscription_tier: user.subscription || 'free',
+        app_version: Constants.expoConfig?.version,
+        is_lifetime_pro: user.isLifetimePro || false,
       });
 
       // Fetch usage data

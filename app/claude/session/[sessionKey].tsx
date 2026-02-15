@@ -185,8 +185,19 @@ export default function ClaudeSessionScreen() {
       ?.find((s) => s.sessionKey === sessionKey)
   );
 
+  // Track session duration for analytics
+  const sessionOpenedAtRef = useRef(Date.now());
+
   // Track if we've done initial load
   const initialLoadDoneRef = useRef(false);
+
+  // Track session duration on unmount
+  useEffect(() => {
+    return () => {
+      const durationSeconds = Math.round((Date.now() - sessionOpenedAtRef.current) / 1000);
+      analyticsService.track('claude_session_duration', { sessionKey, duration_seconds: durationSeconds });
+    };
+  }, [sessionKey]);
 
   // Stable transcript path ref — prevents effect re-runs when session object updates
   const transcriptPathRef = useRef(session?.transcriptPath);

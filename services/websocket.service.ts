@@ -499,6 +499,7 @@ class WebSocketService {
 
     this.socket.on('connect', () => {
       const wasReconnect = this.reconnectAttempts > 0;
+      const reconnectAttempts = this.reconnectAttempts;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
       console.log('[WS] Mobile app connected to WebSocket');
@@ -515,6 +516,7 @@ class WebSocketService {
       // Re-subscribe to device rooms after reconnect (room memberships are lost)
       if (wasReconnect) {
         console.log('[WS] Reconnected — re-subscribing to rooms');
+        analyticsService.track('websocket_reconnected', { attempts: reconnectAttempts });
         this.resubscribeAll();
       }
 
@@ -776,6 +778,7 @@ class WebSocketService {
         (callback as (data: unknown) => void)(data);
       } catch (error) {
         console.error(`Error in ${event} callback:`, error);
+        sentryService.captureException(error as Error, { context: 'websocket_callback', event: String(event) });
       }
     });
   }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ColorScheme } from '@/theme/colors';
+import { analyticsService } from '@/services/analytics.service';
 
 interface ThemeState {
   colorScheme: ColorScheme | null;  // null = use system theme
@@ -19,6 +20,7 @@ export const useThemeStore = create<ThemeState>()(
 
       setColorScheme: (scheme) => {
         set({ colorScheme: scheme, hasUserOverride: true });
+        analyticsService.track('theme_changed', { scheme });
       },
 
       toggleColorScheme: () => {
@@ -29,6 +31,7 @@ export const useThemeStore = create<ThemeState>()(
         // For now, just flip between light and dark
         const newScheme = current === 'dark' ? 'light' : 'dark';
         set({ colorScheme: newScheme, hasUserOverride: true });
+        analyticsService.track('theme_changed', { scheme: newScheme });
       },
 
       resetToSystem: () => {
