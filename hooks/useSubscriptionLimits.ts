@@ -27,7 +27,7 @@ export interface UseSubscriptionLimitsReturn {
     activeProjectCount: number;
     pairedDeviceCount: number;
   };
-  tier: 'free' | 'pro' | 'team';
+  tier: 'free' | 'pro';
   isPro: boolean;
 
   // Reset info
@@ -38,7 +38,7 @@ export interface UseSubscriptionLimitsReturn {
 export function useSubscriptionLimits(): UseSubscriptionLimitsReturn {
   const user = useAuthStore((state) => state.user);
   const tier = user?.subscription || 'free';
-  const isPro = tier === 'pro' || tier === 'team';
+  const isPro = tier === 'pro';
 
   const {
     messagesUsedToday,

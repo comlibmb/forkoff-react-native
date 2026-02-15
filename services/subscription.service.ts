@@ -2,7 +2,7 @@ import { apiClient } from './api.client';
 import { SubscriptionLimits, SubscriptionUsage } from '@/types';
 import { useUsageStore } from '@/stores/usage.store';
 
-export type SubscriptionTier = 'free' | 'pro' | 'team';
+export type SubscriptionTier = 'free' | 'pro';
 export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'trial';
 
 export interface Subscription {
@@ -92,23 +92,6 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     stripePriceId: STRIPE_PRO_PRICE_ID,
     features: ['Everything in Pro Monthly', '2 months free'],
     productId: { ios: 'com.forkoff.pro.yearly', android: 'com.forkoff.pro.yearly' },
-  },
-  {
-    id: 'team_monthly',
-    name: 'Team Monthly',
-    tier: 'team',
-    price: 29.99,
-    currency: 'USD',
-    interval: 'month',
-    features: [
-      'Everything in Pro',
-      'Team collaboration',
-      'Shared devices',
-      'Admin dashboard',
-      'SSO integration',
-      'Dedicated support',
-    ],
-    productId: { ios: 'com.forkoff.team.monthly', android: 'com.forkoff.team.monthly' },
   },
 ];
 
@@ -281,18 +264,15 @@ class SubscriptionService {
 
   isFeatureAvailable(feature: string, tier: SubscriptionTier): boolean {
     const featureAccess: Record<string, SubscriptionTier[]> = {
-      'unlimited-devices': ['pro', 'team'],
-      'unlimited-projects': ['pro', 'team'],
-      'unlimited-messages': ['pro', 'team'],
-      'unlimited-sessions': ['pro', 'team'],
-      'unlimited-repairs': ['pro', 'team'],
-      'full-history': ['pro', 'team'],
-      'code-diff': ['pro', 'team'],
-      'terminal-access': ['pro', 'team'],
-      'priority-support': ['pro', 'team'],
-      'team-collaboration': ['team'],
-      'sso': ['team'],
-      'admin-dashboard': ['team'],
+      'unlimited-devices': ['pro'],
+      'unlimited-projects': ['pro'],
+      'unlimited-messages': ['pro'],
+      'unlimited-sessions': ['pro'],
+      'unlimited-repairs': ['pro'],
+      'full-history': ['pro'],
+      'code-diff': ['pro'],
+      'terminal-access': ['pro'],
+      'priority-support': ['pro'],
     };
 
     const allowedTiers = featureAccess[feature];
@@ -311,7 +291,6 @@ class SubscriptionService {
       'full-history': 'Upgrade to Pro for full chat history',
       'code-diff': 'Upgrade to Pro to view code diffs',
       'terminal-access': 'Upgrade to Pro for terminal access',
-      'team-collaboration': 'Upgrade to Team for collaboration features',
     };
 
     return messages[feature] || 'Upgrade your plan to access this feature';
@@ -320,7 +299,7 @@ class SubscriptionService {
   getLimitsForTier(tier: SubscriptionTier): SubscriptionLimits {
     const { serverLimits } = useUsageStore.getState();
     if (serverLimits) {
-      const tierKey = (tier === 'pro' || tier === 'team') ? tier : 'free';
+      const tierKey = tier === 'pro' ? 'pro' : 'free';
       const t = serverLimits[tierKey];
       const map = (v: number) => (v === -1 ? Infinity : v);
       return {

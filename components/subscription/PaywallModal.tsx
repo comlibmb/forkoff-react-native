@@ -48,22 +48,6 @@ const plans: Plan[] = [
       { name: 'Code diff viewer', included: true },
       { name: 'Terminal access', included: true },
       { name: 'Priority support', included: true },
-      { name: 'Team features', included: false },
-    ],
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    price: 29.99,
-    interval: 'month',
-    features: [
-      { name: 'Everything in Pro', included: true },
-      { name: 'Team collaboration', included: true },
-      { name: 'Shared devices', included: true },
-      { name: 'Admin dashboard', included: true },
-      { name: 'SSO integration', included: true },
-      { name: 'Dedicated support', included: true },
-      { name: 'Custom integrations', included: true },
     ],
   },
 ];
