@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { analyticsService } from '@/services/analytics.service';
 
 export interface PermissionRule {
   tool: string;
@@ -58,10 +59,12 @@ export const usePermissionRulesStore = create<PermissionRulesState>()(
               : r
           ),
         });
+        analyticsService.track('permission_rule_changed', { tool, action });
       },
 
       resetToDefaults: () => {
         set({ rules: DEFAULT_RULES });
+        analyticsService.track('permission_rules_reset');
       },
     }),
     {

@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { apiClient } from './api.client';
+import { sentryService } from './sentry.service';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -88,6 +89,7 @@ class NotificationService {
     } catch (error) {
       // Expo Go doesn't support push tokens - silently fail
       console.log('[Notifications] Push token unavailable (expected in Expo Go)');
+      sentryService.captureException(error as Error, { context: 'registerForPushNotifications' });
       return null;
     }
   }
@@ -101,6 +103,7 @@ class NotificationService {
       });
     } catch (error) {
       console.error('Failed to register push token:', error);
+      sentryService.captureException(error as Error, { context: 'registerTokenWithBackend' });
     }
   }
 
@@ -108,6 +111,7 @@ class NotificationService {
     try {
       return await apiClient.get<NotificationSettings>('/notifications/settings');
     } catch (error) {
+      sentryService.captureMessage('notification_settings_fetch_failed', 'warning', { error: String(error) });
       // Return default settings
       return {
         pushEnabled: true,
