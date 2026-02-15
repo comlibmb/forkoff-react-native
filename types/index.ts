@@ -434,7 +434,6 @@ export interface SubscriptionLimits {
 export interface ServerSubscriptionLimits {
   free: SubscriptionLimits;
   pro: SubscriptionLimits;
-  team: SubscriptionLimits;
 }
 
 // ==================== VOUCHER TYPES ====================

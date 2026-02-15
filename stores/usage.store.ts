@@ -158,12 +158,12 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     const { serverLimits } = get();
 
     if (serverLimits) {
-      const tierKey = (tier === 'pro' || tier === 'team') ? tier : 'free';
+      const tierKey = tier === 'pro' ? 'pro' : 'free';
       return mapServerLimits(serverLimits[tierKey]);
     }
 
     // Fallback to hardcoded limits
-    return (tier === 'pro' || tier === 'team') ? PRO_LIMITS : FREE_LIMITS;
+    return tier === 'pro' ? PRO_LIMITS : FREE_LIMITS;
   },
 
   canSendMessage: () => {
@@ -324,7 +324,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       case 'phone_session':
         // Pro feature - always allowed for Pro, never for free
         const user = useAuthStore.getState().user;
-        const isPro = user?.subscription === 'pro' || user?.subscription === 'team';
+        const isPro = user?.subscription === 'pro';
         return {
           allowed: isPro,
           limitType,
