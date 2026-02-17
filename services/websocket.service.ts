@@ -407,14 +407,25 @@ interface EventCallbacks {
   error: EventCallback<Error>[];
 }
 
+// Queued message for offline buffering
+interface QueuedMessage {
+  event: string;
+  data: unknown;
+  queuedAt: number;
+}
+
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = Infinity;
   private reconnectDelay = 1000;
   // Track subscriptions so we can re-subscribe after reconnect
   private subscribedDevices = new Set<string>();
+  // Critical message queue — buffers messages when disconnected, flushes on reconnect
+  private pendingMessages: QueuedMessage[] = [];
+  private static readonly MAX_QUEUE_SIZE = 50;
+  private static readonly MESSAGE_TTL_MS = 2 * 60 * 1000; // 2 minutes
   private callbacks: EventCallbacks = {
     device_status: [],
     terminal_output: [],
@@ -484,6 +495,8 @@ class WebSocketService {
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.reconnectDelay,
+        reconnectionDelayMax: 15000,
+        randomizationFactor: 0.5,
       });
 
       this.setupListeners();
@@ -518,6 +531,7 @@ class WebSocketService {
         console.log('[WS] Reconnected — re-subscribing to rooms');
         analyticsService.track('websocket_reconnected', { attempts: reconnectAttempts });
         this.resubscribeAll();
+        this.flushQueue();
       }
 
       this.emitInternal('connected');
@@ -537,6 +551,7 @@ class WebSocketService {
 
     this.socket.on('connect_error', (error) => {
       this.isConnecting = false;
+      this.reconnectAttempts++;
 
       // Capture connection errors to Sentry
       sentryService.captureException(error, {
@@ -857,6 +872,46 @@ class WebSocketService {
     }
   }
 
+  // Queue a message if disconnected, send immediately if connected
+  private emitOrQueue(event: string, data: unknown): void {
+    if (this.socket?.connected) {
+      this.socket.emit(event, data);
+      return;
+    }
+
+    // Drop oldest if queue is full
+    if (this.pendingMessages.length >= WebSocketService.MAX_QUEUE_SIZE) {
+      this.pendingMessages.shift();
+    }
+
+    this.pendingMessages.push({ event, data, queuedAt: Date.now() });
+    console.log(`[WS] Queued ${event} (queue size: ${this.pendingMessages.length})`);
+  }
+
+  // Flush queued messages after reconnect, dropping stale ones
+  private flushQueue(): void {
+    const now = Date.now();
+    const fresh = this.pendingMessages.filter(
+      (msg) => now - msg.queuedAt < WebSocketService.MESSAGE_TTL_MS,
+    );
+    const staleCount = this.pendingMessages.length - fresh.length;
+    if (staleCount > 0) {
+      console.log(`[WS] Dropped ${staleCount} stale queued message(s)`);
+    }
+
+    for (const msg of fresh) {
+      console.log(`[WS] Flushing queued ${msg.event}`);
+      this.socket?.emit(msg.event, msg.data);
+    }
+
+    this.pendingMessages = [];
+  }
+
+  // Expose queue length for testing
+  get queueLength(): number {
+    return this.pendingMessages.length;
+  }
+
   // Subscribe to terminal output
   subscribeToTerminal(terminalId: string): void {
     this.socket?.emit('terminal_subscribe', { terminalSessionId: terminalId });
@@ -891,7 +946,7 @@ class WebSocketService {
   ): void {
     // SECURITY: Never log message content
     console.log(`[WS] Sending user_message to device ${deviceId}, length: ${message.length}`);
-    this.socket?.emit('user_message', {
+    this.emitOrQueue('user_message', {
       deviceId,
       message,
       sessionKey: options?.sessionKey,
@@ -939,7 +994,7 @@ class WebSocketService {
     }
   ): void {
     console.log(`[WS] Sending permission_response: ${promptId} -> ${decision}`);
-    this.socket?.emit('permission_response', {
+    this.emitOrQueue('permission_response', {
       promptId,
       decision,
       reason: options?.reason,
@@ -958,7 +1013,7 @@ class WebSocketService {
     }
   ): void {
     console.log(`[WS] Sending claude_approval_response: ${approvalId} -> ${response}`);
-    this.socket?.emit('claude_approval_response', {
+    this.emitOrQueue('claude_approval_response', {
       approvalId,
       response,
       deviceId: options?.deviceId,
@@ -1004,6 +1059,7 @@ class WebSocketService {
     }
     this.isConnecting = false;
     this.reconnectAttempts = 0;
+    this.pendingMessages = [];
   }
 
   get isConnected(): boolean {
