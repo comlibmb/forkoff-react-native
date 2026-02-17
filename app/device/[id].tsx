@@ -88,7 +88,13 @@ export default function DeviceDetailScreen() {
         <Laptop size={48} color={theme.textTertiary} />
         <Text style={{ color: theme.textSecondary, fontSize: 18, marginTop: 16 }}>Device not found</Text>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/devices');
+            }
+          }}
           style={{ marginTop: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 9999 }}
         >
           <Text style={{ color: theme.text, fontWeight: '500' }}>Go Back</Text>
@@ -148,14 +154,11 @@ export default function DeviceDetailScreen() {
   };
 
   const ToolCard = ({ tool }: { tool: ConnectedTool }) => {
-    const isClaudeTool = ['claude_code', 'claude-code', 'claude_terminal'].includes(tool.type.toLowerCase());
-    // For Claude tools, check if any session is active; for other tools, use tool.status
-    const isToolActive = isClaudeTool ? hasActiveClaudeSession : tool.status === 'active';
+    const isToolActive = hasActiveClaudeSession;
 
     return (
       <TouchableOpacity
-        onPress={isClaudeTool ? () => handleToolPress(tool) : undefined}
-        disabled={!isClaudeTool}
+        onPress={() => handleToolPress(tool)}
         style={{
           backgroundColor: theme.backgroundSecondary,
           borderWidth: 1,
@@ -163,10 +166,9 @@ export default function DeviceDetailScreen() {
           borderRadius: 12,
           padding: 16,
           overflow: 'hidden',
-          opacity: !isClaudeTool ? 0.6 : 1,
         }}
       >
-        {isToolActive && isClaudeTool && (
+        {isToolActive && (
           <View
             style={{
               position: 'absolute',
@@ -183,58 +185,48 @@ export default function DeviceDetailScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ width: 40, height: 40, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Cpu size={20} color={isClaudeTool && isToolActive ? theme.primary : theme.textTertiary} />
+              <Cpu size={20} color={isToolActive ? theme.primary : theme.textTertiary} />
             </View>
             <View>
               <Text style={{ color: theme.text, fontWeight: '500' }}>{tool.name}</Text>
-              {isClaudeTool && <Text style={{ color: theme.textSecondary, fontSize: 12 }}>v{tool.version}</Text>}
+              <Text style={{ color: theme.textSecondary, fontSize: 12 }}>v{tool.version}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {isClaudeTool ? (
-              <>
-                <View
-                  style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    backgroundColor: isToolActive ? theme.primary + '1A' : theme.border + '4D',
-                    borderWidth: 1,
-                    borderColor: isToolActive ? theme.primary + '33' : theme.border,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: isToolActive ? theme.primary : theme.textTertiary,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                      color: isToolActive ? theme.primary : theme.textSecondary,
-                    }}
-                  >
-                    {isToolActive ? 'Active' : 'Inactive'}
-                  </Text>
-                </View>
-                <ChevronRight size={16} color={theme.textTertiary} />
-              </>
-            ) : (
-              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, backgroundColor: theme.warning + '1A', borderWidth: 1, borderColor: theme.warning + '33' }}>
-                <Text style={{ color: theme.warning, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Coming soon
-                </Text>
-              </View>
-            )}
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: isToolActive ? theme.primary + '1A' : theme.border + '4D',
+                borderWidth: 1,
+                borderColor: isToolActive ? theme.primary + '33' : theme.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: isToolActive ? theme.primary : theme.textTertiary,
+                }}
+              />
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  color: isToolActive ? theme.primary : theme.textSecondary,
+                }}
+              >
+                {isToolActive ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+            <ChevronRight size={16} color={theme.textTertiary} />
           </View>
         </View>
       </TouchableOpacity>
@@ -246,7 +238,13 @@ export default function DeviceDetailScreen() {
       {/* Header */}
       <View style={{ backgroundColor: theme.background + 'F2', borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/devices');
+            }
+          }}
           style={{ flexDirection: 'row', alignItems: 'center' }}
         >
           <ArrowLeft size={24} color={theme.textSecondary} />
@@ -403,7 +401,7 @@ export default function DeviceDetailScreen() {
             return (
               <>
                 <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 16 }}>
-                  Connected Tools ({supportedTools.length})
+                  Tools ({supportedTools.length})
                 </Text>
 
                 {supportedTools.length === 0 ? (

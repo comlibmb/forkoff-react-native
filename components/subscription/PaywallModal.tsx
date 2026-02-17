@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { X, Zap, Lock, Crown, Ticket } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { alert } from '@/components/ui/AlertModal';
 import { Button } from '@/components/ui';
 import { PlanCard, Plan } from './PlanCard';
 import { colors } from '@/theme/colors';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
 import { VoucherRedemptionResult, PromotionBanner } from '@/types';
 import { subscriptionService } from '@/services/subscription.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 interface PaywallModalProps {
   visible: boolean;
@@ -63,6 +65,25 @@ export function PaywallModal({
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherResult, setVoucherResult] = useState<VoucherRedemptionResult | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    try {
+      const result = await subscriptionService.restorePurchases();
+      if (result.success) {
+        await useAuthStore.getState().initialize();
+        alert.success('Purchases Restored', 'Your subscription has been restored.');
+        onClose();
+      } else {
+        alert.error('Restore Failed', result.error || 'No active subscription found for this account.');
+      }
+    } catch {
+      alert.error('Restore Failed', 'Could not restore purchases. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   useEffect(() => {
     if (!visible) return;
@@ -219,8 +240,21 @@ export function PaywallModal({
 
           {/* Terms */}
           <Text className="text-dark-500 text-xs text-center mt-6 px-4">
-            By subscribing, you agree to our Terms of Service and Privacy
-            Policy. Subscriptions auto-renew unless cancelled at least 24 hours
+            By subscribing, you agree to our{' '}
+            <Text
+              className="text-primary-400"
+              onPress={() => Linking.openURL('https://forkoff.app/legal/terms')}
+            >
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text
+              className="text-primary-400"
+              onPress={() => Linking.openURL('https://forkoff.app/legal/privacy')}
+            >
+              Privacy Policy
+            </Text>
+            . Subscriptions auto-renew unless cancelled at least 24 hours
             before the end of the current period.
           </Text>
         </ScrollView>
@@ -241,9 +275,10 @@ export function PaywallModal({
         {/* Restore Purchases */}
         <View className="px-6 pb-8">
           <Button
-            title="Restore Purchases"
+            title={isRestoring ? 'Restoring...' : 'Restore Purchases'}
             variant="ghost"
-            onPress={() => {}}
+            onPress={handleRestorePurchases}
+            disabled={isRestoring}
             fullWidth
           />
         </View>

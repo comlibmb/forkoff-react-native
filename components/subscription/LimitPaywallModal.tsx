@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, Image, Linking } from 'react-native';
 import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket, Users } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { Button } from '@/components/ui';
@@ -325,6 +325,25 @@ export function LimitPaywallModal({
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Terms */}
+        <Text className="text-dark-500 text-xs text-center px-6 pb-2">
+          By subscribing, you agree to our{' '}
+          <Text
+            className="text-primary-400"
+            onPress={() => Linking.openURL('https://forkoff.app/legal/terms')}
+          >
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text
+            className="text-primary-400"
+            onPress={() => Linking.openURL('https://forkoff.app/legal/privacy')}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
 
         {/* Action buttons */}
         <View className="px-6 pb-8 gap-3">

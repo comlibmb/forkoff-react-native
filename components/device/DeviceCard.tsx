@@ -58,7 +58,7 @@ export function DeviceCard({ device, onPress, compact = false }: DeviceCardProps
 
         <View className="flex-1">
           <View className="flex-row items-center justify-between">
-            <Text className="font-semibold text-lg" style={{ color: theme.text }}>
+            <Text className="font-semibold text-lg flex-1 mr-2" style={{ color: theme.text }} numberOfLines={1}>
               {device.name}
             </Text>
             <StatusBadge status={device.status} size="sm" />
