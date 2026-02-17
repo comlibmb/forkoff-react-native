@@ -47,10 +47,13 @@ export function UpdateRequiredModal({ visible }: UpdateRequiredModalProps) {
   }, [visible]);
 
   const handleOpenStore = () => {
+    const iosAppId = process.env.EXPO_PUBLIC_IOS_APP_STORE_ID;
     const storeUrl = Platform.select({
-      ios: 'https://apps.apple.com/app/forkoff/id123456789', // Replace with actual App Store ID
-      android: 'https://play.google.com/store/apps/details?id=com.forkoff.app',
-      default: 'https://forkoff.dev',
+      ios: iosAppId
+        ? `https://apps.apple.com/app/forkoff/id${iosAppId}`
+        : 'https://apps.apple.com/app/forkoff',
+      android: 'https://play.google.com/store/apps/details?id=app.forkoff',
+      default: 'https://forkoff.app',
     });
 
     if (storeUrl) {

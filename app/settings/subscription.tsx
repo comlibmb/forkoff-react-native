@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -360,7 +360,22 @@ export default function SubscriptionScreen() {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.disclaimer}>Cancel anytime. No hidden fees.</Text>
+        <Text style={styles.disclaimer}>
+          Cancel anytime. No hidden fees.{'\n'}
+          <Text
+            style={{ color: theme.primary }}
+            onPress={() => Linking.openURL('https://forkoff.app/legal/terms')}
+          >
+            Terms of Service
+          </Text>
+          {' \u2022 '}
+          <Text
+            style={{ color: theme.primary }}
+            onPress={() => Linking.openURL('https://forkoff.app/legal/privacy')}
+          >
+            Privacy Policy
+          </Text>
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );

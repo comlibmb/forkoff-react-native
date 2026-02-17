@@ -105,6 +105,28 @@ Navigated to from the Projects tab with `deviceId`, `directory`, `deviceName` pa
 - **Dual session key matching**: Events from CLI carry `sessionKey` (Claude's internal session ID) and `terminalSessionId` (mobile-generated key). Filters must check both: `data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey`
 - **Permission rules sync**: On session start/take-over, mobile sends the user's configured permission rules to CLI via `permission_rules_sync`. The CLI writes them to `os.tmpdir()/forkoff-permissions/rules.json`, which the PreToolUse hook script reads on each invocation.
 
+## App Store Submission Notes
+
+### Subscription / IAP
+- Currently uses **Stripe web checkout** for Pro subscriptions. Apple requires In-App Purchase for digital goods on iOS (guideline 3.1.1).
+- `subscription.service.ts` has placeholder `productId` fields and commented-out RevenueCat init — ready for IAP implementation.
+- Before iOS submission: implement Apple IAP (via RevenueCat or `react-native-iap`), or remove all purchase CTAs from the iOS build.
+
+### Environment Variables (`.env`)
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID` — unused in app code (Google OAuth goes through Supabase server-side), but update if you plan direct Google OAuth.
+- `EXPO_PUBLIC_POSTHOG_API_KEY` — PostHog analytics key (moved from hardcoded to env).
+- `EXPO_PUBLIC_IOS_APP_STORE_ID` — Set after creating app in App Store Connect (used in UpdateRequiredModal).
+- `EXPO_PUBLIC_STRIPE_PRO_PRICE_ID` — Stripe price ID for checkout.
+
+### Legal Pages
+All outbound legal URLs point to `https://forkoff.app/legal/*`:
+- Privacy Policy: `/legal/privacy` — linked from registration, subscription screens, paywall modals
+- Terms of Service: `/legal/terms` — linked from same locations
+- Docs: `/docs` — linked from Settings > Help Center
+
+### Privacy Manifest
+Expo SDK auto-generates the app-level `PrivacyInfo.xcprivacy` during iOS builds. Individual Expo packages (expo-device, expo-constants, async-storage, etc.) include their own privacy manifests in `node_modules`.
+
 ## Reference Documentation
 Always check `docs/` for detailed documentation:
 - `docs/PERMISSION-MODEL.md` — Permission modes, interactive approval flow, configurable rules, hook system

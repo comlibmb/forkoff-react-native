@@ -119,7 +119,7 @@ const DeviceCard = memo(({
 
         <View style={styles.deviceInfo}>
           <View style={styles.deviceTitleRow}>
-            <Text style={[styles.deviceName, { color: theme.text }]}>
+            <Text style={[styles.deviceName, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
               {device.name}
             </Text>
             <View
@@ -506,6 +506,8 @@ const styles = StyleSheet.create({
   deviceName: {
     fontWeight: 'bold',
     fontSize: 16,
+    flex: 1,
+    marginRight: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -515,6 +517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
+    flexShrink: 0,
   },
   statusDot: {
     width: 6,

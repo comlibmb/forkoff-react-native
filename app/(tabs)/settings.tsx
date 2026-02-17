@@ -378,7 +378,7 @@ export default function SettingsScreen() {
           <SettingsItem
             icon={HelpCircle}
             title="Help Center"
-            onPress={() => Linking.openURL('https://forkoff-website.vercel.app/docs')}
+            onPress={() => Linking.openURL('https://forkoff.app/docs')}
             theme={theme}
             rightElement={<ExternalLink size={16} color={theme.textTertiary} />}
           />
