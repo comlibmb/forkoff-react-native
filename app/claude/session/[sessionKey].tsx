@@ -191,6 +191,10 @@ export default function ClaudeSessionScreen() {
   // Track if we've done initial load
   const initialLoadDoneRef = useRef(false);
 
+  // Track the claudeSessionId/transcriptPath that was used for the initial fetch
+  // so we can re-fetch when better data becomes available
+  const fetchedWithClaudeSessionIdRef = useRef<string | undefined>(undefined);
+
   // Track session duration on unmount
   useEffect(() => {
     return () => {
@@ -892,6 +896,7 @@ export default function ClaudeSessionScreen() {
 
       // Request message history from CLI (via API relay)
       console.log('[Session] Requesting SDK session history, claudeSessionId:', session?.claudeSessionId);
+      fetchedWithClaudeSessionIdRef.current = session?.claudeSessionId;
       wsService.emit('sdk_session_history', {
         deviceId,
         sessionKey,
@@ -980,6 +985,51 @@ export default function ClaudeSessionScreen() {
       unsubReconnect();
     };
   }, [sessionKey, deviceId, session?.claudeSessionId, session?.directory]);
+
+  // Re-fetch history when session data becomes available after initial load
+  // This handles the race condition where the initial fetch runs before the session
+  // is loaded into the store, sending sdk_session_history with no claudeSessionId
+  useEffect(() => {
+    if (!sessionKey || !deviceId || !session) return;
+    if (!initialLoadDoneRef.current) return; // Initial load hasn't run yet
+
+    const newClaudeSessionId = session.claudeSessionId;
+    const prevClaudeSessionId = fetchedWithClaudeSessionIdRef.current;
+
+    // If we now have a claudeSessionId that wasn't available during the initial fetch, re-fetch
+    if (newClaudeSessionId && newClaudeSessionId !== prevClaudeSessionId) {
+      console.log('[Session] Session data now available — re-fetching with claudeSessionId:', newClaudeSessionId);
+      fetchedWithClaudeSessionIdRef.current = newClaudeSessionId;
+
+      // Update transcript path ref if session has one
+      if (session.transcriptPath) {
+        transcriptPathRef.current = session.transcriptPath;
+      }
+
+      const transcriptPath = transcriptPathRef.current;
+      if (transcriptPath && transcriptPath.length > 0) {
+        // Switch to legacy mode now that we have the transcript path
+        wsService.emit('transcript_subscribe', { deviceId, sessionKey, transcriptPath });
+        wsService.emit('transcript_fetch', {
+          deviceId,
+          sessionKey,
+          transcriptPath,
+          offset: 0,
+          limit: INITIAL_LOAD,
+          reverse: true,
+        });
+      } else {
+        wsService.emit('sdk_session_history', {
+          deviceId,
+          sessionKey,
+          claudeSessionId: newClaudeSessionId,
+          directory: session.directory,
+          limit: INITIAL_LOAD,
+          offset: 0,
+        });
+      }
+    }
+  }, [sessionKey, deviceId, session?.claudeSessionId, session?.transcriptPath]);
 
   // Listen for session lifecycle when taken over
   useEffect(() => {
@@ -1543,8 +1593,7 @@ export default function ClaudeSessionScreen() {
   }, [entries]);
 
   const directoryName =
-    session?.directory.split('/').pop() ||
-    session?.directory.split('\\').pop() ||
+    session?.directory?.replace(/\\/g, '/').split('/').filter(Boolean).pop() ||
     'Session';
 
   return (
