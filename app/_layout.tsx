@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/auth.store';
+import { useClaudeStore } from '@/stores/claude.store';
 import { useApprovalStore } from '@/stores/approval.store';
 import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
@@ -198,7 +199,24 @@ export default function RootLayout() {
       // For approval notifications, the modal will already be shown via WebSocket
       // Just navigate to the session if we have a sessionKey
       if (data.sessionKey) {
-        router.push(`/claude/session/${data.sessionKey}`);
+        // Look up deviceId from notification data or from the session store
+        let targetDeviceId = data.deviceId as string | undefined;
+        if (!targetDeviceId) {
+          const sessions = useClaudeStore.getState().sessions;
+          for (const [devId, devSessions] of sessions) {
+            if (devSessions.some(s => s.sessionKey === data.sessionKey)) {
+              targetDeviceId = devId;
+              break;
+            }
+          }
+        }
+        router.push({
+          pathname: '/claude/session/[sessionKey]' as any,
+          params: {
+            sessionKey: data.sessionKey as string,
+            ...(targetDeviceId ? { deviceId: targetDeviceId } : {}),
+          },
+        });
       }
     }
   }, [router]);
