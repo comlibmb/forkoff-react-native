@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, Image, Linking } from 'react-native';
 import { X, Zap, MessageSquare, FolderOpen, Monitor, RefreshCw, Smartphone, Gift, Clock, Crown, Ticket, Users } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { alert } from '@/components/ui/AlertModal';
 import { Button } from '@/components/ui';
 import { LimitType, VoucherRedemptionResult } from '@/types';
 import { colors } from '@/theme/colors';
 import { useRouter } from 'expo-router';
 import { analyticsService } from '@/services/analytics.service';
 import { subscriptionService } from '@/services/subscription.service';
+import { useAuthStore } from '@/stores/auth.store';
 import { VoucherRedeemModal, VoucherSuccessModal } from '@/components/voucher';
 import { useUsageStore } from '@/stores/usage.store';
 
@@ -143,6 +145,28 @@ export function LimitPaywallModal({
       limitType,
     });
 
+    const paymentMode = subscriptionService.getPaymentMode();
+
+    if (paymentMode === 'iap') {
+      // Native IAP flow
+      setIsCheckoutLoading(true);
+      try {
+        const result = await subscriptionService.purchaseSubscription('pro_monthly');
+        if (result.success) {
+          await useAuthStore.getState().initialize();
+          onClose();
+          return;
+        } else if (result.error && result.error !== 'Purchase cancelled') {
+          alert.error('Purchase Failed', result.error);
+        }
+      } catch {
+        // Fall back to navigation
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+      return;
+    }
+
     const proPriceId = process.env.EXPO_PUBLIC_STRIPE_PRO_PRICE_ID;
     if (proPriceId) {
       setIsCheckoutLoading(true);
@@ -153,7 +177,6 @@ export function LimitPaywallModal({
             dismissButtonStyle: 'close',
             presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
           });
-          // Close modal when browser dismisses
           onClose();
           return;
         }

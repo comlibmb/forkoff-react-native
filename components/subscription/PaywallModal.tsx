@@ -116,7 +116,24 @@ export function PaywallModal({
   }, [visible]);
 
   const handlePlanSelect = async (plan: Plan) => {
-    if (plan.stripePriceId) {
+    const paymentMode = subscriptionService.getPaymentMode();
+
+    if (paymentMode === 'iap' && plan.id !== 'free') {
+      setIsCheckoutLoading(true);
+      try {
+        const result = await subscriptionService.purchaseSubscription(plan.id);
+        if (result.success) {
+          await useAuthStore.getState().initialize();
+          onClose();
+        } else if (result.error && result.error !== 'Purchase cancelled') {
+          alert.error('Purchase Failed', result.error);
+        }
+      } catch {
+        onSelectPlan(plan);
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+    } else if (plan.stripePriceId) {
       setIsCheckoutLoading(true);
       try {
         const result = await subscriptionService.createCheckoutSession(plan.stripePriceId);
@@ -125,11 +142,9 @@ export function PaywallModal({
             dismissButtonStyle: 'close',
             presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
           });
-          // Close modal - user data will be refreshed by the subscription screen
           onClose();
         }
       } catch {
-        // Fall back to the original handler
         onSelectPlan(plan);
       } finally {
         setIsCheckoutLoading(false);
