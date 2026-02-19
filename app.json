@@ -64,7 +64,8 @@
           "organization": "forkoff-app",
           "project": "react-native"
         }
-      ]
+      ],
+      "react-native-iap"
     ],
     "experiments": {
       "typedRoutes": true

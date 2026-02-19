@@ -309,7 +309,7 @@ export default function AddDeviceScreen() {
 
         {/* Skip */}
         <TouchableOpacity
-          onPress={() => router.push('/(onboarding)/referral-code')}
+          onPress={() => router.replace('/(tabs)')}
           style={{ marginTop: 'auto', padding: 16, paddingBottom: 32, alignItems: 'center' }}
         >
           <Text style={{ color: theme.textTertiary, fontWeight: '500' }}>Skip for now</Text>

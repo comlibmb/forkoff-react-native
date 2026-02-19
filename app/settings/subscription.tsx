@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -144,30 +144,43 @@ export default function SubscriptionScreen() {
 
     setIsLoading(true);
     try {
-      const selectedDisplayPlan = plans.find((p) => p.id === planId);
-      const result = selectedDisplayPlan?.stripePriceId
-        ? await subscriptionService.createCheckoutSession(selectedDisplayPlan.stripePriceId)
-        : await subscriptionService.purchaseSubscription(planId);
-      if (result.success && result.url) {
-        // Open checkout in browser
-        await WebBrowser.openBrowserAsync(result.url, {
-          dismissButtonStyle: 'close',
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        });
+      const paymentMode = subscriptionService.getPaymentMode();
 
-        // Always refresh after browser closes (user may have completed checkout)
-        setIsLoading(true);
-        await initialize();
-
-        // Check if subscription was updated and show feedback
-        const updatedUser = useAuthStore.getState().user;
-        if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentTier) {
-          // Update selected plan to match new subscription
+      if (paymentMode === 'iap') {
+        // Native IAP flow — no browser needed
+        const result = await subscriptionService.purchaseSubscription(planId);
+        if (result.success) {
+          await initialize();
           setSelectedPlan(planId);
           await alert.success('Welcome to Pro!', 'Your subscription is now active');
+        } else if (result.error) {
+          if (result.error !== 'Purchase cancelled') {
+            await alert.error('Error', result.error);
+          }
         }
-      } else if (result.error) {
-        await alert.error('Error', result.error);
+      } else {
+        // Stripe web checkout flow
+        const selectedDisplayPlan = plans.find((p) => p.id === planId);
+        const result = selectedDisplayPlan?.stripePriceId
+          ? await subscriptionService.createCheckoutSession(selectedDisplayPlan.stripePriceId)
+          : await subscriptionService.purchaseSubscription(planId);
+        if (result.success && result.url) {
+          await WebBrowser.openBrowserAsync(result.url, {
+            dismissButtonStyle: 'close',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          });
+
+          setIsLoading(true);
+          await initialize();
+
+          const updatedUser = useAuthStore.getState().user;
+          if (updatedUser?.subscription !== 'free' && updatedUser?.subscription !== currentTier) {
+            setSelectedPlan(planId);
+            await alert.success('Welcome to Pro!', 'Your subscription is now active');
+          }
+        } else if (result.error) {
+          await alert.error('Error', result.error);
+        }
       }
     } catch (error: any) {
       await alert.error('Error', error.message || 'Something went wrong');
@@ -177,6 +190,18 @@ export default function SubscriptionScreen() {
   };
 
   const handleManageSubscription = async () => {
+    const paymentMode = subscriptionService.getPaymentMode();
+
+    if (paymentMode === 'iap') {
+      // Open native subscription management
+      if (Platform.OS === 'ios') {
+        Linking.openURL('https://apps.apple.com/account/subscriptions');
+      } else {
+        Linking.openURL('https://play.google.com/store/account/subscriptions');
+      }
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await subscriptionService.createPortalSession();
@@ -186,12 +211,9 @@ export default function SubscriptionScreen() {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
         });
 
-        // Always refresh when browser closes
         if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-          // Force refresh user data and trigger re-render
           await initialize();
 
-          // Force component to re-read from store
           const updatedUser = useAuthStore.getState().user;
           if (updatedUser?.subscription !== currentTier) {
             await alert.success('Subscription Updated', 'Your subscription has been updated');
