@@ -92,8 +92,8 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       "Single phone session",
     ],
     productId: {
-      ios: "app.forkoff.monthly",
-      android: "app.forkoff.monthly",
+      ios: "app.forkoff.sub.monthly",
+      android: "app.forkoff.sub.monthly",
     },
   },
   {
@@ -106,8 +106,8 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     stripePriceId: STRIPE_PRO_PRICE_ID,
     features: ["Everything in Pro Monthly", "2 months free"],
     productId: {
-      ios: "app.forkoff.yearly",
-      android: "app.forkoff.yearly",
+      ios: "app.forkoff.sub.yearly",
+      android: "app.forkoff.sub.yearly",
     },
   },
 ];
@@ -321,8 +321,8 @@ class SubscriptionService {
       const purchases = await IAP.getAvailablePurchases();
       const proPurchase = purchases.find(
         (p: any) =>
-          p.productId === "app.forkoff.monthly" ||
-          p.productId === "app.forkoff.yearly",
+          p.productId === "app.forkoff.sub.monthly" ||
+          p.productId === "app.forkoff.sub.yearly",
       );
 
       if (!proPurchase) {
