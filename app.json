@@ -24,10 +24,7 @@
         "SKPaymentTransactions": true
       },
       "entitlements": {
-        "com.apple.developer.in-app-payments": [
-          "app.forkoff.sub.monthly",
-          "app.forkoff.sub.yearly"
-        ]
+        "com.apple.developer.in-app-purchases": true
       }
     },
     "android": {
