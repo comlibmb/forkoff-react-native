@@ -23,9 +23,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "SKPaymentTransactions": true
       },
-      "entitlements": {
-        "com.apple.developer.in-app-purchases": true
-      }
+      "entitlements": {}
     },
     "android": {
       "adaptiveIcon": {
