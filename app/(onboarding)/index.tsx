@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Eye, ShieldCheck, MonitorSmartphone, Lock, ListChecks, ArrowRight } from 'lucide-react-native';
+import { Eye, ShieldCheck, MonitorSmartphone, Lock, ListChecks, ArrowRight, Server } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 
 const features = [
@@ -127,6 +127,23 @@ export default function WelcomeScreen() {
             }}
           >
             <Text style={{ color: theme.textTertiary, fontSize: 14 }}>I'll set up later</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/settings/relay')}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              paddingVertical: 10,
+            }}
+          >
+            <Server size={14} color={theme.textTertiary} />
+            <Text style={{ color: theme.textTertiary, fontSize: 13 }}>
+              Advanced: Custom Relay Server
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
