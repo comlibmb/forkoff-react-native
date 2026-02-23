@@ -7,15 +7,12 @@ import { PostHogProvider } from 'posthog-react-native';
 import Constants from 'expo-constants';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuthStore } from '@/stores/auth.store';
+import { useIdentityStore } from '@/stores/identity.store';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useApprovalStore } from '@/stores/approval.store';
 import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
-import { useQueueStore } from '@/stores/queue.store';
-import { useUsageStore } from '@/stores/usage.store';
 import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
@@ -29,7 +26,6 @@ import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { UpdateRequiredModal } from '@/components/ui/UpdateRequiredModal';
 import { AchievementUnlockModal } from '@/components/achievements/AchievementUnlockModal';
-import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { AnimatedSplash } from '@/components/splash/AnimatedSplash';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -67,8 +63,6 @@ function ThemedApp({
   needsUpdate,
   recentUnlock,
   setRecentUnlock,
-  showOnboardingPaywall,
-  setShowOnboardingPaywall,
 }: {
   currentApproval: any;
   handleApprovalRespond: (approvalId: string, response: string) => void;
@@ -76,8 +70,6 @@ function ThemedApp({
   needsUpdate: boolean;
   recentUnlock: any;
   setRecentUnlock: (unlock: any) => void;
-  showOnboardingPaywall: boolean;
-  setShowOnboardingPaywall: (show: boolean) => void;
 }) {
   const { isDark, theme } = useTheme();
 
@@ -92,7 +84,6 @@ function ThemedApp({
         }}
       >
         <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
         <Stack.Screen name="(onboarding)" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
         <Stack.Screen
@@ -130,13 +121,6 @@ function ThemedApp({
             presentation: 'card',
           }}
         />
-        <Stack.Screen
-          name="queue/index"
-          options={{
-            animation: 'slide_from_right',
-            presentation: 'card',
-          }}
-        />
       </Stack>
 
       {/* Global Claude Approval Modal */}
@@ -161,13 +145,6 @@ function ThemedApp({
         onClose={() => setRecentUnlock(null)}
       />
 
-      {/* Onboarding paywall modal for new users */}
-      <LimitPaywallModal
-        visible={showOnboardingPaywall}
-        onClose={() => setShowOnboardingPaywall(false)}
-        limitType="onboarding"
-      />
-
       {/* One-time guided tutorial overlay */}
       <TutorialOverlay />
     </>
@@ -176,7 +153,7 @@ function ThemedApp({
 
 export default function RootLayout() {
   const router = useRouter();
-  const { initialize, isInitialized, isAuthenticated, user } = useAuthStore();
+  const { initialize, isReady, isPaired, mobileDeviceId } = useIdentityStore();
   const {
     currentApproval,
     hideApproval,
@@ -186,9 +163,6 @@ export default function RootLayout() {
   const { initialize: initializeConnection } = useConnectionStore();
   const { needsUpdate, checkVersion } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
-  const { addQueueItem, updateQueueItem, updatePendingCount } = useQueueStore();
-  const { fetchUsage } = useUsageStore();
-  const [showOnboardingPaywall, setShowOnboardingPaywall] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   // Handle notification tap - navigate to approval or session
@@ -196,10 +170,7 @@ export default function RootLayout() {
     const data = response.notification.request.content.data;
 
     if (data?.type === 'claude_approval' && data?.approvalId) {
-      // For approval notifications, the modal will already be shown via WebSocket
-      // Just navigate to the session if we have a sessionKey
       if (data.sessionKey) {
-        // Look up deviceId from notification data or from the session store
         let targetDeviceId = data.deviceId as string | undefined;
         if (!targetDeviceId) {
           const sessions = useClaudeStore.getState().sessions;
@@ -224,190 +195,67 @@ export default function RootLayout() {
   useEffect(() => {
     async function initializeApp() {
       try {
-        // Initialize auth
+        // Initialize identity (loads device ID + paired devices from secure storage)
         await initialize();
 
         // Initialize notifications
         await notificationService.initialize();
 
-        // Connect WebSocket if authenticated
-        if (isAuthenticated) {
-          await wsService.connect();
-
-          // Register for push notifications
-          await notificationService.registerForPushNotifications();
-        }
-
         // Track app opened
         analyticsService.track('app_opened');
       } catch (error) {
-        console.error('Failed to initialize app:', error);
+        console.error('Failed to initialize app:', (error as Error).message);
         sentryService.captureException(error, { context: 'app_initialization' });
-      } finally {
-        // Native splash is now hidden by AnimatedSplash component
       }
     }
 
     initializeApp();
   }, [initialize]);
 
-  // Identify user in analytics/sentry when auth state changes
+  // Identify device in analytics/sentry when identity is ready
   useEffect(() => {
-    if (user) {
-      sentryService.setUser({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      });
-      analyticsService.identify(user.id, {
-        email: user.email,
-        name: user.name,
-      });
-      analyticsService.setUserProperties({
-        subscription_tier: user.subscription || 'free',
+    if (mobileDeviceId) {
+      sentryService.setUser({ id: mobileDeviceId });
+      analyticsService.identify(mobileDeviceId, {
         app_version: Constants.expoConfig?.version,
-        is_lifetime_pro: user.isLifetimePro || false,
       });
-
-      // Fetch usage data
-      fetchUsage();
-
-      // Check if this is a new user who should see onboarding paywall
-      const checkOnboardingPaywall = async () => {
-        try {
-          const paywallKey = `paywall_shown_${user.id}`;
-          const hasSeenPaywall = await AsyncStorage.getItem(paywallKey);
-
-          if (hasSeenPaywall) return;
-
-          // Check if user was created within last 5 minutes
-          const createdAt = new Date(user.createdAt).getTime();
-          const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-          const isNewUser = createdAt > fiveMinutesAgo;
-
-          if (isNewUser && user.subscription === 'free') {
-            setShowOnboardingPaywall(true);
-            await AsyncStorage.setItem(paywallKey, 'true');
-            analyticsService.track('onboarding_paywall_shown');
-          }
-        } catch (error) {
-          console.error('Failed to check onboarding paywall:', error);
-        }
-      };
-
-      checkOnboardingPaywall();
-    } else {
-      sentryService.setUser(null);
-      analyticsService.reset();
     }
-  }, [user, fetchUsage]);
+  }, [mobileDeviceId]);
 
-  // Connect/disconnect WebSocket based on auth state
+  // Connect/disconnect WebSocket based on pairing state
   useEffect(() => {
-    if (isInitialized) {
-      if (isAuthenticated) {
-        // Clear kicked flag on new login
-        useConnectionStore.getState().setWasKicked(false);
+    if (isReady) {
+      if (isPaired) {
         wsService.connect();
 
-        // Register for push notifications when authenticated
+        // Register for push notifications when paired
         notificationService.registerForPushNotifications();
       } else {
         wsService.disconnect();
       }
     }
-  }, [isAuthenticated, isInitialized]);
-
-  // Handle session_claimed: another device logged in with this account
-  const isHandlingKick = useRef(false);
-  useEffect(() => {
-    if (isAuthenticated && isInitialized) {
-      const unsubscribe = wsService.on('session_claimed', async (data) => {
-        if (isHandlingKick.current) return;
-        isHandlingKick.current = true;
-
-        // Mark as kicked to prevent auto-reconnect
-        useConnectionStore.getState().setWasKicked(true);
-
-        // Disconnect WebSocket immediately
-        wsService.disconnect();
-
-        // Alert the user
-        const { alert } = await import('@/components/ui/AlertModal');
-        alert.warning(
-          'Session Ended',
-          data.message || 'Your account was signed in on another device.',
-        );
-
-        // Sign out and navigate to login
-        const { signOut } = useAuthStore.getState();
-        await signOut();
-        router.replace('/(auth)/login');
-        isHandlingKick.current = false;
-      });
-
-      return () => unsubscribe();
-    }
-  }, [isAuthenticated, isInitialized, router]);
+  }, [isPaired, isReady]);
 
   // Subscribe to approval events when WebSocket is connected
   useEffect(() => {
-    if (isAuthenticated && isInitialized) {
+    if (isPaired && isReady) {
       const unsubscribe = subscribeToApprovals();
       return () => unsubscribe();
     }
-  }, [isAuthenticated, isInitialized, subscribeToApprovals]);
+  }, [isPaired, isReady, subscribeToApprovals]);
 
-  // Subscribe to achievement and queue events
+  // Subscribe to achievement events
   useEffect(() => {
-    if (isAuthenticated && isInitialized) {
-      // Achievement unlocked
+    if (isPaired && isReady) {
       const unsubAchievement = wsService.on('achievement_unlocked', (data) => {
         setRecentUnlock(data.achievement as any);
       });
 
-      // Prompt queued
-      const unsubQueued = wsService.on('prompt_queued', (data) => {
-        addQueueItem({
-          id: data.queueItemId,
-          userId: user?.id || '',
-          deviceId: data.deviceId,
-          sessionKey: data.sessionKey || null,
-          prompt: data.prompt,
-          status: 'PENDING',
-          priority: 0,
-          rateLimitReason: data.rateLimitReason || null,
-          retryAfter: data.retryAfter || null,
-          scheduledFor: null,
-          executedAt: null,
-          errorMessage: null,
-          createdAt: data.createdAt,
-          updatedAt: data.createdAt,
-        });
-      });
-
-      // Queue item executed
-      const unsubExecuted = wsService.on('queue_item_executed', (data) => {
-        updateQueueItem(data.queueItemId, {
-          status: data.success ? 'COMPLETED' : 'FAILED',
-          errorMessage: data.errorMessage || null,
-          executedAt: data.executedAt,
-        });
-      });
-
-      // Queue updated
-      const unsubUpdated = wsService.on('queue_updated', (data) => {
-        updatePendingCount(data.pendingCount);
-      });
-
       return () => {
         unsubAchievement();
-        unsubQueued();
-        unsubExecuted();
-        unsubUpdated();
       };
     }
-  }, [isAuthenticated, isInitialized, user, setRecentUnlock, addQueueItem, updateQueueItem, updatePendingCount]);
+  }, [isPaired, isReady, setRecentUnlock]);
 
   // Initialize connection monitoring
   useEffect(() => {
@@ -415,23 +263,21 @@ export default function RootLayout() {
     return cleanup;
   }, [initializeConnection]);
 
-  // Check version when app starts and after auth
+  // Check version when app starts
   useEffect(() => {
-    if (isInitialized) {
+    if (isReady) {
       checkVersion();
     }
-  }, [isInitialized, checkVersion]);
+  }, [isReady, checkVersion]);
 
   // Handle notification responses (when user taps a notification)
   useEffect(() => {
-    // Check if app was opened from a notification
     notificationService.getLastNotificationResponse().then((response) => {
       if (response) {
         handleNotificationTap(response);
       }
     });
 
-    // Listen for notification taps while app is running
     const subscription = notificationService.addNotificationResponseListener(handleNotificationTap);
 
     return () => subscription.remove();
@@ -442,7 +288,7 @@ export default function RootLayout() {
     respondToApproval(approvalId, response);
   }, [respondToApproval]);
 
-  if (!isInitialized) {
+  if (!isReady) {
     return null;
   }
 
@@ -467,8 +313,6 @@ export default function RootLayout() {
                     needsUpdate={needsUpdate}
                     recentUnlock={recentUnlock}
                     setRecentUnlock={setRecentUnlock}
-                    showOnboardingPaywall={showOnboardingPaywall}
-                    setShowOnboardingPaywall={setShowOnboardingPaywall}
                   />
                 </ScreenTracker>
                 </QueryClientProvider>

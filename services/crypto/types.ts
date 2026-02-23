@@ -34,16 +34,27 @@ export interface SessionKeys {
   lastReceivedCounter: number; // Last received counter (replay protection)
 }
 
+/** Ed25519 signing key pair for identity verification during key exchange */
+export interface SigningKeyPair {
+  publicKey: string;   // Base64-encoded 32-byte Ed25519 public key
+  secretKey: string;   // Base64-encoded 64-byte Ed25519 secret key (NEVER sent to server)
+}
+
 /** Key exchange initiation (sender → recipient via server) */
 export interface KeyExchangeInit {
   senderDeviceId: string;
   ephemeralPublicKey: string; // Base64-encoded X25519 public key
+  identityPublicKey?: string; // Base64-encoded Ed25519 public key for TOFU verification
+  signature?: string;         // Base64-encoded Ed25519 signature over exchange payload
 }
 
 /** Key exchange acknowledgment (recipient → sender via server) */
 export interface KeyExchangeAck {
-  recipientDeviceId: string;
-  ephemeralPublicKey: string; // Base64-encoded X25519 public key
+  senderDeviceId: string;     // Device that computed the ack (the responder)
+  recipientDeviceId: string;  // Device that initiated the exchange (the initiator)
+  ephemeralPublicKey: string;  // Base64-encoded X25519 public key
+  identityPublicKey?: string; // Base64-encoded Ed25519 public key for TOFU verification
+  signature?: string;         // Base64-encoded Ed25519 signature over exchange payload
 }
 
 /** Public key data stored on server */

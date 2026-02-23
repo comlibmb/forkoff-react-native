@@ -41,6 +41,8 @@ export interface ClaudeApprovalRequest {
   options: string[];       // Available options (e.g., ['y:yes', 'n:no'])
   promptText: string;      // The actual prompt text
   timestamp: string;
+  toolName?: string;       // Structured tool name from CLI SDK (e.g., 'Edit', 'Bash')
+  toolInput?: any;         // Structured tool input from CLI SDK
 }
 
 /**
@@ -113,6 +115,15 @@ function sanitizeApprovalRequest(data: Partial<ClaudeApprovalRequest>): ClaudeAp
     }
   }
 
+  // SECURITY: Sanitize toolName (strict alphanumeric + underscores, max 50 chars)
+  let toolName: string | undefined = undefined;
+  if (typeof data.toolName === 'string' && data.toolName.length > 0) {
+    const sanitized = data.toolName.substring(0, 50);
+    if (/^[a-zA-Z0-9_]+$/.test(sanitized)) {
+      toolName = sanitized;
+    }
+  }
+
   return {
     approvalId: data.approvalId,
     terminalSessionId: typeof data.terminalSessionId === 'string' ? data.terminalSessionId : '',
@@ -122,6 +133,17 @@ function sanitizeApprovalRequest(data: Partial<ClaudeApprovalRequest>): ClaudeAp
     options,
     promptText,
     timestamp: typeof data.timestamp === 'string' ? data.timestamp : new Date().toISOString(),
+    toolName,
+    toolInput: (() => {
+      if (data.toolInput === undefined) return undefined;
+      try {
+        const serialized = JSON.stringify(data.toolInput);
+        if (serialized.length <= 10000) return data.toolInput;
+        return { _truncated: true, _originalSize: serialized.length };
+      } catch {
+        return { _error: 'unserializable' };
+      }
+    })(),
   };
 }
 
@@ -280,7 +302,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
         deviceId: approval.deviceId,
         sessionKey: approval.sessionKey,
       });
-      console.log('[ApprovalStore] Sent approval response:', approvalId, '->', response);
+      console.log('[ApprovalStore] Sent approval response:', approvalId);
 
       // Track approval responded event
       analyticsService.track('approval_responded', {
@@ -290,7 +312,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
         sessionKey: approval.sessionKey,
       });
     } catch (error) {
-      console.error('[ApprovalStore] Error sending approval response:', error);
+      console.error('[ApprovalStore] Error sending approval response:', (error as Error).message);
       sentryService.captureException(error, { context: 'approval_response', approvalId });
     }
 
@@ -333,7 +355,18 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
       }
 
       // Auto-approve Edit tool requests — user already has edit access
-      const isEditTool = /Claude (?:is using|wants to use):?\s*Edit/i.test(approval.promptText);
+      // SECURITY: Prefer structured toolName field (tamper-proof, set by CLI from SDK data)
+      // Fallback to regex on promptText for backward compat with old CLI versions
+      let isEditTool = false;
+      if (approval.toolName) {
+        isEditTool = approval.toolName === 'Edit';
+      } else {
+        // BACKWARD COMPAT: Regex fallback for old CLI versions without toolName field
+        isEditTool = /Claude (?:is using|wants to use):?\s*Edit/i.test(approval.promptText);
+        if (isEditTool) {
+          console.warn('[ApprovalStore] Using legacy regex auto-approve (CLI should send toolName field)');
+        }
+      }
       if (isEditTool) {
         console.log('[ApprovalStore] Auto-approving Edit tool request:', approval.approvalId);
         try {
@@ -346,7 +379,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
             tool: 'Edit',
           });
         } catch (error) {
-          console.error('[ApprovalStore] Error auto-approving Edit:', error);
+          console.error('[ApprovalStore] Error auto-approving Edit:', (error as Error).message);
           sentryService.captureException(error, { context: 'auto_approve_edit', approvalId: approval.approvalId });
         }
         return;

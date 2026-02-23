@@ -88,7 +88,7 @@ export default function AddDeviceScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/(onboarding)/referral-code')}
+              onPress={() => router.replace('/(tabs)')}
               style={{
                 backgroundColor: theme.primary,
                 borderRadius: 12,

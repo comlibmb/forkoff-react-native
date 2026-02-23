@@ -44,10 +44,11 @@ jest.mock('socket.io-client', () => ({
   Socket: class MockSocket {},
 }));
 
-// Mock auth service
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    getAccessToken: jest.fn().mockResolvedValue('mock-access-token'),
+// Mock pairing service
+jest.mock('@/services/pairing.service', () => ({
+  pairingService: {
+    getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
+    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
   },
 }));
 

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { TokenUsageDaily, UsageStats, StreakInfo } from '@/types';
-import { apiClient } from '@/services/api.client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const DAILY_USAGE_KEY = '@forkoff/analytics_daily';
+const USAGE_STATS_KEY = '@forkoff/analytics_stats';
+const STREAK_KEY = '@forkoff/analytics_streak';
 
 interface AnalyticsState {
   dailyUsage: TokenUsageDaily[];
@@ -33,12 +37,12 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      const response = await apiClient.get<UsageStats>(
-        `/analytics/usage?period=${selectedPeriod}`,
-      );
+      // Load from local storage
+      const raw = await AsyncStorage.getItem(USAGE_STATS_KEY);
+      const stats: UsageStats | null = raw ? JSON.parse(raw) : null;
 
       set({
-        usageStats: response,
+        usageStats: stats,
         selectedPeriod,
         isLoading: false,
       });
@@ -50,24 +54,15 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
     }
   },
 
-  fetchDailyUsage: async (startDate, endDate) => {
+  fetchDailyUsage: async () => {
     try {
       set({ isLoading: true, error: null });
 
-      let url = '/analytics/daily';
-      const params: string[] = [];
-
-      if (startDate) params.push(`startDate=${startDate}`);
-      if (endDate) params.push(`endDate=${endDate}`);
-
-      if (params.length > 0) {
-        url += `?${params.join('&')}`;
-      }
-
-      const response = await apiClient.get<TokenUsageDaily[]>(url);
+      const raw = await AsyncStorage.getItem(DAILY_USAGE_KEY);
+      const daily: TokenUsageDaily[] = raw ? JSON.parse(raw) : [];
 
       set({
-        dailyUsage: response,
+        dailyUsage: daily,
         isLoading: false,
       });
     } catch (error) {
@@ -80,10 +75,11 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
 
   fetchStreakInfo: async () => {
     try {
-      const response = await apiClient.get<StreakInfo>('/analytics/streak');
-      set({ streakInfo: response });
+      const raw = await AsyncStorage.getItem(STREAK_KEY);
+      const streak: StreakInfo | null = raw ? JSON.parse(raw) : null;
+      set({ streakInfo: streak });
     } catch (error) {
-      console.error('Failed to fetch streak info:', error);
+      console.error('Failed to fetch streak info:', (error as Error).message);
     }
   },
 
@@ -101,14 +97,17 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       const newInput = currentInput + BigInt(inputTokens);
       const newOutput = currentOutput + BigInt(outputTokens);
 
-      return {
-        usageStats: {
-          ...state.usageStats,
-          totalInputTokens: newInput.toString(),
-          totalOutputTokens: newOutput.toString(),
-          totalTokens: (newInput + newOutput).toString(),
-        },
+      const updatedStats = {
+        ...state.usageStats,
+        totalInputTokens: newInput.toString(),
+        totalOutputTokens: newOutput.toString(),
+        totalTokens: (newInput + newOutput).toString(),
       };
+
+      // Persist updated stats
+      AsyncStorage.setItem(USAGE_STATS_KEY, JSON.stringify(updatedStats)).catch(() => {});
+
+      return { usageStats: updatedStats };
     });
   },
 

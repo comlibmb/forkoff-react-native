@@ -1,40 +1,11 @@
-// User & Auth Types
+// User type is no longer needed for auth — kept minimal for interface compatibility
 export interface User {
   id: string;
-  email: string;
-  username?: string;
-  name: string;
-  avatarUrl?: string;
-  createdAt: string;
-  subscription: SubscriptionTier;
-  country?: string;
-  // Stripe subscription fields
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
-  stripePriceId?: string | null;
-  stripeCurrentPeriodEnd?: string | null;
-}
-
-export type SubscriptionTier = 'free' | 'pro';
-
-export interface AuthState {
-  user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface RegisterCredentials {
-  email: string;
-  password: string;
   name: string;
 }
+
+// Subscription tier kept for interface compatibility (always 'free' in open source)
+export type SubscriptionTier = 'free';
 
 // Device Types
 export type DeviceStatus = 'online' | 'offline' | 'syncing' | 'ONLINE' | 'OFFLINE' | 'SYNCING';
@@ -355,59 +326,19 @@ export interface UnlockedAchievement {
   showcased: boolean;
 }
 
-// ==================== QUEUE TYPES ====================
-
-export type QueueItemStatus =
-  | 'PENDING'
-  | 'SCHEDULED'
-  | 'EXECUTING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'CANCELLED';
-
-export interface PromptQueueItem {
-  id: string;
-  userId: string;
-  deviceId: string;
-  sessionKey: string | null;
-  prompt: string;
-  status: QueueItemStatus;
-  priority: number;
-  rateLimitReason: string | null;
-  retryAfter: string | null;
-  scheduledFor: string | null;
-  executedAt: string | null;
-  errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface QueueSchedule {
-  id: string;
-  userId: string;
-  enabled: boolean;
-  scheduledTime: string; // HH:mm format
-  daysOfWeek: number[]; // 0=Sunday, 1=Monday, etc.
-  createdAt: string;
-  updatedAt: string;
-}
-
-// ==================== SUBSCRIPTION LIMITS TYPES ====================
+// ==================== SUBSCRIPTION LIMITS TYPES (open source: all unlimited) ====================
 
 export type LimitType =
   | 'messages_daily'
   | 'sessions_monthly'
   | 'projects_max'
   | 'devices_max'
-  | 'repairs_monthly'
-  | 'phone_session';
+  | 'repairs_monthly';
 
 export interface SubscriptionUsage {
   messagesUsedToday: number;
-  messageLimitResetAt: string;
   sessionsUsedThisMonth: number;
   repairsUsedThisMonth: number;
-  monthlyLimitResetAt: string;
   activeProjectCount: number;
   pairedDeviceCount: number;
 }
@@ -427,116 +358,4 @@ export interface SubscriptionLimits {
   maxDevices: number;
   repairsPerMonth: number;
   historyRetentionDays: number;
-  maxPhoneSessions?: number;
-}
-
-/** Server-provided limits keyed by tier (values use -1 for unlimited) */
-export interface ServerSubscriptionLimits {
-  free: SubscriptionLimits;
-  pro: SubscriptionLimits;
-}
-
-// ==================== SERVER PLAN TYPES ====================
-
-export interface ServerPlanFeature {
-  name: string;
-  included: boolean;
-}
-
-export interface ServerPlan {
-  id: string;
-  name: string;
-  tier: SubscriptionTier;
-  price: number;
-  originalPrice?: number;
-  currency: string;
-  interval: 'month' | 'year';
-  features: ServerPlanFeature[];
-  popular?: boolean;
-  badge?: string;
-  stripePriceId?: string;
-  productId: { ios: string; android: string };
-}
-
-export interface PromotionBanner {
-  text: string;
-  backgroundColor?: string;
-  textColor?: string;
-  expiresAt?: string;
-}
-
-export interface ServerPlansResponse {
-  plans: ServerPlan[];
-  promotionBanner?: PromotionBanner;
-  allowPromotionCodes: boolean;
-}
-
-// ==================== VOUCHER TYPES ====================
-
-export type VoucherType = 'LIFETIME_PRO' | 'CAMPAIGN' | 'SINGLE_USE';
-export type VoucherBenefitType = 'FREE_MONTHS' | 'LIFETIME_PRO' | 'DISCOUNT_PERCENT';
-
-export interface VoucherBenefit {
-  type: VoucherBenefitType;
-  value: number;
-  expiresAt?: string;
-  description: string;
-}
-
-export interface VoucherRedemptionResult {
-  success: boolean;
-  message: string;
-  benefit?: VoucherBenefit;
-}
-
-export interface VoucherValidationResult {
-  valid: boolean;
-  message: string;
-  benefit?: VoucherBenefit;
-}
-
-export interface VoucherRedemptionHistory {
-  id: string;
-  code: string;
-  benefitType: VoucherBenefitType;
-  benefitValue: number;
-  benefitExpiresAt?: string;
-  redeemedAt: string;
-  campaignName?: string;
-}
-
-// ==================== REFERRAL TYPES ====================
-
-export interface ReferralStats {
-  totalReferrals: number;
-  successfulConversions: number;
-  rewardMonthsAvailable: number;
-  nextRewardProgress: number; // Progress towards next tier
-  nextRewardTarget: number; // Conversions needed for next reward (3, 6, 9, ...)
-}
-
-export interface ReferralCodeResponse {
-  referralCode: string;
-  shareUrl: string;
-  stats: ReferralStats;
-}
-
-export interface ReferralListItem {
-  id: string;
-  referredUserEmail?: string;
-  signedUpAt: string;
-  isConverted: boolean;
-  convertedAt?: string;
-}
-
-export interface ClaimRewardResult {
-  success: boolean;
-  message: string;
-  monthsClaimed?: number;
-  newExpiresAt?: string;
-}
-
-export interface ApplyReferralResult {
-  success: boolean;
-  message: string;
 }

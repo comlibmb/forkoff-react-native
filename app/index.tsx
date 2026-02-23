@@ -1,14 +1,12 @@
-import { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
-import { useAuthStore } from '@/stores/auth.store';
+import { useIdentityStore } from '@/stores/identity.store';
 import { colors } from '@/theme/colors';
 
 export default function Index() {
-  const { isAuthenticated, isInitialized } = useAuthStore();
+  const { isPaired, isReady } = useIdentityStore();
 
-  // Show loading only while initializing (not during sign-in — login screen handles that)
-  if (!isInitialized) {
+  if (!isReady) {
     return (
       <View className="flex-1 items-center justify-center bg-dark-900">
         <ActivityIndicator size="large" color={colors.primary[500]} />
@@ -16,10 +14,10 @@ export default function Index() {
     );
   }
 
-  // Redirect based on auth state
-  if (isAuthenticated) {
+  // Paired → main app, otherwise → onboarding (device pairing)
+  if (isPaired) {
     return <Redirect href="/(tabs)" />;
   }
 
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(onboarding)" />;
 }

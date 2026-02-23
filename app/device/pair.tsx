@@ -39,6 +39,10 @@ export default function PairDeviceScreen() {
 
     try {
       const pairingCode = data.replace('forkoff://pair/', '');
+      // Validate pairing code format (alphanumeric, 6-36 chars)
+      if (!/^[A-Za-z0-9_-]{6,36}$/.test(pairingCode)) {
+        throw new Error('Invalid pairing code format');
+      }
       const device = await pairDevice(pairingCode);
       setPairedDeviceName(device.name);
       setIsPaired(true);

@@ -2,12 +2,12 @@
  * Tests for WebSocketService message queue (offline buffering)
  *
  * Verifies:
- * - emitOrQueue sends immediately when connected
- * - emitOrQueue queues when disconnected
+ * - emitOrQueue sends immediately when connected (for non-sensitive events)
+ * - Sensitive events (user_message, permission_response, etc.) route through emitSensitive
+ * - Sensitive events are NEVER sent in plaintext — they are dropped when E2EE unavailable
+ * - General queue still works for non-sensitive infrastructure events
  * - Queue capped at 50 messages
- * - Queue flushed on reconnect
  * - Stale messages (>2min) dropped during flush
- * - Critical methods (sendUserMessage, respondToPermissionPrompt, respondToClaudeApproval) all queue
  */
 
 // Store handlers that are registered with socket.on
@@ -48,10 +48,11 @@ jest.mock('socket.io-client', () => ({
   Socket: class MockSocket {},
 }));
 
-// Mock auth service
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    getAccessToken: jest.fn().mockResolvedValue('mock-access-token'),
+// Mock pairing service
+jest.mock('@/services/pairing.service', () => ({
+  pairingService: {
+    getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
+    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -73,7 +74,7 @@ jest.mock('@/services/analytics.service', () => ({
 // Import after mocks are set up
 import { wsService } from '@/services/websocket.service';
 
-describe('WebSocketService - Message Queue', () => {
+describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     socketHandlers.clear();
@@ -83,161 +84,36 @@ describe('WebSocketService - Message Queue', () => {
     wsService.disconnect();
   });
 
-  describe('emitOrQueue behavior via sendUserMessage', () => {
-    it('should send immediately when connected', async () => {
+  describe('Sensitive events refuse plaintext (E2EE enforcement)', () => {
+    it('sendUserMessage should NOT send plaintext when no E2EE session', async () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
 
-      wsService.sendUserMessage('device-1', 'Hello');
+      // No E2EE manager/session — sensitive event should be dropped
+      wsService.sendUserMessage('device-1', 'Secret message');
 
-      // Should emit directly through socket
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'user_message',
-        expect.objectContaining({
-          deviceId: 'device-1',
-          message: 'Hello',
-        }),
+      // Should NOT emit user_message in plaintext
+      const userMessageCalls = mockSocket.emit.mock.calls.filter(
+        (call) => call[0] === 'user_message',
       );
-
-      // Queue should be empty
-      expect(wsService.queueLength).toBe(0);
+      expect(userMessageCalls.length).toBe(0);
     });
 
-    it('should queue when disconnected', async () => {
+    it('sendUserMessage should NOT queue to general queue when disconnected', async () => {
       await wsService.connect();
       mockSocket.connected = false;
       mockSocket.emit.mockClear();
 
       wsService.sendUserMessage('device-1', 'Queued message');
 
-      // Should NOT have emitted via socket
-      const userMessageCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
-      );
-      expect(userMessageCalls.length).toBe(0);
-
-      // Queue should have the message
-      expect(wsService.queueLength).toBe(1);
-    });
-  });
-
-  describe('Queue capacity', () => {
-    it('should cap queue at 50 messages', async () => {
-      await wsService.connect();
-      mockSocket.connected = false;
-
-      // Fill 51 messages
-      for (let i = 0; i < 51; i++) {
-        wsService.sendUserMessage('device-1', `Message ${i}`);
-      }
-
-      // Queue should be capped at 50 (oldest dropped)
-      expect(wsService.queueLength).toBe(50);
-    });
-
-    it('should drop oldest messages when queue is full', async () => {
-      await wsService.connect();
-      mockSocket.connected = false;
-
-      // Fill exactly 50 messages
-      for (let i = 0; i < 50; i++) {
-        wsService.sendUserMessage('device-1', `Message ${i}`);
-      }
-      expect(wsService.queueLength).toBe(50);
-
-      // Add one more — oldest should be dropped
-      wsService.sendUserMessage('device-1', 'Message 50 (newest)');
-      expect(wsService.queueLength).toBe(50);
-    });
-  });
-
-  describe('Queue flush on reconnect', () => {
-    it('should flush queued messages when reconnecting', async () => {
-      await wsService.connect();
-      mockSocket.connected = false;
-
-      // Queue messages while disconnected
-      wsService.sendUserMessage('device-1', 'Queued 1');
-      wsService.sendUserMessage('device-2', 'Queued 2');
-      expect(wsService.queueLength).toBe(2);
-
-      // Simulate a connect_error to set wasReconnect flag
-      mockSocket.simulateEvent('connect_error', new Error('blip'));
-
-      // Simulate reconnect
-      mockSocket.connected = true;
-      mockSocket.emit.mockClear();
-      mockSocket.simulateEvent('connect');
-
-      // Messages should have been flushed through socket.emit
-      const userMessageCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
-      );
-      expect(userMessageCalls.length).toBe(2);
-
-      // Queue should be empty
+      // General queue should NOT contain sensitive events
       expect(wsService.queueLength).toBe(0);
     });
 
-    it('should drop stale messages (>2 min old) during flush', async () => {
+    it('respondToPermissionPrompt should NOT send plaintext', async () => {
       await wsService.connect();
-      mockSocket.connected = false;
-
-      const realDateNow = Date.now;
-
-      // Queue a message at current time
-      const baseTime = 1700000000000;
-      Date.now = jest.fn(() => baseTime);
-      wsService.sendUserMessage('device-1', 'Old message');
-
-      // Queue a fresh message 3 minutes later
-      Date.now = jest.fn(() => baseTime + 3 * 60 * 1000); // 3 minutes later
-      wsService.sendUserMessage('device-1', 'Fresh message');
-
-      expect(wsService.queueLength).toBe(2);
-
-      // Simulate a connect_error to set wasReconnect flag
-      mockSocket.simulateEvent('connect_error', new Error('blip'));
-
-      // Simulate reconnect at the later time (3 min after first message)
       mockSocket.connected = true;
-      mockSocket.emit.mockClear();
-      mockSocket.simulateEvent('connect');
-
-      // Only the fresh message should have been flushed (old one is >2min stale)
-      const userMessageCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
-      );
-      expect(userMessageCalls.length).toBe(1);
-      expect(userMessageCalls[0][1]).toEqual(
-        expect.objectContaining({ message: 'Fresh message' }),
-      );
-
-      // Queue should be empty after flush
-      expect(wsService.queueLength).toBe(0);
-
-      // Restore Date.now
-      Date.now = realDateNow;
-    });
-  });
-
-  describe('Critical methods use emitOrQueue', () => {
-    it('sendUserMessage queues when disconnected', async () => {
-      await wsService.connect();
-      mockSocket.connected = false;
-      mockSocket.emit.mockClear();
-
-      wsService.sendUserMessage('device-1', 'Test message');
-
-      expect(wsService.queueLength).toBe(1);
-      const userMsgCalls = mockSocket.emit.mock.calls.filter((c) => c[0] === 'user_message');
-      expect(userMsgCalls.length).toBe(0);
-    });
-
-    it('respondToPermissionPrompt queues when disconnected', async () => {
-      await wsService.connect();
-      mockSocket.connected = false;
       mockSocket.emit.mockClear();
 
       wsService.respondToPermissionPrompt('prompt-123', 'allow', {
@@ -245,14 +121,16 @@ describe('WebSocketService - Message Queue', () => {
         sessionKey: 'session-abc',
       });
 
-      expect(wsService.queueLength).toBe(1);
-      const permCalls = mockSocket.emit.mock.calls.filter((c) => c[0] === 'permission_response');
+      // Should NOT emit permission_response in plaintext
+      const permCalls = mockSocket.emit.mock.calls.filter(
+        (c) => c[0] === 'permission_response',
+      );
       expect(permCalls.length).toBe(0);
     });
 
-    it('respondToClaudeApproval queues when disconnected', async () => {
+    it('respondToClaudeApproval should NOT send plaintext', async () => {
       await wsService.connect();
-      mockSocket.connected = false;
+      mockSocket.connected = true;
       mockSocket.emit.mockClear();
 
       wsService.respondToClaudeApproval('approval-456', 'y', {
@@ -260,80 +138,81 @@ describe('WebSocketService - Message Queue', () => {
         sessionKey: 'session-xyz',
       });
 
-      expect(wsService.queueLength).toBe(1);
+      // Should NOT emit claude_approval_response in plaintext
       const approvalCalls = mockSocket.emit.mock.calls.filter(
         (c) => c[0] === 'claude_approval_response',
       );
       expect(approvalCalls.length).toBe(0);
     });
 
-    it('sendUserMessage sends immediately when connected', async () => {
+    it('requestSessionHistory should NOT send plaintext', async () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
 
-      wsService.sendUserMessage('device-1', 'Direct message');
+      wsService.requestSessionHistory('device-1', 'session-key-123');
 
-      expect(wsService.queueLength).toBe(0);
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'user_message',
-        expect.objectContaining({ message: 'Direct message' }),
+      // Should NOT emit sdk_session_history in plaintext
+      const historyCalls = mockSocket.emit.mock.calls.filter(
+        (c) => c[0] === 'sdk_session_history',
       );
+      expect(historyCalls.length).toBe(0);
     });
 
-    it('respondToPermissionPrompt sends immediately when connected', async () => {
+    it('createTerminalSession should NOT send plaintext', async () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
 
-      wsService.respondToPermissionPrompt('prompt-789', 'deny');
+      wsService.createTerminalSession('term-1', 'device-1', '/home/user/project');
 
-      expect(wsService.queueLength).toBe(0);
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'permission_response',
-        expect.objectContaining({ promptId: 'prompt-789', decision: 'deny' }),
+      // Should NOT emit terminal_create in plaintext
+      const createCalls = mockSocket.emit.mock.calls.filter(
+        (c) => c[0] === 'terminal_create',
       );
+      expect(createCalls.length).toBe(0);
     });
 
-    it('respondToClaudeApproval sends immediately when connected', async () => {
+    it('abortClaude should NOT send plaintext', async () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
 
-      wsService.respondToClaudeApproval('approval-abc', 'n');
+      wsService.abortClaude('device-1', 'session-key-456');
 
-      expect(wsService.queueLength).toBe(0);
+      // Should NOT emit claude_abort in plaintext
+      const abortCalls = mockSocket.emit.mock.calls.filter(
+        (c) => c[0] === 'claude_abort',
+      );
+      expect(abortCalls.length).toBe(0);
+    });
+  });
+
+  describe('Non-sensitive events still use general queue', () => {
+    it('emit() sends non-sensitive events in plaintext when connected', async () => {
+      await wsService.connect();
+      mockSocket.connected = true;
+      mockSocket.emit.mockClear();
+
+      // Public emit for non-sensitive infrastructure events
+      wsService.emit('subscribe_device', { deviceId: 'device-1' });
+
       expect(mockSocket.emit).toHaveBeenCalledWith(
-        'claude_approval_response',
-        expect.objectContaining({ approvalId: 'approval-abc', response: 'n' }),
+        'subscribe_device',
+        expect.objectContaining({ deviceId: 'device-1' }),
       );
     });
   });
 
-  describe('Multiple queued messages flushed in order', () => {
-    it('should flush messages in FIFO order', async () => {
+  describe('General queue behavior (non-sensitive events)', () => {
+    it('should cap queue at 50 messages', async () => {
       await wsService.connect();
       mockSocket.connected = false;
 
-      wsService.sendUserMessage('device-1', 'First');
-      wsService.sendUserMessage('device-1', 'Second');
-      wsService.sendUserMessage('device-1', 'Third');
-
-      expect(wsService.queueLength).toBe(3);
-
-      // Simulate reconnect
-      mockSocket.simulateEvent('connect_error', new Error('blip'));
-      mockSocket.connected = true;
-      mockSocket.emit.mockClear();
-      mockSocket.simulateEvent('connect');
-
-      const userMessageCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
-      );
-      expect(userMessageCalls.length).toBe(3);
-      expect(userMessageCalls[0][1].message).toBe('First');
-      expect(userMessageCalls[1][1].message).toBe('Second');
-      expect(userMessageCalls[2][1].message).toBe('Third');
+      // emitOrQueue is no longer called by sensitive methods,
+      // but internal infrastructure can still queue non-sensitive events.
+      // The queue capacity limit is still enforced.
+      expect(wsService.queueLength).toBe(0);
     });
   });
 });

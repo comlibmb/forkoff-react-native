@@ -35,7 +35,7 @@ class NetworkService {
       try {
         listener(isConnected);
       } catch (error) {
-        console.error('[NetworkService] Listener error:', error);
+        console.error('[NetworkService] Listener error:', (error as Error).message);
       }
     });
   }

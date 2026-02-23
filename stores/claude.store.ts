@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { ClaudeSession, DirectoryEntry, TabCompletionResult } from '@/types';
 import { wsService } from '@/services/websocket.service';
-import { apiClient } from '@/services/api.client';
 import { unstable_batchedUpdates } from 'react-native';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
@@ -64,23 +63,16 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      const sessions = await apiClient.get<ClaudeSession[]>(
-        `/claude-sessions/device/${deviceId}`
-      );
+      // Sessions are populated via WebSocket events (claude_session_update)
+      // Request sessions list from CLI via WebSocket
+      wsService.emit('claude_sessions_request', { deviceId });
 
-      analyticsService.track('claude_sessions_fetched', {
-        deviceId,
-        sessionCount: sessions.length,
-      });
+      analyticsService.track('claude_sessions_fetched', { deviceId });
 
-      set((state) => {
-        const newSessions = new Map(state.sessions);
-        newSessions.set(deviceId, sessions);
-        return { sessions: newSessions, isLoading: false };
-      });
+      // Don't wait for response — sessions arrive via claude_session_update listener
+      set({ isLoading: false });
     } catch (error) {
       sentryService.captureException(error, { context: 'fetch_claude_sessions', deviceId });
-      // Sessions might come via WebSocket instead of API, so don't show error
       set({ isLoading: false });
     }
   },
@@ -274,13 +266,6 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
   deleteSession: async (sessionIdOrKey: string, deviceId: string) => {
     try {
       set({ isLoading: true, error: null });
-
-      // Try to delete from API (may fail if session is only local)
-      try {
-        await apiClient.delete(`/claude-sessions/${sessionIdOrKey}`);
-      } catch {
-        console.log('[ClaudeStore] Session not in API, removing locally');
-      }
 
       analyticsService.track('claude_session_deleted', {
         deviceId,

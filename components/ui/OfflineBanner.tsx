@@ -3,17 +3,17 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { WifiOff, CloudOff } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useConnectionStore } from '@/stores/connection.store';
-import { useAuthStore } from '@/stores/auth.store';
+import { useIdentityStore } from '@/stores/identity.store';
 
 export function OfflineBanner() {
   const { theme } = useTheme();
   const { isPhoneOnline, isServerConnected } = useConnectionStore();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isPaired = useIdentityStore((state) => state.isPaired);
   const slideAnim = useRef(new Animated.Value(-60)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   // Only show server connection issues when authenticated
-  const showBanner = !isPhoneOnline || (isAuthenticated && !isServerConnected);
+  const showBanner = !isPhoneOnline || (isPaired && !isServerConnected);
   const message = !isPhoneOnline
     ? 'No internet connection'
     : 'Connecting to server...';

@@ -36,6 +36,7 @@ export interface ClaudeApprovalRequestData {
   context: string[];       // Recent output lines for context
   options: string[];       // Available options (e.g., ['y:yes', 'n:no'])
   promptText: string;      // The actual prompt text
+  toolName?: string;       // Structured tool name from CLI SDK
 }
 
 // Helper to parse and format approval request data
@@ -52,9 +53,11 @@ interface FormattedApproval {
 function formatApprovalRequest(request: ClaudeApprovalRequestData): FormattedApproval {
   const { promptText, context } = request;
 
-  // Extract tool name from promptText like "Claude is using: Write" or "Claude wants to use: Bash"
-  const toolMatch = promptText.match(/Claude (?:is using|wants to use):?\s*(\w+)/i);
-  const toolName = toolMatch?.[1] || '';
+  // Prefer structured toolName from CLI; fall back to regex parsing of promptText
+  const toolName = request.toolName || (() => {
+    const toolMatch = promptText.match(/Claude (?:is using|wants to use):?\s*(\w+)/i);
+    return toolMatch?.[1] || '';
+  })();
 
   // Parse context for file paths, commands, and content
   let filePath = '';

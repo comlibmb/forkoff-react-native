@@ -45,10 +45,11 @@ jest.mock('socket.io-client', () => ({
   Socket: class MockSocket {},
 }));
 
-// Mock auth service
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    getAccessToken: jest.fn().mockResolvedValue('mock-access-token'),
+// Mock pairing service
+jest.mock('@/services/pairing.service', () => ({
+  pairingService: {
+    getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
+    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -185,39 +186,36 @@ describe('WebSocketService - Reconnection Resilience', () => {
     });
   });
 
-  describe('Queue flush on reconnect', () => {
-    it('should flush queued messages on reconnect', async () => {
+  describe('Reconnect behavior', () => {
+    it('should NOT queue sensitive events (user_message) in general queue', async () => {
       await wsService.connect();
-
-      // Queue a message while disconnected
       mockSocket.connected = false;
+
+      // Sensitive events go through emitSensitive, NOT the general plaintext queue
       wsService.sendUserMessage('device-1', 'Hello from queue');
 
-      // The message should not have been directly emitted via socket.emit with 'user_message'
-      const directEmitCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
-      );
-      expect(directEmitCalls.length).toBe(0);
+      // General queue should remain empty — sensitive events are handled separately
+      expect(wsService.queueLength).toBe(0);
+    });
 
-      // Verify the queue has content
-      expect(wsService.queueLength).toBeGreaterThan(0);
+    it('should re-subscribe to devices after reconnect', async () => {
+      await wsService.connect();
 
-      // Simulate a connect_error to set wasReconnect
-      mockSocket.simulateEvent('connect_error', new Error('blip'));
-
-      // Simulate reconnect
+      // Subscribe to a device first
       mockSocket.connected = true;
+      wsService.subscribeToDevice('device-1');
+
+      // Simulate disconnect + reconnect
+      mockSocket.simulateEvent('connect_error', new Error('blip'));
       mockSocket.emit.mockClear();
+      mockSocket.connected = true;
       mockSocket.simulateEvent('connect');
 
-      // Queue should have been flushed — user_message should now appear in emit calls
-      const flushedCalls = mockSocket.emit.mock.calls.filter(
-        (call) => call[0] === 'user_message',
+      // After reconnect, should re-subscribe to devices
+      const subscribeCalls = mockSocket.emit.mock.calls.filter(
+        (call) => call[0] === 'subscribe_device',
       );
-      expect(flushedCalls.length).toBe(1);
-
-      // Queue should be empty after flush
-      expect(wsService.queueLength).toBe(0);
+      expect(subscribeCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 

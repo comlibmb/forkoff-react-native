@@ -1,116 +1,55 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet } from 'react-native';
+import { useState, useMemo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Mail, User, AtSign, Sparkles, ChevronRight, Trash2, Check, X } from 'lucide-react-native';
-import { useAuthStore } from '@/stores/auth.store';
+import { ArrowLeft, Smartphone, Trash2, Shield, Copy, Check } from 'lucide-react-native';
+import { useIdentityStore } from '@/stores/identity.store';
+import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
+import * as Clipboard from 'expo-clipboard';
 
 export default function AccountScreen() {
   const { theme } = useTheme();
-  const { user, updateProfile, deleteAccount, validateUsername, checkUsernameAvailability, isLoading } = useAuthStore();
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const [name, setName] = useState(user?.name || '');
-  const [username, setUsername] = useState(user?.username || '');
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  const { mobileDeviceId, pairedDevices, removePairedDevice, unpairAll } = useIdentityStore();
+  const { devices, removeDevice } = useDeviceStore();
+  const [copiedId, setCopiedId] = useState(false);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const handleNameChange = (text: string) => {
-    setName(text);
-    checkForChanges(text, username);
-  };
-
-  const checkForChanges = (newName: string, newUsername: string) => {
-    const nameChanged = newName !== (user?.name || '');
-    const usernameChanged = newUsername !== (user?.username || '');
-    setHasChanges(nameChanged || usernameChanged);
-  };
-
-  // Debounced username validation
-  useEffect(() => {
-    if (!username) {
-      setUsernameError(null);
-      setIsUsernameAvailable(null);
-      return;
-    }
-
-    // If username hasn't changed from current, mark as valid
-    if (username === user?.username) {
-      setUsernameError(null);
-      setIsUsernameAvailable(true);
-      return;
-    }
-
-    // Local validation first
-    const validation = validateUsername(username);
-    if (!validation.valid) {
-      setUsernameError(validation.error || 'Invalid username');
-      setIsUsernameAvailable(false);
-      return;
-    }
-
-    // Check availability with debounce
-    setIsCheckingUsername(true);
-    setUsernameError(null);
-    setIsUsernameAvailable(null);
-
-    const timer = setTimeout(async () => {
-      try {
-        const result = await checkUsernameAvailability(username);
-        setIsUsernameAvailable(result.available);
-        if (!result.available) {
-          setUsernameError(result.error || 'Username is already taken');
-        }
-      } catch (error) {
-        setUsernameError('Failed to check username');
-        setIsUsernameAvailable(false);
-      } finally {
-        setIsCheckingUsername(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [username, user?.username]);
-
-  const handleUsernameChange = (text: string) => {
-    // Only allow valid characters while typing
-    const cleanText = text.toLowerCase().replace(/[^a-z0-9_]/g, '');
-    setUsername(cleanText);
-    checkForChanges(name, cleanText);
-  };
-
-  const handleSave = async () => {
-    if (!hasChanges) return;
-
-    // Validate username if changed
-    if (username !== (user?.username || '') && !isUsernameAvailable) {
-      alert.error('Error', usernameError || 'Please fix username errors');
-      return;
-    }
-
-    try {
-      const updates: { name?: string; username?: string } = {};
-      if (name !== user?.name) updates.name = name;
-      if (username !== (user?.username || '')) updates.username = username;
-
-      await updateProfile(updates);
-      alert.success('Success', 'Profile updated successfully');
-      setHasChanges(false);
-    } catch (error) {
-      alert.error('Error', error instanceof Error ? error.message : 'Failed to update profile');
+  const handleCopyDeviceId = async () => {
+    if (mobileDeviceId) {
+      await Clipboard.setStringAsync(mobileDeviceId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
     }
   };
 
-  function Section({ title, children }: {
-    title: string;
-    children: React.ReactNode;
-  }) {
+  const handleRemoveDevice = async (deviceId: string, deviceName: string) => {
+    const confirmed = await alert.confirm(
+      'Remove Device',
+      `Remove "${deviceName}" from your paired devices? You will need to re-pair to reconnect.`,
+      { confirmText: 'Remove', destructive: true }
+    );
+    if (confirmed) {
+      await removePairedDevice(deviceId);
+      await removeDevice(deviceId);
+    }
+  };
+
+  const handleUnpairAll = async () => {
+    const confirmed = await alert.confirm(
+      'Unpair All Devices',
+      'Remove all paired devices and reset your identity? This cannot be undone.',
+      { confirmText: 'Unpair All', destructive: true }
+    );
+    if (confirmed) {
+      await unpairAll();
+      router.replace('/(onboarding)');
+    }
+  };
+
+  function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
       <View style={styles.section}>
         {title && <Text style={styles.sectionTitle}>{title}</Text>}
@@ -132,184 +71,87 @@ export default function AccountScreen() {
           <ArrowLeft size={24} color={theme.textSecondary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-
-        {hasChanges && (
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={isLoading}
-            style={styles.saveButton}
-          >
-            <Text style={styles.saveButtonText}>
-              {isLoading ? 'Saving...' : 'Save'}
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.pageTitle}>Account</Text>
+        <Text style={styles.pageTitle}>Device Identity</Text>
 
-        {/* Avatar Section */}
-        <Section title="Avatar">
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(user?.name || 'U').charAt(0).toUpperCase()}
+        {/* Device ID Section */}
+        <Section title="Mobile Device ID">
+          <TouchableOpacity onPress={handleCopyDeviceId} style={styles.deviceIdRow}>
+            <View style={styles.deviceIdInfo}>
+              <Shield size={18} color={theme.primary} />
+              <Text style={styles.deviceIdText} numberOfLines={1}>
+                {mobileDeviceId || 'Not initialized'}
               </Text>
             </View>
-            <Text style={styles.avatarHint}>Tap to change avatar</Text>
-          </View>
-        </Section>
-
-        {/* Profile Info Section */}
-        <Section title="Profile">
-          {/* Username Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Username</Text>
-            <View style={styles.inputWrapper}>
-              <View style={styles.inputIcon}>
-                <AtSign size={18} color={theme.textTertiary} />
-              </View>
-              <TextInput
-                placeholder="username"
-                placeholderTextColor={theme.textTertiary}
-                value={username}
-                onChangeText={handleUsernameChange}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={[
-                  styles.textInput,
-                  usernameError ? styles.inputError : isUsernameAvailable ? styles.inputSuccess : null
-                ]}
-              />
-              <View style={styles.inputStatus}>
-                {isCheckingUsername ? (
-                  <ActivityIndicator size="small" color={theme.textTertiary} />
-                ) : isUsernameAvailable === true ? (
-                  <Check size={18} color={theme.success} />
-                ) : isUsernameAvailable === false ? (
-                  <X size={18} color={theme.error} />
-                ) : null}
-              </View>
-            </View>
-            {usernameError ? (
-              <Text style={styles.errorText}>{usernameError}</Text>
+            {copiedId ? (
+              <Check size={18} color={theme.success} />
             ) : (
-              <Text style={styles.hintText}>
-                3-20 characters, letters, numbers, and underscores only
-              </Text>
+              <Copy size={18} color={theme.textTertiary} />
             )}
-          </View>
-
-          {/* Name Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Display Name</Text>
-            <View style={styles.inputWrapper}>
-              <View style={styles.inputIcon}>
-                <User size={18} color={theme.textTertiary} />
-              </View>
-              <TextInput
-                placeholder="Your name"
-                placeholderTextColor={theme.textTertiary}
-                value={name}
-                onChangeText={handleNameChange}
-                style={styles.textInput}
-              />
-            </View>
-          </View>
-
-          {/* Email (Read-only) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <View style={styles.readOnlyField}>
-              <Mail size={18} color={theme.textTertiary} />
-              <Text style={styles.readOnlyText}>{user?.email}</Text>
-            </View>
-            <Text style={styles.hintText}>Email cannot be changed</Text>
-          </View>
-        </Section>
-
-        {/* Subscription Section */}
-        <Section title="Subscription">
-          <TouchableOpacity
-            onPress={() => router.push('/settings/subscription')}
-            style={styles.subscriptionRow}
-          >
-            <View>
-              <Text style={styles.subscriptionTitle}>Current Plan</Text>
-              <Text style={styles.subscriptionPlan}>
-                {user?.subscription || 'Free'} Plan
-              </Text>
-            </View>
-            <View style={styles.upgradeRow}>
-              <View style={styles.upgradeBadge}>
-                <Sparkles size={12} color={theme.primary} />
-                <Text style={styles.upgradeText}>Upgrade</Text>
-              </View>
-              <ChevronRight size={18} color={theme.textTertiary} />
-            </View>
           </TouchableOpacity>
+          <Text style={styles.hintText}>
+            Your unique device identity, stored securely on this device. Tap to copy.
+          </Text>
         </Section>
 
-        {/* Account Info */}
-        <View style={styles.accountInfo}>
-          <Text style={styles.accountInfoText}>
-            Account created{' '}
-            {user?.createdAt
-              ? new Date(user.createdAt).toLocaleDateString()
-              : 'Unknown'}
-          </Text>
-        </View>
+        {/* Paired Devices Section */}
+        <Section title={`Paired Devices (${pairedDevices.length})`}>
+          {pairedDevices.length === 0 ? (
+            <Text style={styles.emptyText}>No devices paired yet</Text>
+          ) : (
+            pairedDevices.map((device, index) => {
+              const liveDevice = devices.find((d) => d.id === device.id);
+              return (
+                <View key={device.id}>
+                  {index > 0 && <View style={styles.divider} />}
+                  <View style={styles.pairedDeviceRow}>
+                    <View style={styles.pairedDeviceIcon}>
+                      <Smartphone size={20} color={theme.textSecondary} />
+                    </View>
+                    <View style={styles.pairedDeviceInfo}>
+                      <Text style={styles.pairedDeviceName}>{device.name}</Text>
+                      <Text style={styles.pairedDeviceMeta}>
+                        {device.platform} — {liveDevice?.status === 'online' ? 'Online' : 'Offline'}
+                      </Text>
+                      <Text style={styles.pairedDeviceDate}>
+                        Paired {new Date(device.pairedAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveDevice(device.id, device.name)}
+                      style={styles.removeButton}
+                    >
+                      <Trash2 size={16} color={theme.error} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </Section>
+
+        {/* Security Info */}
+        <Section title="Security">
+          <View style={styles.securityInfo}>
+            <Shield size={16} color={theme.primary} />
+            <Text style={styles.securityText}>
+              All communication between your phone and paired devices is end-to-end encrypted.
+              Your device ID and encryption keys are stored in the device's secure hardware keychain.
+            </Text>
+          </View>
+        </Section>
 
         {/* Danger Zone */}
-        <Section title="Danger Zone">
-          <TouchableOpacity
-            onPress={async () => {
-              const confirmed = await alert.confirm(
-                'Delete Account',
-                'Are you sure you want to delete your account? This will permanently delete all your data including devices, projects, and sessions. This action cannot be undone.',
-                { confirmText: 'Delete', destructive: true }
-              );
-              if (confirmed) {
-                const confirmation = await alert.prompt(
-                  'Confirm Deletion',
-                  'Type "DELETE" to confirm account deletion:',
-                  { placeholder: 'DELETE', confirmText: 'Confirm' }
-                );
-                if (confirmation?.toUpperCase() !== 'DELETE') {
-                  if (confirmation !== null) {
-                    alert.error('Error', 'Please type DELETE to confirm');
-                  }
-                  return;
-                }
-
-                setIsDeleting(true);
-                try {
-                  await deleteAccount();
-                  router.replace('/(auth)/login');
-                } catch (error) {
-                  alert.error(
-                    'Error',
-                    error instanceof Error ? error.message : 'Failed to delete account'
-                  );
-                } finally {
-                  setIsDeleting(false);
-                }
-              }
-            }}
-            disabled={isDeleting}
-            style={styles.deleteButton}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color={theme.error} />
-            ) : (
+        {pairedDevices.length > 0 && (
+          <Section title="Danger Zone">
+            <TouchableOpacity onPress={handleUnpairAll} style={styles.deleteButton}>
               <Trash2 size={18} color={theme.error} />
-            )}
-            <Text style={styles.deleteButtonText}>
-              {isDeleting ? 'Deleting...' : 'Delete Account'}
-            </Text>
-          </TouchableOpacity>
-        </Section>
+              <Text style={styles.deleteButtonText}>Unpair All Devices</Text>
+            </TouchableOpacity>
+          </Section>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -337,17 +179,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
     color: theme.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
-  },
-  saveButton: {
-    backgroundColor: theme.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
   },
   scrollView: {
     flex: 1,
@@ -384,147 +215,90 @@ const createStyles = (theme: ReturnType<typeof useTheme>['theme']) => StyleSheet
   sectionContent: {
     padding: 16,
   },
-  // Avatar
-  avatarContainer: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.primaryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  avatarHint: {
-    color: theme.textTertiary,
-    fontSize: 12,
-  },
-  // Inputs
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    color: theme.textTertiary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    position: 'relative',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 14,
-    top: '50%',
-    transform: [{ translateY: -9 }],
-    zIndex: 1,
-  },
-  textInput: {
-    backgroundColor: theme.card,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 10,
-    paddingLeft: 44,
-    paddingRight: 44,
-    paddingVertical: 14,
-    color: theme.text,
-    fontSize: 15,
-  },
-  inputError: {
-    borderColor: theme.error,
-  },
-  inputSuccess: {
-    borderColor: theme.success,
-  },
-  inputStatus: {
-    position: 'absolute',
-    right: 14,
-    top: '50%',
-    transform: [{ translateY: -9 }],
-  },
-  errorText: {
-    color: theme.error,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  hintText: {
-    color: theme.textTertiary,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  readOnlyField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.card,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  readOnlyText: {
-    color: theme.textTertiary,
-    marginLeft: 12,
-    fontSize: 15,
-  },
-  // Subscription
-  subscriptionRow: {
+  deviceIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  subscriptionTitle: {
+  deviceIdInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  deviceIdText: {
+    color: theme.text,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    flex: 1,
+  },
+  hintText: {
+    color: theme.textTertiary,
+    fontSize: 12,
+    marginTop: 10,
+  },
+  emptyText: {
+    color: theme.textTertiary,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  pairedDeviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  pairedDeviceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  pairedDeviceInfo: {
+    flex: 1,
+  },
+  pairedDeviceName: {
     color: theme.text,
     fontWeight: '600',
     fontSize: 15,
   },
-  subscriptionPlan: {
-    color: theme.textTertiary,
-    fontSize: 14,
+  pairedDeviceMeta: {
+    color: theme.textSecondary,
+    fontSize: 12,
     marginTop: 2,
     textTransform: 'capitalize',
   },
-  upgradeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  upgradeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.primary + '15',
-    borderWidth: 1,
-    borderColor: theme.primary + '30',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  upgradeText: {
-    color: theme.primary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  // Account Info
-  accountInfo: {
-    marginVertical: 8,
-  },
-  accountInfoText: {
+  pairedDeviceDate: {
     color: theme.textTertiary,
-    fontSize: 12,
-    textAlign: 'center',
+    fontSize: 11,
+    marginTop: 2,
   },
-  // Delete
+  removeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: theme.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.divider,
+    marginLeft: 52,
+  },
+  securityInfo: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  securityText: {
+    color: theme.textSecondary,
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 20,
+  },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',

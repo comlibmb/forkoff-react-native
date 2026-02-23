@@ -3,12 +3,15 @@
  * Stores E2EE keys securely using expo-secure-store (hardware-backed on iOS/Android).
  */
 import * as SecureStore from 'expo-secure-store';
-import { E2EEKeyPair } from './types';
+import { E2EEKeyPair, SigningKeyPair } from './types';
 
 const KEYS = {
   IDENTITY_PUBLIC: 'e2ee_identity_public',
   IDENTITY_PRIVATE: 'e2ee_identity_private',
+  SIGNING_PUBLIC: 'e2ee_signing_public',
+  SIGNING_SECRET: 'e2ee_signing_secret',
   SESSION_PREFIX: 'e2ee_session_',
+  TRUSTED_PREFIX: 'e2ee_trusted_',
 } as const;
 
 class KeyStorage {
@@ -45,6 +48,45 @@ class KeyStorage {
   /** Delete a session key for a specific remote device */
   async deleteSessionKey(deviceId: string): Promise<void> {
     await SecureStore.deleteItemAsync(`${KEYS.SESSION_PREFIX}${deviceId}`);
+  }
+
+  // --- Ed25519 Signing Key Pair ---
+
+  /** Store the Ed25519 signing key pair */
+  async storeSigningKeyPair(keyPair: SigningKeyPair): Promise<void> {
+    await SecureStore.setItemAsync(KEYS.SIGNING_PUBLIC, keyPair.publicKey);
+    await SecureStore.setItemAsync(KEYS.SIGNING_SECRET, keyPair.secretKey);
+  }
+
+  /** Retrieve the Ed25519 signing key pair */
+  async getSigningKeyPair(): Promise<SigningKeyPair | null> {
+    const publicKey = await SecureStore.getItemAsync(KEYS.SIGNING_PUBLIC);
+    const secretKey = await SecureStore.getItemAsync(KEYS.SIGNING_SECRET);
+    if (!publicKey || !secretKey) return null;
+    return { publicKey, secretKey };
+  }
+
+  // --- Trusted Peer Identity Keys (TOFU) ---
+
+  /** Store a peer's identity public key */
+  async storeTrustedPeerKey(deviceId: string, identityPublicKey: string): Promise<void> {
+    await SecureStore.setItemAsync(`${KEYS.TRUSTED_PREFIX}${deviceId}`, identityPublicKey);
+  }
+
+  /** Get a trusted peer's identity public key */
+  async getTrustedPeerKey(deviceId: string): Promise<string | null> {
+    return SecureStore.getItemAsync(`${KEYS.TRUSTED_PREFIX}${deviceId}`);
+  }
+
+  /** Clear all E2EE keys on logout — identity, signing, and known trusted peer keys */
+  async clearAllKeys(knownPeerDeviceIds: string[] = []): Promise<void> {
+    await this.deleteIdentityKeyPair();
+    await SecureStore.deleteItemAsync(KEYS.SIGNING_PUBLIC);
+    await SecureStore.deleteItemAsync(KEYS.SIGNING_SECRET);
+    for (const deviceId of knownPeerDeviceIds) {
+      await SecureStore.deleteItemAsync(`${KEYS.TRUSTED_PREFIX}${deviceId}`);
+      await SecureStore.deleteItemAsync(`${KEYS.SESSION_PREFIX}${deviceId}`);
+    }
   }
 }
 
