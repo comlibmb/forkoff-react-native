@@ -5,70 +5,55 @@
 <h1 align="center">ForkOff Mobile App</h1>
 
 <p align="center">
-  <strong>Control your AI coding tools from anywhere</strong>
+  <strong>Control your AI coding sessions from your phone</strong>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#development">Development</a> •
-  <a href="#architecture">Architecture</a>
+  <a href="https://github.com/Forkoff-app/forkoff-react-native/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Forkoff-app/forkoff-react-native" alt="MIT License"></a>
+  <a href="https://testflight.apple.com/join/dhh5FrN7"><img src="https://img.shields.io/badge/TestFlight-Open_Beta-blue?logo=apple" alt="TestFlight"></a>
 </p>
 
 <p align="center">
-  <a href="https://apps.apple.com/app/forkoff">
-    <img src="https://img.shields.io/badge/Download_on_the-App_Store-black?style=for-the-badge&logo=apple" alt="App Store"/>
-  </a>
-  <a href="https://play.google.com/store/apps/details?id=com.forkoff.app">
-    <img src="https://img.shields.io/badge/Get_it_on-Google_Play-green?style=for-the-badge&logo=google-play" alt="Google Play"/>
-  </a>
+  <a href="#features">Features</a> &bull;
+  <a href="#installation">Installation</a> &bull;
+  <a href="#development">Development</a> &bull;
+  <a href="#architecture">Architecture</a> &bull;
+  <a href="#security">Security</a>
 </p>
+
+---
+
+ForkOff is a React Native mobile app that connects to [Claude Code](https://claude.ai/code) running on your laptop via the [ForkOff CLI](https://github.com/Forkoff-app/forkoff-cli). Monitor sessions, approve tool use, and track usage &mdash; all from your phone.
+
+> **Open Source** &mdash; MIT licensed. Contributions welcome!
+>
+> **Open Beta** &mdash; [Join the iOS TestFlight](https://testflight.apple.com/join/dhh5FrN7)
 
 ---
 
 ## Features
 
-### 🎮 Remote Control for AI Coding
+### Remote Control for AI Coding
+- **Monitor live sessions** &mdash; See Claude Code output as it streams in real-time
+- **Interactive approvals** &mdash; Approve or deny file edits, bash commands, and other tool use
+- **Configurable permissions** &mdash; Auto-approve safe tools, require approval for destructive ones
+- **Send prompts** &mdash; Start new sessions or continue existing ones from mobile
 
-- **Send prompts** to Claude Code, Cursor, and other AI tools
-- **Approve code changes** with a single tap
-- **View live responses** as they stream in
-- **Monitor terminal output** in real-time
+### Multi-Device Management
+- **Pair via QR code** &mdash; Scan to link your laptop in seconds
+- **Multiple devices** &mdash; Connect several machines, switch between them
+- **Device status** &mdash; See which devices are online in real-time
+- **Project hub** &mdash; Browse projects, view CLAUDE.md, launch quick actions
 
-### 📱 Multi-Device Management
+### Analytics & Insights
+- **Token usage tracking** &mdash; Daily, weekly, monthly breakdowns
+- **Multi-device aggregation** &mdash; Stats summed across all connected CLIs
+- **Usage streaks** &mdash; Track your coding consistency
+- **Real-time updates** &mdash; Token counts update as you code
 
-- **Pair multiple computers** via QR code
-- **Switch between devices** seamlessly
-- **Track device status** (online/offline)
-- **Manage Claude sessions** across machines
-
-### 📊 Analytics & Insights
-
-- **Token usage tracking** - daily, weekly, monthly
-- **Session history** - review past conversations
-- **Cost estimates** - monitor API spending
-- **Usage streaks** - track your coding habits
-
-### 🏆 Achievements & Gamification
-
-- **Unlock achievements** for milestones
-- **Track progress** towards goals
-- **Showcase badges** on your profile
-
-### ⏰ Smart Queue System
-
-- **Queue prompts** during rate limits
-- **Schedule execution** for later
-- **Automatic retry** when limits reset
-
----
-
-## Screenshots
-
-<p align="center">
-  <i>Screenshots coming soon</i>
-</p>
+### Achievements
+- **Unlock badges** for usage milestones
+- **Showcase achievements** on your profile
 
 ---
 
@@ -76,14 +61,17 @@
 
 | Technology | Purpose |
 |------------|---------|
-| **React Native** | Cross-platform mobile framework |
-| **Expo** | Development & build tooling |
-| **Expo Router** | File-based navigation |
+| **React Native 0.81** | Cross-platform mobile framework |
+| **Expo SDK 54** | Development, builds, OTA updates |
+| **Expo Router** | File-based navigation (typed routes) |
 | **Zustand** | State management |
 | **TanStack Query** | Server state & caching |
 | **Socket.io** | Real-time communication |
+| **TweetNaCl** | End-to-end encryption (X25519, XSalsa20-Poly1305) |
 | **Supabase** | Authentication |
 | **NativeWind** | Tailwind CSS for React Native |
+| **PostHog** | Product analytics |
+| **Sentry** | Error tracking |
 
 ---
 
@@ -92,9 +80,8 @@
 ### Prerequisites
 
 - Node.js 18+
-- Expo CLI (`npm install -g expo-cli`)
 - iOS Simulator (Mac) or Android Emulator
-- Expo Go app on your device (for physical testing)
+- [ForkOff CLI](https://www.npmjs.com/package/forkoff) (`npm install -g forkoff`)
 
 ### 1. Clone & Install
 
@@ -109,29 +96,20 @@ npm install
 Create a `.env` file:
 
 ```bash
-# API Configuration
-EXPO_PUBLIC_API_URL=https://api.forkoff.dev/api
-EXPO_PUBLIC_WS_URL=wss://api.forkoff.dev
-
-# Supabase (for auth)
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
-# PostHog (analytics - optional)
-EXPO_PUBLIC_POSTHOG_KEY=your-posthog-key
+# Optional
+EXPO_PUBLIC_POSTHOG_API_KEY=your-posthog-key
+EXPO_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ```
 
-### 3. Start Development Server
+### 3. Start Development
 
 ```bash
-# Start Expo
-npx expo start
-
-# Run on iOS simulator
-npx expo run:ios
-
-# Run on Android emulator
-npx expo run:android
+npx expo start             # Start dev server
+npx expo start --ios       # iOS simulator
+npx expo start --android   # Android emulator
 ```
 
 ---
@@ -142,81 +120,63 @@ npx expo run:android
 
 ```
 app/
-├── (auth)/             # Authentication screens
-│   ├── login.tsx
-│   ├── register.tsx
-│   └── forgot-password.tsx
-├── (tabs)/             # Main tab navigation
-│   ├── devices.tsx     # Device list (home)
-│   ├── projects.tsx    # Projects list
-│   └── settings.tsx    # Settings
-├── device/
-│   ├── [id].tsx        # Device detail
-│   └── pair.tsx        # QR pairing
+├── (onboarding)/          # First-run setup flow
+├── (tabs)/                # Bottom tab navigation
+│   ├── projects.tsx       # Projects list
+│   ├── devices.tsx        # Paired devices
+│   ├── analytics.tsx      # Usage analytics
+│   └── settings.tsx       # Settings
 ├── claude/
-│   └── session/[key].tsx  # Claude session view
-├── queue/              # Prompt queue
-├── achievements/       # Achievements
-└── _layout.tsx         # Root layout
+│   └── session/[key].tsx  # Live session view (streaming, approvals)
+├── device/
+│   ├── [id].tsx           # Device detail
+│   └── pair.tsx           # QR pairing
+├── project-hub.tsx        # Per-project command center
+├── achievements/          # Achievement badges
+├── settings/
+│   └── permissions.tsx    # Tool permission rules
+└── _layout.tsx            # Root layout
 
 components/
-├── ui/                 # Reusable UI components
-├── claude/             # Claude-specific components
-├── device/             # Device components
-├── chat/               # Chat components
-└── analytics/          # Charts & stats
+├── ui/                    # Reusable UI (AlertModal, OfflineBanner, etc.)
+├── claude/                # Session components (PermissionQueue, ToolUseBlock)
+│   └── tools/             # Tool renderers (Bash, Edit, Read, Write, etc.)
+├── analytics/             # Charts & summary cards
+├── achievements/          # Achievement badges & unlock modal
+└── tutorial/              # Guided tutorial overlay
 
 stores/
-├── auth.store.ts       # Authentication state
-├── approval.store.ts   # Approval requests
-├── connection.store.ts # Connection status
-├── queue.store.ts      # Prompt queue
-└── theme.store.ts      # Theme preferences
+├── claude.store.ts        # Claude sessions per device
+├── device.store.ts        # Paired devices & status
+├── approval.store.ts      # Pending approval requests
+├── analytics.store.ts     # Token usage & multi-device aggregation
+├── connection.store.ts    # WebSocket connection state
+├── permission-rules.store.ts  # Tool approval rules
+└── ...
 
 services/
-├── api.client.ts       # HTTP client
-├── websocket.service.ts # WebSocket handling
-├── notification.service.ts
-└── analytics.service.ts
+├── websocket.service.ts   # Socket.io client, E2EE, event routing
+├── crypto/                # E2EE implementation (NaCl)
+│   ├── e2eeManager.ts     # Key exchange, encryption, TOFU
+│   ├── encryption.ts      # XSalsa20-Poly1305
+│   ├── keyGeneration.ts   # X25519 key pairs
+│   └── keyStorage.ts      # SecureStore persistence
+├── api.client.ts          # Axios HTTP client
+├── notification.service.ts # Push notifications
+├── analytics.service.ts   # PostHog
+└── sentry.service.ts      # Error tracking
 ```
 
-### Key Commands
+### Commands
 
 ```bash
-# Start development server
-npx expo start
-
-# Clear cache and restart
-npx expo start --clear
-
-# Build for production (iOS)
-eas build --platform ios
-
-# Build for production (Android)
-eas build --platform android
-
-# Run tests
-npm test
-
-# Type check
-npx tsc --noEmit
-
-# Lint
-npm run lint
+npx expo start             # Dev server
+npx expo start --clear     # Clear cache and restart
+npm test                   # Run tests
+npx tsc --noEmit           # Type check
+eas build --platform ios   # Production build (iOS)
+eas build --platform android  # Production build (Android)
 ```
-
-### Local Backend Development
-
-To test with a local backend:
-
-1. Start the backend server on your machine
-2. Get your local IP address
-3. Update `.env`:
-   ```
-   EXPO_PUBLIC_API_URL=http://YOUR_IP:3000/api
-   EXPO_PUBLIC_WS_URL=ws://YOUR_IP:3000
-   ```
-4. Restart Expo
 
 ---
 
@@ -224,27 +184,49 @@ To test with a local backend:
 
 ### State Management
 
-- **Zustand** for client state (auth, UI, preferences)
-- **TanStack Query** for server state (API data, caching)
-- **WebSocket** for real-time updates
-
-### Authentication Flow
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Supabase  │────>│  JWT Token  │────>│   Backend   │
-│    Auth     │     │   Storage   │     │     API     │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
+- **Zustand** stores in `stores/*.store.ts` with `create<State>((set, get) => ({...}))`
+- **Module-level WebSocket listeners** for global events (analytics sync, achievements)
+- **AsyncStorage** for persistence, **SecureStore** for cryptographic keys
+- **Optimistic updates** &mdash; Messages appear instantly, replaced when server confirms
 
 ### Real-time Communication
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Mobile App │<───>│   Backend   │<───>│     CLI     │
-│  (Socket)   │     │  (Socket)   │     │  (Socket)   │
+│  Mobile App │<───>│   Relay     │<───>│  CLI Tool   │
+│  (E2EE)     │     │  (opaque)   │     │  (E2EE)     │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
+
+The relay server only sees encrypted payloads. All session content, approvals, file contents, and terminal output are end-to-end encrypted between the mobile app and CLI.
+
+### Permission System
+
+The mobile app configures tool permission rules that sync to the CLI:
+
+1. User configures rules in **Settings > Permissions** (which tools auto-approve vs require approval)
+2. On session takeover, rules sync to CLI via `permission_rules_sync` event
+3. CLI installs a **PreToolUse hook** into Claude Code's settings
+4. Hook script reads rules and auto-approves or prompts mobile for approval
+5. Approval requests appear in a **queued modal** on mobile with approve/deny controls
+
+---
+
+## Security
+
+All communication between the mobile app and CLI is end-to-end encrypted:
+
+| Layer | Implementation |
+|-------|---------------|
+| **Key exchange** | X25519 ECDH with Ed25519 identity signatures |
+| **Encryption** | XSalsa20-Poly1305 authenticated encryption (NaCl) |
+| **Identity** | TOFU (Trust On First Use) with key pinning |
+| **Replay protection** | Per-peer monotonic message counters |
+| **Key storage** | Expo SecureStore (iOS Keychain / Android Keystore) |
+| **Enforcement** | Sensitive events never sent in plaintext; enforced at both ends |
+| **Validation** | Encrypted payloads validated for structure before dispatch |
+
+E2EE is established automatically on device pairing. No configuration required.
 
 ---
 
@@ -253,16 +235,9 @@ To test with a local backend:
 ### EAS Build
 
 ```bash
-# Install EAS CLI
 npm install -g eas-cli
-
-# Login to Expo
 eas login
-
-# Configure build
 eas build:configure
-
-# Build for app stores
 eas build --platform all
 ```
 
@@ -271,8 +246,8 @@ eas build --platform all
 Production builds use EAS Secrets:
 
 ```bash
-eas secret:create --name EXPO_PUBLIC_API_URL --value "https://api.forkoff.dev/api"
-eas secret:create --name EXPO_PUBLIC_WS_URL --value "wss://api.forkoff.dev"
+eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value "https://..."
+eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "..."
 ```
 
 ---
@@ -280,21 +255,18 @@ eas secret:create --name EXPO_PUBLIC_WS_URL --value "wss://api.forkoff.dev"
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit changes (`git commit -m 'Add my feature'`)
+4. Push to branch (`git push origin feature/my-feature`)
 5. Open a Pull Request
 
 ---
 
 ## Related Projects
 
-- [ForkOff Backend](https://github.com/Forkoff-app/forkoff-backend) - API server
-- [ForkOff CLI](https://github.com/Forkoff-app/forkoff-cli) - Command line tool
-- [ForkOff Website](https://github.com/Forkoff-app/forkoff-website) - Landing page
+- [ForkOff CLI](https://github.com/Forkoff-app/forkoff-cli) &mdash; CLI tool (`npm install -g forkoff`)
+- [ForkOff Website](https://forkoff.app) &mdash; Landing page
 
----
+## License
 
-<p align="center">
-  Made with ❤️ by the ForkOff team
-</p>
+[MIT](LICENSE)
