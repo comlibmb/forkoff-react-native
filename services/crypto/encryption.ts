@@ -2,6 +2,7 @@
  * Encryption/Decryption Service
  * Uses NaCl secretbox (XSalsa20-Poly1305) for symmetric encryption.
  */
+import './polyfill'; // Must be first — sets PRNG before any nacl usage
 import nacl from 'tweetnacl';
 import { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } from 'tweetnacl-util';
 import { EncryptedPayload } from './types';

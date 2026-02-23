@@ -9,6 +9,7 @@
  * - XSalsa20-Poly1305 authenticated encryption
  * - Per-peer monotonic message counters (replay protection)
  */
+import './polyfill'; // Must be first — sets PRNG before any nacl usage
 import nacl from 'tweetnacl';
 import { encodeBase64, decodeBase64, decodeUTF8 } from 'tweetnacl-util';
 import { generateKeyPair } from './keyGeneration';
@@ -47,26 +48,68 @@ export class E2EEManager {
 
   /** Initialize the manager: load or generate identity keys (DH + signing) */
   async initialize(): Promise<void> {
+    console.log(`[E2EE-DIAG] initialize() called, deviceId=${this.deviceId.substring(0, 20)}...`);
+
     // Load or generate X25519 DH key pair
     const stored = await keyStorage.getIdentityKeyPair();
-    if (stored) {
+    if (stored && this.isDHKeyValid(stored)) {
       this.identityKeyPair = stored;
+      console.log(`[E2EE-DIAG] Loaded existing DH keypair, pub=${stored.publicKey.substring(0, 12)}...`);
     } else {
+      if (stored) {
+        console.warn('[E2EE] Stored DH keypair failed validation, regenerating');
+        await keyStorage.deleteIdentityKeyPair();
+      }
       this.identityKeyPair = generateKeyPair();
       await keyStorage.storeIdentityKeyPair(this.identityKeyPair);
+      console.log(`[E2EE-DIAG] Generated NEW DH keypair, pub=${this.identityKeyPair.publicKey.substring(0, 12)}...`);
     }
 
     // Load or generate Ed25519 signing key pair
     const storedSigning = await keyStorage.getSigningKeyPair();
-    if (storedSigning) {
+    if (storedSigning && this.isSigningKeyValid(storedSigning)) {
       this.signingKeyPair = storedSigning;
+      console.log(`[E2EE-DIAG] Loaded existing signing keypair, pub=${storedSigning.publicKey.substring(0, 12)}...`);
     } else {
+      if (storedSigning) {
+        console.warn(`[E2EE-DIAG] Stored signing keypair FAILED validation (pub=${storedSigning.publicKey.substring(0, 12)}...), regenerating`);
+        await keyStorage.deleteSigningKeyPair();
+      } else {
+        console.log('[E2EE-DIAG] No stored signing keypair found, generating new');
+      }
       const signKP = nacl.sign.keyPair();
       this.signingKeyPair = {
         publicKey: encodeBase64(signKP.publicKey),
         secretKey: encodeBase64(signKP.secretKey),
       };
       await keyStorage.storeSigningKeyPair(this.signingKeyPair);
+      console.log(`[E2EE-DIAG] Generated NEW signing keypair, pub=${this.signingKeyPair.publicKey.substring(0, 12)}...`);
+    }
+
+    console.log('[E2EE-DIAG] initialize() complete');
+  }
+
+  /** Validate a DH keypair by checking the public key derives from the private key */
+  private isDHKeyValid(kp: E2EEKeyPair): boolean {
+    try {
+      const secretKey = decodeBase64(kp.privateKey);
+      const derived = nacl.box.keyPair.fromSecretKey(secretKey);
+      return encodeBase64(derived.publicKey) === kp.publicKey;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Validate a signing keypair by doing a sign/verify round-trip */
+  private isSigningKeyValid(kp: SigningKeyPair): boolean {
+    try {
+      const testMessage = decodeUTF8('e2ee-key-validation-test');
+      const secretKey = decodeBase64(kp.secretKey);
+      const publicKey = decodeBase64(kp.publicKey);
+      const signature = nacl.sign.detached(testMessage, secretKey);
+      return nacl.sign.detached.verify(testMessage, signature, publicKey);
+    } catch {
+      return false;
     }
   }
 
@@ -80,16 +123,32 @@ export class E2EEManager {
     return this.signingKeyPair?.publicKey ?? null;
   }
 
+  /** Get the device ID this manager was initialized with */
+  getDeviceId(): string {
+    return this.deviceId;
+  }
+
   /**
    * Sign a key exchange payload with our Ed25519 identity key.
    */
   private signPayload(prefix: string, ephemeralPublicKey: string, recipientDeviceId?: string): string | undefined {
-    if (!this.signingKeyPair) return undefined;
+    if (!this.signingKeyPair) {
+      console.warn('[E2EE-DIAG] signPayload called but signingKeyPair is NULL');
+      return undefined;
+    }
     const parts = [prefix, this.deviceId, ephemeralPublicKey];
     if (recipientDeviceId) parts.push(recipientDeviceId);
-    const message = decodeUTF8(parts.join(':'));
+    const msgString = parts.join(':');
+    console.log(`[E2EE-DIAG] signPayload: msg="${msgString.substring(0, 80)}..." signingPub=${this.signingKeyPair.publicKey.substring(0, 12)}...`);
+    const message = decodeUTF8(msgString);
     const secretKey = decodeBase64(this.signingKeyPair.secretKey);
     const signature = nacl.sign.detached(message, secretKey);
+
+    // Self-verify to confirm the signature is valid before sending
+    const pubKeyBytes = decodeBase64(this.signingKeyPair.publicKey);
+    const selfVerify = nacl.sign.detached.verify(message, signature, pubKeyBytes);
+    console.log(`[E2EE-DIAG] signPayload self-verify: ${selfVerify}`);
+
     return encodeBase64(signature);
   }
 
@@ -205,13 +264,15 @@ export class E2EEManager {
     // Sign our ack
     const signature = this.signPayload('KEY_EXCHANGE_ACK', ephemeral.publicKey, init.senderDeviceId);
 
-    return {
+    const ack = {
       senderDeviceId: this.deviceId,
       recipientDeviceId: init.senderDeviceId,
       ephemeralPublicKey: ephemeral.publicKey,
       identityPublicKey: this.signingKeyPair?.publicKey,
       signature,
     };
+    console.log(`[E2EE-DIAG] handleKeyExchangeInit returning ack: sender=${ack.senderDeviceId.substring(0, 20)}... recipient=${ack.recipientDeviceId.substring(0, 20)}... ephPub=${ack.ephemeralPublicKey.substring(0, 12)}... idPub=${ack.identityPublicKey?.substring(0, 12)}... sig=${ack.signature?.substring(0, 12)}...`);
+    return ack;
   }
 
   /**

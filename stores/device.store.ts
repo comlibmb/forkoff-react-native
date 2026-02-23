@@ -4,6 +4,7 @@ import { deviceService } from '@/services/device.service';
 import { wsService } from '@/services/websocket.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
+import { pairingService } from '@/services/pairing.service';
 
 interface DeviceState {
   devices: Device[];
@@ -21,6 +22,7 @@ interface DeviceState {
   removeDevice: (id: string) => Promise<void>;
   updateDeviceStatus: (deviceId: string, status: DeviceStatus, lastSeenAt?: string, cliVersion?: string) => void;
   updateToolStatus: (deviceId: string, toolType: string, status: 'active' | 'inactive' | 'error') => void;
+  refreshDeviceStatus: () => void;
   clearError: () => void;
   subscribeToDeviceUpdates: () => () => void;
 }
@@ -42,6 +44,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
         devices,
         isLoading: false,
       });
+
+      // Update status based on current WebSocket connection
+      get().refreshDeviceStatus();
     } catch (error) {
       set({
         isLoading: false,
@@ -91,8 +96,16 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
             connectedTools: [],
           };
 
-          // Save to AsyncStorage
-          deviceService.saveDevice(device).then(() => {
+          // Save to AsyncStorage + identity store (so isPaired persists across restarts)
+          deviceService.saveDevice(device).then(async () => {
+            // Sync to pairing service so identity store sees it on next launch
+            await pairingService.addPairedDevice({
+              id: device.id,
+              name: device.name,
+              platform: device.platform || 'linux',
+              pairedAt: new Date().toISOString(),
+            });
+
             analyticsService.track('device_paired', {
               deviceId: device.id,
               deviceName: device.name,
@@ -131,6 +144,13 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
   addDeviceFromPairing: async (device: Device) => {
     await deviceService.saveDevice(device);
+    // Sync to pairing service so identity store sees it on next launch
+    await pairingService.addPairedDevice({
+      id: device.id,
+      name: device.name,
+      platform: device.platform || 'linux',
+      pairedAt: new Date().toISOString(),
+    });
     set((state) => ({
       devices: [...state.devices.filter((d) => d.id !== device.id), device],
     }));
@@ -162,6 +182,7 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       const device = get().devices.find((d) => d.id === id);
 
       await deviceService.removeDevice(id);
+      await pairingService.removePairedDevice(id);
 
       // Notify relay
       wsService.unpairDevice(id);
@@ -222,6 +243,30 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     }));
   },
 
+  refreshDeviceStatus: () => {
+    const isConnected = wsService.isConnected;
+    const devices = get().devices;
+    if (devices.length === 0) return;
+
+    // In the embedded relay model, the CLI is the server we connect to.
+    // If our socket is connected, the paired device is online; otherwise offline.
+    const status: DeviceStatus = isConnected ? 'online' : 'offline';
+    const now = new Date().toISOString();
+
+    set((state) => ({
+      devices: state.devices.map((d) => ({
+        ...d,
+        status,
+        lastSeen: isConnected ? now : d.lastSeen,
+      })),
+    }));
+
+    // Persist to AsyncStorage
+    for (const d of devices) {
+      deviceService.updateDeviceStatus(d.id, status, isConnected ? now : undefined).catch(() => {});
+    }
+  },
+
   clearError: () => set({ error: null }),
 
   subscribeToDeviceUpdates: () => {
@@ -247,5 +292,18 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     };
   },
 }));
+
+// Auto-update device status on WebSocket connect/disconnect
+wsService.on('connected', () => {
+  useDeviceStore.getState().refreshDeviceStatus();
+});
+
+wsService.on('disconnected', () => {
+  // Mark all devices offline when socket drops
+  const now = new Date().toISOString();
+  useDeviceStore.setState((state) => ({
+    devices: state.devices.map((d) => ({ ...d, status: 'offline' as DeviceStatus })),
+  }));
+});
 
 export default useDeviceStore;

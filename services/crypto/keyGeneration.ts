@@ -2,6 +2,7 @@
  * Key Generation Service
  * Generates X25519 key pairs for E2EE using tweetnacl.
  */
+import './polyfill'; // Must be first — sets PRNG before any nacl usage
 import nacl from 'tweetnacl';
 import { encodeBase64 } from 'tweetnacl-util';
 import { E2EEKeyPair } from './types';

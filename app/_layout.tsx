@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { useIdentityStore } from '@/stores/identity.store';
 import { useClaudeStore } from '@/stores/claude.store';
+import '@/stores/analytics.store'; // Import early so global WS listeners register before first sync
 import { useApprovalStore } from '@/stores/approval.store';
 import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
@@ -17,6 +18,7 @@ import { wsService } from '@/services/websocket.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
 import { analyticsService } from '@/services/analytics.service';
+import { appConfigService } from '@/services/appConfig.service';
 import { ClaudeApproval } from '@/components/claude/PermissionRequest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ScreenTracker } from '@/components/ScreenTracker';
@@ -161,7 +163,7 @@ export default function RootLayout() {
     subscribeToApprovals,
   } = useApprovalStore();
   const { initialize: initializeConnection } = useConnectionStore();
-  const { needsUpdate, checkVersion } = useVersionStore();
+  const { needsUpdate } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
   const [showSplash, setShowSplash] = useState(true);
 
@@ -263,12 +265,27 @@ export default function RootLayout() {
     return cleanup;
   }, [initializeConnection]);
 
-  // Check version when app starts
+  // Fetch app config from Supabase and check version on startup
   useEffect(() => {
-    if (isReady) {
-      checkVersion();
+    if (!isReady) return;
+
+    async function fetchAppConfig() {
+      try {
+        const [versionConfig, cliVersionConfig] = await Promise.all([
+          appConfigService.fetchVersionConfig(),
+          appConfigService.fetchCliVersionConfig(),
+        ]);
+
+        const store = useVersionStore.getState();
+        if (versionConfig) store.setVersionConfig(versionConfig);
+        if (cliVersionConfig) store.setCliVersionConfig(cliVersionConfig);
+      } catch (e) {
+        console.warn('[Layout] Failed to fetch app config:', e);
+      }
     }
-  }, [isReady, checkVersion]);
+
+    fetchAppConfig();
+  }, [isReady]);
 
   // Handle notification responses (when user taps a notification)
   useEffect(() => {

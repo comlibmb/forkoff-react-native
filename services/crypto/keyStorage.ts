@@ -66,6 +66,12 @@ class KeyStorage {
     return { publicKey, secretKey };
   }
 
+  /** Delete the Ed25519 signing key pair (forces regeneration on next init) */
+  async deleteSigningKeyPair(): Promise<void> {
+    await SecureStore.deleteItemAsync(KEYS.SIGNING_PUBLIC);
+    await SecureStore.deleteItemAsync(KEYS.SIGNING_SECRET);
+  }
+
   // --- Trusted Peer Identity Keys (TOFU) ---
 
   /** Store a peer's identity public key */
