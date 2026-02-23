@@ -7,6 +7,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { X, CheckCircle, Flashlight, FlashlightOff, Keyboard, QrCode, ArrowLeft } from 'lucide-react-native';
 import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
+import { pairingService } from '@/services/pairing.service';
 
 type PairMethod = 'qr' | 'code';
 
@@ -38,11 +39,33 @@ export default function PairDeviceScreen() {
     setScanned(true);
 
     try {
-      const pairingCode = data.replace('forkoff://pair/', '');
+      // Parse URL: forkoff://pair/CODE or forkoff://pair/CODE?relay=ws://...
+      let urlPath = data.replace('forkoff://pair/', '');
+      let pairingCode = urlPath;
+      let relayUrl: string | null = null;
+
+      // Check for query params (relay URL embedded by CLI)
+      const queryIndex = urlPath.indexOf('?');
+      if (queryIndex !== -1) {
+        pairingCode = urlPath.substring(0, queryIndex);
+        const queryString = urlPath.substring(queryIndex + 1);
+        const params = new URLSearchParams(queryString);
+        const rawRelay = params.get('relay');
+        if (rawRelay) {
+          relayUrl = decodeURIComponent(rawRelay);
+        }
+      }
+
       // Validate pairing code format (alphanumeric, 6-36 chars)
       if (!/^[A-Za-z0-9_-]{6,36}$/.test(pairingCode)) {
         throw new Error('Invalid pairing code format');
       }
+
+      // If relay URL is embedded in QR, set it before pairing
+      if (relayUrl) {
+        await pairingService.setRelayUrl(relayUrl);
+      }
+
       const device = await pairDevice(pairingCode);
       setPairedDeviceName(device.name);
       setIsPaired(true);
