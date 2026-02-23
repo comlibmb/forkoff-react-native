@@ -19,7 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "ForkOff needs camera access to scan QR codes for device pairing.",
         "NSFaceIDUsageDescription": "ForkOff uses Face ID for secure authentication.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": true
       }
     },
     "android": {

@@ -162,7 +162,7 @@ export default function ClaudeSessionScreen() {
   const unreadDividerIndexRef = useRef<number | null>(null);
   const isAtBottomRef = useRef(true);
 
-  // Premium input state & animations
+  // Input state & animations
   const [isFocused, setIsFocused] = useState(false);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
   const sendButtonBg = useRef(new Animated.Value(0)).current;
@@ -224,7 +224,7 @@ export default function ClaudeSessionScreen() {
     setSessionUnrestricted(globalUnrestricted);
   }, [globalUnrestricted]);
 
-  // Animated interpolations for premium input
+  // Animated interpolations for input
   const sendBgColor = sendButtonBg.interpolate({
     inputRange: [0, 1],
     outputRange: [theme.backgroundTertiary, colors.primary[600]],
@@ -1729,7 +1729,7 @@ export default function ClaudeSessionScreen() {
           {/* Bottom: Take Over button OR Input field */}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.dark[700], backgroundColor: colors.dark[900] }}>
             {!hasTakenOver ? (
-              /* State 1: Before Take Over — Premium CTA */
+              /* State 1: Before Take Over — Session Controls */
               <View style={{
                 backgroundColor: colors.dark[800],
                 borderWidth: 1,
