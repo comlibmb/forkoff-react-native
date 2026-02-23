@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { Achievement, AchievementWithProgress, UnlockedAchievement } from '@/types';
-import { apiClient } from '@/services/api.client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const ACHIEVEMENTS_KEY = '@forkoff/achievements';
+const UNLOCKED_KEY = '@forkoff/achievements_unlocked';
 
 interface AchievementsState {
   achievements: AchievementWithProgress[];
@@ -34,12 +36,12 @@ export const useAchievementsStore = create<AchievementsState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      const response = await apiClient.get<AchievementWithProgress[]>(
-        '/achievements/user',
-      );
+      // Load from local storage (Phase 3 will add bundled definitions)
+      const raw = await AsyncStorage.getItem(ACHIEVEMENTS_KEY);
+      const achievements: AchievementWithProgress[] = raw ? JSON.parse(raw) : [];
 
       set({
-        achievements: response,
+        achievements,
         isLoading: false,
       });
     } catch (error) {
@@ -56,25 +58,22 @@ export const useAchievementsStore = create<AchievementsState>((set, get) => ({
     const cacheAge = lastFetchedAt ? now - lastFetchedAt : Infinity;
     const hasCachedData = unlockedAchievements.length > 0;
 
-    // If not forcing and cache is fresh, skip fetch
     if (!forceRefresh && cacheAge < CACHE_TTL_MS && hasCachedData) {
       return;
     }
 
     try {
-      // Stale-while-revalidate: if we have cached data, show it and refresh in background
       if (hasCachedData) {
         set({ isRefreshing: true, error: null });
       } else {
         set({ isLoading: true, error: null });
       }
 
-      const response = await apiClient.get<UnlockedAchievement[]>(
-        '/achievements/user/unlocked',
-      );
+      const raw = await AsyncStorage.getItem(UNLOCKED_KEY);
+      const unlocked: UnlockedAchievement[] = raw ? JSON.parse(raw) : [];
 
       set({
-        unlockedAchievements: response,
+        unlockedAchievements: unlocked,
         isLoading: false,
         isRefreshing: false,
         lastFetchedAt: Date.now(),
@@ -90,33 +89,33 @@ export const useAchievementsStore = create<AchievementsState>((set, get) => ({
 
   toggleShowcase: async (achievementId) => {
     try {
-      const response = await apiClient.patch<{ success: boolean; showcased: boolean }>(
-        `/achievements/${achievementId}/showcase`,
-        {},
-      );
+      // Toggle locally
+      set((state) => {
+        const newUnlocked = state.unlockedAchievements.map((ua) =>
+          ua.achievement.id === achievementId
+            ? { ...ua, showcased: !ua.showcased }
+            : ua,
+        );
 
-      if (response.success) {
-        // Update local state
-        set((state) => ({
+        // Persist to AsyncStorage
+        AsyncStorage.setItem(UNLOCKED_KEY, JSON.stringify(newUnlocked)).catch(() => {});
+
+        return {
           achievements: state.achievements.map((a) =>
             a.id === achievementId
               ? {
                   ...a,
                   userProgress: a.userProgress
-                    ? { ...a.userProgress, showcased: response.showcased }
+                    ? { ...a.userProgress, showcased: !a.userProgress.showcased }
                     : null,
                 }
               : a,
           ),
-          unlockedAchievements: state.unlockedAchievements.map((ua) =>
-            ua.achievement.id === achievementId
-              ? { ...ua, showcased: response.showcased }
-              : ua,
-          ),
-        }));
-      }
+          unlockedAchievements: newUnlocked,
+        };
+      });
     } catch (error) {
-      console.error('Failed to toggle showcase:', error);
+      console.error('Failed to toggle showcase:', (error as Error).message);
     }
   },
 

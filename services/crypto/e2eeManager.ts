@@ -1,13 +1,23 @@
 /**
  * E2EE Manager
  * Orchestrates key generation, storage, exchange, and message encryption/decryption.
+ *
+ * Security features:
+ * - X25519 ECDH key exchange for shared secret derivation
+ * - Ed25519 identity signatures on ephemeral keys (MITM protection)
+ * - TOFU (Trust On First Use) for peer identity verification
+ * - XSalsa20-Poly1305 authenticated encryption
+ * - Per-peer monotonic message counters (replay protection)
  */
+import nacl from 'tweetnacl';
+import { encodeBase64, decodeBase64, decodeUTF8 } from 'tweetnacl-util';
 import { generateKeyPair } from './keyGeneration';
 import { keyStorage } from './keyStorage';
 import { encrypt, decrypt } from './encryption';
 import { computeSharedKey } from './keyExchange';
 import {
   E2EEKeyPair,
+  SigningKeyPair,
   EncryptedMessage,
   KeyExchangeInit,
   KeyExchangeAck,
@@ -20,19 +30,43 @@ interface ActiveSession {
 }
 
 export class E2EEManager {
+  private deviceId: string;
   private identityKeyPair: E2EEKeyPair | null = null;
+  private signingKeyPair: SigningKeyPair | null = null;
   private sessions: Map<string, ActiveSession> = new Map();
   // Temporary storage for ephemeral keys during key exchange
-  private pendingExchanges: Map<string, E2EEKeyPair> = new Map();
+  private static readonly MAX_PENDING_EXCHANGES = 20;
+  private static readonly PENDING_EXCHANGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private pendingExchanges: Map<string, { keyPair: E2EEKeyPair; createdAt: number }> = new Map();
+  // In-memory cache of trusted peer identity keys (TOFU)
+  private trustedPeerKeys: Map<string, string> = new Map();
 
-  /** Initialize the manager: load or generate identity keys */
+  constructor(deviceId: string) {
+    this.deviceId = deviceId;
+  }
+
+  /** Initialize the manager: load or generate identity keys (DH + signing) */
   async initialize(): Promise<void> {
+    // Load or generate X25519 DH key pair
     const stored = await keyStorage.getIdentityKeyPair();
     if (stored) {
       this.identityKeyPair = stored;
     } else {
       this.identityKeyPair = generateKeyPair();
       await keyStorage.storeIdentityKeyPair(this.identityKeyPair);
+    }
+
+    // Load or generate Ed25519 signing key pair
+    const storedSigning = await keyStorage.getSigningKeyPair();
+    if (storedSigning) {
+      this.signingKeyPair = storedSigning;
+    } else {
+      const signKP = nacl.sign.keyPair();
+      this.signingKeyPair = {
+        publicKey: encodeBase64(signKP.publicKey),
+        secretKey: encodeBase64(signKP.secretKey),
+      };
+      await keyStorage.storeSigningKeyPair(this.signingKeyPair);
     }
   }
 
@@ -41,25 +75,124 @@ export class E2EEManager {
     return this.identityKeyPair?.publicKey ?? null;
   }
 
+  /** Get the signing public key */
+  getSigningPublicKey(): string | null {
+    return this.signingKeyPair?.publicKey ?? null;
+  }
+
+  /**
+   * Sign a key exchange payload with our Ed25519 identity key.
+   */
+  private signPayload(prefix: string, ephemeralPublicKey: string, recipientDeviceId?: string): string | undefined {
+    if (!this.signingKeyPair) return undefined;
+    const parts = [prefix, this.deviceId, ephemeralPublicKey];
+    if (recipientDeviceId) parts.push(recipientDeviceId);
+    const message = decodeUTF8(parts.join(':'));
+    const secretKey = decodeBase64(this.signingKeyPair.secretKey);
+    const signature = nacl.sign.detached(message, secretKey);
+    return encodeBase64(signature);
+  }
+
+  /**
+   * Verify a peer's signature on a key exchange payload (TOFU).
+   * Throws on identity key mismatch or invalid signature.
+   */
+  private async verifyPeerSignature(
+    peerId: string,
+    identityPublicKey: string | undefined,
+    signature: string | undefined,
+    ephemeralPublicKey: string,
+    prefix: string,
+    recipientDeviceId?: string,
+  ): Promise<void> {
+    if (!identityPublicKey || !signature) {
+      throw new Error(
+        `E2EE: Peer ${peerId} sent UNSIGNED key exchange. ` +
+        `Identity verification is required. Update the peer to the latest version.`
+      );
+    }
+
+    // TOFU: check if we already trust a different key for this peer
+    const trusted = await keyStorage.getTrustedPeerKey(peerId);
+    if (trusted && trusted !== identityPublicKey) {
+      throw new Error(
+        `E2EE: IDENTITY KEY MISMATCH for device ${peerId}! ` +
+        `Expected ${trusted.substring(0, 8)}... but got ${identityPublicKey.substring(0, 8)}... ` +
+        `This could indicate a man-in-the-middle attack. Key exchange rejected.`
+      );
+    }
+
+    // Verify the Ed25519 signature
+    const parts = [prefix, peerId, ephemeralPublicKey];
+    if (recipientDeviceId) parts.push(recipientDeviceId);
+    const message = decodeUTF8(parts.join(':'));
+    const sigBytes = decodeBase64(signature);
+    const pubKeyBytes = decodeBase64(identityPublicKey);
+
+    const valid = nacl.sign.detached.verify(message, sigBytes, pubKeyBytes);
+    if (!valid) {
+      throw new Error(
+        `E2EE: INVALID SIGNATURE from device ${peerId}! ` +
+        `The ephemeral key was not properly signed. Key exchange rejected.`
+      );
+    }
+
+    // TOFU: trust this key if it's new
+    if (!trusted) {
+      await keyStorage.storeTrustedPeerKey(peerId, identityPublicKey);
+      console.log(`[E2EE] TOFU: Trusted new identity key for ${peerId}`);
+    }
+  }
+
   /**
    * Create a key exchange initiation to send to a remote device.
-   * Generates an ephemeral key pair and stores it for later completion.
+   * Signs the ephemeral key with our Ed25519 identity key.
    */
+  /** Evict expired or excess pending key exchanges */
+  private cleanupPendingExchanges(): void {
+    const now = Date.now();
+    for (const [deviceId, entry] of this.pendingExchanges) {
+      if (now - entry.createdAt > E2EEManager.PENDING_EXCHANGE_TTL_MS) {
+        this.pendingExchanges.delete(deviceId);
+      }
+    }
+    while (this.pendingExchanges.size >= E2EEManager.MAX_PENDING_EXCHANGES) {
+      const oldestKey = this.pendingExchanges.keys().next().value;
+      if (oldestKey) this.pendingExchanges.delete(oldestKey);
+      else break;
+    }
+  }
+
   createKeyExchangeInit(targetDeviceId: string): KeyExchangeInit {
+    this.cleanupPendingExchanges();
     const ephemeral = generateKeyPair();
-    this.pendingExchanges.set(targetDeviceId, ephemeral);
+    this.pendingExchanges.set(targetDeviceId, { keyPair: ephemeral, createdAt: Date.now() });
+
+    const signature = this.signPayload('KEY_EXCHANGE_INIT', ephemeral.publicKey);
 
     return {
-      senderDeviceId: targetDeviceId, // Will be overridden by caller with actual sender ID
+      senderDeviceId: this.deviceId,
       ephemeralPublicKey: ephemeral.publicKey,
+      identityPublicKey: this.signingKeyPair?.publicKey,
+      signature,
     };
   }
 
   /**
    * Handle an incoming key exchange init from a remote device.
-   * Computes the shared key and returns an ack with our ephemeral public key.
+   * Verifies identity signature (TOFU), computes shared key, returns signed ack.
+   * Now async due to TOFU key storage lookup.
    */
-  handleKeyExchangeInit(init: KeyExchangeInit): KeyExchangeAck {
+  async handleKeyExchangeInit(init: KeyExchangeInit): Promise<KeyExchangeAck> {
+    // Verify peer's signature (TOFU)
+    await this.verifyPeerSignature(
+      init.senderDeviceId,
+      init.identityPublicKey,
+      init.signature,
+      init.ephemeralPublicKey,
+      'KEY_EXCHANGE_INIT',
+    );
+
     const ephemeral = generateKeyPair();
     const sharedKey = computeSharedKey(ephemeral.privateKey, init.ephemeralPublicKey);
 
@@ -69,31 +202,50 @@ export class E2EEManager {
       lastReceivedCounter: -1,
     });
 
+    // Sign our ack
+    const signature = this.signPayload('KEY_EXCHANGE_ACK', ephemeral.publicKey, init.senderDeviceId);
+
     return {
+      senderDeviceId: this.deviceId,
       recipientDeviceId: init.senderDeviceId,
       ephemeralPublicKey: ephemeral.publicKey,
+      identityPublicKey: this.signingKeyPair?.publicKey,
+      signature,
     };
   }
 
   /**
    * Handle an incoming key exchange ack from a remote device.
-   * Completes the key exchange by computing the shared key.
+   * Verifies identity signature (TOFU) and completes the key exchange.
+   * Now async due to TOFU key storage lookup.
    */
-  handleKeyExchangeAck(ack: KeyExchangeAck): void {
-    const pending = this.pendingExchanges.get(ack.recipientDeviceId);
-    if (!pending) {
-      throw new Error(`E2EE: No pending key exchange for device ${ack.recipientDeviceId}`);
+  async handleKeyExchangeAck(ack: KeyExchangeAck): Promise<void> {
+    const peerId = ack.senderDeviceId;
+    const pendingEntry = this.pendingExchanges.get(peerId);
+    if (!pendingEntry) {
+      throw new Error(`E2EE: No pending key exchange for device ${peerId}`);
     }
+    const pending = pendingEntry.keyPair;
+
+    // Verify peer's signature (TOFU)
+    await this.verifyPeerSignature(
+      peerId,
+      ack.identityPublicKey,
+      ack.signature,
+      ack.ephemeralPublicKey,
+      'KEY_EXCHANGE_ACK',
+      ack.recipientDeviceId,
+    );
 
     const sharedKey = computeSharedKey(pending.privateKey, ack.ephemeralPublicKey);
 
-    this.sessions.set(ack.recipientDeviceId, {
+    this.sessions.set(peerId, {
       sharedKey,
       outgoingCounter: 0,
       lastReceivedCounter: -1,
     });
 
-    this.pendingExchanges.delete(ack.recipientDeviceId);
+    this.pendingExchanges.delete(peerId);
   }
 
   /** Check if an encrypted session is established with a device */
@@ -116,7 +268,7 @@ export class E2EEManager {
     session.outgoingCounter++;
 
     return {
-      senderDeviceId: '', // Caller should set this
+      senderDeviceId: this.deviceId,
       recipientDeviceId,
       sessionId,
       payload,
@@ -130,6 +282,17 @@ export class E2EEManager {
     const session = this.sessions.get(senderDeviceId);
     if (!session) {
       throw new Error(`E2EE: No session established with device ${senderDeviceId}`);
+    }
+
+    // SECURITY: Validate counter is a positive finite integer within safe bounds
+    if (
+      typeof message.messageCounter !== 'number' ||
+      !Number.isFinite(message.messageCounter) ||
+      !Number.isInteger(message.messageCounter) ||
+      message.messageCounter < 1 ||
+      message.messageCounter > Number.MAX_SAFE_INTEGER - 1
+    ) {
+      throw new Error('E2EE: Invalid message counter value');
     }
 
     // Replay protection

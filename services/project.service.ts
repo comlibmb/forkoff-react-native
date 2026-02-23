@@ -1,28 +1,33 @@
-import { apiClient } from './api.client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Project, ToolConfig, FileNode } from '@/types';
-import { mockProjects } from '@/mocks/projects';
 
-const USE_MOCKS = process.env.EXPO_PUBLIC_USE_MOCKS === 'true';
+const PROJECTS_KEY = '@forkoff/projects';
 
 class ProjectService {
-  async getProjects(): Promise<Project[]> {
-    if (USE_MOCKS) {
-      return mockProjects;
+  private async loadProjects(): Promise<Project[]> {
+    try {
+      const raw = await AsyncStorage.getItem(PROJECTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
+  }
 
-    return apiClient.get<Project[]>('/projects');
+  private async saveProjects(projects: Project[]): Promise<void> {
+    await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  }
+
+  async getProjects(): Promise<Project[]> {
+    return this.loadProjects();
   }
 
   async getProject(id: string): Promise<Project> {
-    if (USE_MOCKS) {
-      const project = mockProjects.find((p) => p.id === id);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-      return project;
+    const projects = await this.loadProjects();
+    const project = projects.find((p) => p.id === id);
+    if (!project) {
+      throw new Error('Project not found');
     }
-
-    return apiClient.get<Project>(`/projects/${id}`);
+    return project;
   }
 
   async createProject(data: {
@@ -32,106 +37,75 @@ class ProjectService {
     language?: string;
     framework?: string;
   }): Promise<Project> {
-    if (USE_MOCKS) {
-      return {
-        id: `project-${Date.now()}`,
-        name: data.name,
-        path: data.path,
-        language: data.language || 'typescript',
-        framework: data.framework,
-        lastModified: new Date().toISOString(),
-        deviceId: data.deviceId,
-        tools: [],
-        terminals: [],
-        servers: [],
-      };
-    }
+    const project: Project = {
+      id: `project-${Date.now()}`,
+      name: data.name,
+      path: data.path,
+      language: data.language || 'typescript',
+      framework: data.framework,
+      lastModified: new Date().toISOString(),
+      deviceId: data.deviceId,
+      tools: [],
+      terminals: [],
+      servers: [],
+    };
 
-    return apiClient.post<Project>('/projects', data);
+    const projects = await this.loadProjects();
+    projects.push(project);
+    await this.saveProjects(projects);
+
+    return project;
   }
 
   async updateProject(id: string, data: Partial<Project>): Promise<Project> {
-    if (USE_MOCKS) {
-      const project = mockProjects.find((p) => p.id === id);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-      return { ...project, ...data };
+    const projects = await this.loadProjects();
+    const index = projects.findIndex((p) => p.id === id);
+    if (index === -1) {
+      throw new Error('Project not found');
     }
 
-    return apiClient.patch<Project>(`/projects/${id}`, data);
+    projects[index] = { ...projects[index], ...data };
+    await this.saveProjects(projects);
+
+    return projects[index];
   }
 
   async deleteProject(id: string): Promise<void> {
-    if (USE_MOCKS) {
-      return;
-    }
-
-    await apiClient.delete(`/projects/${id}`);
+    const projects = await this.loadProjects();
+    await this.saveProjects(projects.filter((p) => p.id !== id));
   }
 
-  async getFileTree(projectId: string, path = '/'): Promise<FileNode[]> {
-    if (USE_MOCKS) {
-      return [
-        {
-          name: 'src',
-          path: '/src',
-          type: 'directory',
-          children: [
-            { name: 'index.ts', path: '/src/index.ts', type: 'file', language: 'typescript' },
-            { name: 'App.tsx', path: '/src/App.tsx', type: 'file', language: 'typescriptreact' },
-            {
-              name: 'components',
-              path: '/src/components',
-              type: 'directory',
-              children: [
-                { name: 'Button.tsx', path: '/src/components/Button.tsx', type: 'file', language: 'typescriptreact' },
-              ],
-            },
-          ],
-        },
-        { name: 'package.json', path: '/package.json', type: 'file', language: 'json' },
-        { name: 'tsconfig.json', path: '/tsconfig.json', type: 'file', language: 'json' },
-        { name: 'README.md', path: '/README.md', type: 'file', language: 'markdown' },
-      ];
-    }
-
-    return apiClient.get<FileNode[]>(`/projects/${projectId}/files`, {
-      params: { path },
-    });
+  async getFileTree(_projectId: string, _path = '/'): Promise<FileNode[]> {
+    // File tree is fetched via WebSocket (read_file / directory_list events)
+    return [];
   }
 
-  async getFileContent(projectId: string, filePath: string): Promise<string> {
-    if (USE_MOCKS) {
-      return `// Mock content for ${filePath}\n\nexport const example = "Hello World";\n`;
-    }
-
-    const data = await apiClient.get<{ content: string }>(`/projects/${projectId}/files/content`, {
-      params: { path: filePath },
-    });
-    return data.content;
+  async getFileContent(_projectId: string, _filePath: string): Promise<string> {
+    // File content is fetched via WebSocket (read_file events)
+    return '';
   }
 
   async updateToolConfig(projectId: string, toolConfig: ToolConfig): Promise<Project> {
-    if (USE_MOCKS) {
-      const project = mockProjects.find((p) => p.id === projectId);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-      // Initialize tools array if undefined
-      if (!project.tools) {
-        project.tools = [];
-      }
-      const toolIndex = project.tools.findIndex((t) => t.toolType === toolConfig.toolType);
-      if (toolIndex >= 0) {
-        project.tools[toolIndex] = toolConfig;
-      } else {
-        project.tools.push(toolConfig);
-      }
-      return project;
+    const projects = await this.loadProjects();
+    const index = projects.findIndex((p) => p.id === projectId);
+    if (index === -1) {
+      throw new Error('Project not found');
     }
 
-    return apiClient.put<Project>(`/projects/${projectId}/tools`, toolConfig);
+    const project = projects[index];
+    if (!project.tools) {
+      project.tools = [];
+    }
+
+    const toolIndex = project.tools.findIndex((t) => t.toolType === toolConfig.toolType);
+    if (toolIndex >= 0) {
+      project.tools[toolIndex] = toolConfig;
+    } else {
+      project.tools.push(toolConfig);
+    }
+
+    await this.saveProjects(projects);
+    return project;
   }
 }
 

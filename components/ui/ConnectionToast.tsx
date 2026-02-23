@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Laptop, WifiOff, Wifi } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useConnectionStore } from '@/stores/connection.store';
-import { useAuthStore } from '@/stores/auth.store';
+import { useIdentityStore } from '@/stores/identity.store';
 import { DeviceStatus } from '@/types';
 
 interface ToastItem {
@@ -16,7 +16,7 @@ interface ToastItem {
 
 export function ConnectionToast() {
   const { deviceStatuses } = useConnectionStore();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isPaired = useIdentityStore((state) => state.isPaired);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const previousStatuses = useRef<Record<string, DeviceStatus>>({});
   const deviceNames = useRef<Record<string, string>>({});
@@ -79,7 +79,7 @@ export function ConnectionToast() {
   }, []);
 
   // Don't show connection toasts for unauthenticated users
-  if (!isAuthenticated || toasts.length === 0) {
+  if (!isPaired || toasts.length === 0) {
     return null;
   }
 

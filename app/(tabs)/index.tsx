@@ -13,7 +13,6 @@ import {
   FolderGit2,
   Check,
 } from 'lucide-react-native';
-import { useAuthStore } from '@/stores/auth.store';
 import { useDeviceStore } from '@/stores/device.store';
 import { useProjectStore } from '@/stores/project.store';
 import { colors } from '@/theme/colors';
@@ -24,7 +23,6 @@ export default function HomeScreen() {
   // Redirect to projects tab - it's the main landing page
   return <Redirect href="/(tabs)/projects" />;
 
-  const { user } = useAuthStore();
   const { devices, fetchDevices, isLoading: devicesLoading } = useDeviceStore();
   const { projects, fetchProjects, isLoading: projectsLoading } = useProjectStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');

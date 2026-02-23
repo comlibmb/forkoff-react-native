@@ -3,9 +3,8 @@ import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  User,
+  Smartphone,
   Bell,
-  CreditCard,
   Moon,
   Sun,
   ChevronRight,
@@ -15,23 +14,20 @@ import {
   HelpCircle,
   MessageCircle,
   ExternalLink,
-  Sparkles,
   BarChart3,
   Trophy,
-  Clock,
-  Gift,
-  Users,
   Compass,
 } from 'lucide-react-native';
-import { useAuthStore } from '@/stores/auth.store';
+import { useIdentityStore } from '@/stores/identity.store';
+import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useReferralStore } from '@/stores/referral.store';
 import { useSessionSettingsStore } from '@/stores/session-settings.store';
 import { useTutorialStore } from '@/stores/tutorial.store';
-import { useState, useEffect } from 'react';
+import { wsService } from '@/services/websocket.service';
+import { useState } from 'react';
 
 interface SettingsItemProps {
-  icon: typeof User;
+  icon: typeof Smartphone;
   title: string;
   subtitle?: string;
   onPress?: () => void;
@@ -114,16 +110,12 @@ function SettingsSection({
 }
 
 export default function SettingsScreen() {
-  const { user, signOut } = useAuthStore();
+  const { mobileDeviceId, pairedDevices, unpairAll } = useIdentityStore();
+  const { devices } = useDeviceStore();
   const { isDark, theme, toggleTheme } = useTheme();
-  const { stats: referralStats, fetchStats: fetchReferralStats } = useReferralStore();
   const { unrestrictedMode, hasSeenWarning, setUnrestrictedMode, setHasSeenWarning } = useSessionSettingsStore();
   const { resetTutorial, startTutorial: startTutorialAction } = useTutorialStore();
   const [notifications, setNotifications] = useState(true);
-
-  useEffect(() => {
-    fetchReferralStats();
-  }, []);
 
   const handleReplayTutorial = () => {
     resetTutorial();
@@ -133,15 +125,16 @@ export default function SettingsScreen() {
     }, 100);
   };
 
-  const handleSignOut = async () => {
+  const handleUnpairAll = async () => {
     const confirmed = await alert.confirm(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      { confirmText: 'Sign Out', destructive: true }
+      'Unpair All Devices',
+      'This will remove all paired devices and disconnect from the relay. You will need to re-pair to use ForkOff.',
+      { confirmText: 'Unpair All', destructive: true }
     );
     if (confirmed) {
-      await signOut();
-      router.replace('/(auth)/login');
+      wsService.disconnect();
+      await unpairAll();
+      router.replace('/(onboarding)');
     }
   };
 
@@ -174,57 +167,36 @@ export default function SettingsScreen() {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
-        <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>Preferences & account</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.textTertiary }]}>Preferences & devices</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Profile Card */}
+        {/* Device Identity Card */}
         <TouchableOpacity
           onPress={() => router.push('/settings/account')}
           style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
         >
           <View style={styles.profileContent}>
-            {/* Gradient glow */}
             <View style={[styles.profileGlow, { backgroundColor: theme.primary }]} />
-
             <View style={styles.profileRow}>
-              {/* Initials avatar */}
               <View style={[styles.avatar, { backgroundColor: theme.primaryDark }]}>
-                <Text style={styles.avatarText}>
-                  {(user?.name || 'U').charAt(0).toUpperCase()}
-                </Text>
+                <Smartphone size={24} color="#fff" />
               </View>
-
               <View style={styles.profileInfo}>
                 <Text style={[styles.profileName, { color: theme.text }]}>
-                  {user?.name || 'User'}
+                  {pairedDevices.length} Paired Device{pairedDevices.length !== 1 ? 's' : ''}
                 </Text>
-                <Text style={[styles.profileEmail, { color: theme.textSecondary }]}>{user?.email || 'email@example.com'}</Text>
-                <View style={[styles.subscriptionBadge, { backgroundColor: theme.primaryBackground, borderColor: theme.primary + '30' }]}>
-                  <Sparkles size={12} color={theme.primary} />
-                  <Text style={[styles.subscriptionText, { color: theme.primary }]}>
-                    {user?.subscription || 'Free'} Plan
-                  </Text>
-                </View>
+                <Text style={[styles.profileEmail, { color: theme.textSecondary }]} numberOfLines={1}>
+                  {mobileDeviceId ? `ID: ${mobileDeviceId.slice(0, 16)}...` : 'Not initialized'}
+                </Text>
               </View>
               <ChevronRight size={20} color={theme.textTertiary} />
             </View>
           </View>
         </TouchableOpacity>
-
-        {/* Account Settings */}
-        <SettingsSection title="Account" theme={theme}>
-          <SettingsItem
-            icon={User}
-            title="Profile"
-            subtitle="Edit your profile information"
-            onPress={() => router.push('/settings/account')}
-            theme={theme}
-          />
-        </SettingsSection>
 
         {/* Preferences */}
         <SettingsSection title="Preferences" theme={theme}>
@@ -324,53 +296,6 @@ export default function SettingsScreen() {
             onPress={() => router.push('/achievements')}
             theme={theme}
           />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingsItem
-            icon={Clock}
-            title="Prompt Queue"
-            subtitle="Manage queued prompts and schedule"
-            onPress={() => router.push('/queue')}
-            theme={theme}
-          />
-        </SettingsSection>
-
-        {/* Subscription */}
-        <SettingsSection title="Subscription" theme={theme}>
-          <SettingsItem
-            icon={CreditCard}
-            title="Manage Subscription"
-            subtitle="Free plan - Upgrade for more features"
-            onPress={() => router.push('/settings/subscription')}
-            theme={theme}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingsItem
-            icon={Gift}
-            title="Redeem Voucher"
-            subtitle="Enter a promo or voucher code"
-            onPress={() => router.push('/settings/vouchers')}
-            theme={theme}
-          />
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-          <SettingsItem
-            icon={Users}
-            title="Refer Friends"
-            subtitle={
-              referralStats?.rewardMonthsAvailable
-                ? `${referralStats.rewardMonthsAvailable} reward${referralStats.rewardMonthsAvailable > 1 ? 's' : ''} available!`
-                : 'Earn free PRO months'
-            }
-            onPress={() => router.push('/settings/referrals')}
-            theme={theme}
-            rightElement={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {(referralStats?.rewardMonthsAvailable ?? 0) > 0 && (
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
-                )}
-                <ChevronRight size={20} color={theme.textTertiary} />
-              </View>
-            }
-          />
         </SettingsSection>
 
         {/* Support */}
@@ -391,12 +316,12 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {/* Sign Out */}
+        {/* Unpair All */}
         <SettingsSection title="" theme={theme}>
           <SettingsItem
             icon={LogOut}
-            title="Sign Out"
-            onPress={handleSignOut}
+            title="Unpair All Devices"
+            onPress={handleUnpairAll}
             danger
             theme={theme}
           />
@@ -404,7 +329,7 @@ export default function SettingsScreen() {
 
         {/* Version */}
         <Text style={[styles.version, { color: theme.textTertiary }]}>
-          ForkOff v1.0.0
+          ForkOff v1.0.0 (Open Source)
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -515,11 +440,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
   profileInfo: {
     flex: 1,
   },
@@ -530,23 +450,6 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14,
     marginTop: 2,
-  },
-  subscriptionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    gap: 6,
-  },
-  subscriptionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   version: {
     textAlign: 'center',

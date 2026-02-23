@@ -171,7 +171,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       return fileTree;
     } catch (error) {
-      console.error('Failed to fetch file tree:', error);
+      console.error('Failed to fetch file tree:', (error as Error).message);
       return [];
     }
   },

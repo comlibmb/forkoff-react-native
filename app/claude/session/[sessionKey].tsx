@@ -42,7 +42,6 @@ import { StatusBar, ActivityState, getActivityFromTool, getActivityDetail } from
 import { ToolUseBlock } from '@/components/claude/tools/ToolUseBlock';
 import { PlanModeBanner } from '@/components/claude/PlanModeBanner';
 import { TerminalLoader } from '@/components/claude/TerminalLoader';
-import { LimitPaywallModal } from '@/components/subscription/LimitPaywallModal';
 
 const INITIAL_LOAD = 200;
 const LOAD_MORE_COUNT = 200;
@@ -132,13 +131,6 @@ export default function ClaudeSessionScreen() {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [showTaskListModal, setShowTaskListModal] = useState(false);
 
-  // Limit reached state (server-side enforcement)
-  const [isLimitReached, setIsLimitReached] = useState(false);
-  const [limitResetAt, setLimitResetAt] = useState<string | null>(null);
-  const [limitCurrentUsage, setLimitCurrentUsage] = useState(0);
-  const [limitMax, setLimitMax] = useState(20);
-  const [countdownText, setCountdownText] = useState('');
-  const [showPaywall, setShowPaywall] = useState(false);
 
   // Auto-prompt state (for quick actions from Project Hub)
   const [autoPromptSent, setAutoPromptSent] = useState(false);
@@ -177,7 +169,6 @@ export default function ClaudeSessionScreen() {
   const focusBorder = useRef(new Animated.Value(0)).current;
   const summoningGlow = useRef(new Animated.Value(0.5)).current;
   const takeOverScale = useRef(new Animated.Value(1)).current;
-  const upgradeScale = useRef(new Animated.Value(1)).current;
 
   const session = useClaudeStore((state) =>
     state.sessions
@@ -227,44 +218,6 @@ export default function ClaudeSessionScreen() {
 
     return () => clearInterval(interval);
   }, [isThinking]);
-
-  // Countdown timer for limit reset
-  useEffect(() => {
-    if (!isLimitReached || !limitResetAt) {
-      setCountdownText('');
-      return;
-    }
-
-    const updateCountdown = () => {
-      const now = new Date().getTime();
-      const resetTime = new Date(limitResetAt).getTime();
-      const diff = resetTime - now;
-
-      if (diff <= 0) {
-        // Reset has passed, clear the limit
-        setIsLimitReached(false);
-        setLimitResetAt(null);
-        setCountdownText('');
-        return;
-      }
-
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (hours > 0) {
-        setCountdownText(`${hours}h ${minutes}m`);
-      } else if (minutes > 0) {
-        setCountdownText(`${minutes}m ${seconds}s`);
-      } else {
-        setCountdownText(`${seconds}s`);
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [isLimitReached, limitResetAt]);
 
   // Sync local session unrestricted state with global when it changes (unless user overrode)
   useEffect(() => {
@@ -505,12 +458,14 @@ export default function ClaudeSessionScreen() {
     });
 
     // Listen for permission requests (legacy RPC-based)
+    const MAX_PERMISSION_QUEUE = 50;
     const unsubPermission = wsService.on('permission_request', (data) => {
       if (data.sessionKey === sessionKey) {
         console.log('[Session] permission_request:', data.type, data.toolName);
         setPermissionQueue(prev => {
           if (prev.some(p => p.requestId === data.requestId)) return prev;
-          return [...prev, {
+          const queue = prev.length >= MAX_PERMISSION_QUEUE ? prev.slice(1) : prev;
+          return [...queue, {
             requestId: data.requestId,
             type: data.type,
             toolName: data.toolName,
@@ -529,7 +484,8 @@ export default function ClaudeSessionScreen() {
       hookPromptIdsRef.current.add(data.promptId);
       setPermissionQueue(prev => {
         if (prev.some(p => p.requestId === data.promptId)) return prev; // dedupe
-        return [...prev, convertPromptToPermissionData(data)];
+        const queue = prev.length >= MAX_PERMISSION_QUEUE ? prev.slice(1) : prev;
+        return [...queue, convertPromptToPermissionData(data)];
       });
       setActivityState('waiting');
       setActivityDetail(`Waiting for approval: ${data.toolName || 'Unknown'}`);
@@ -566,7 +522,7 @@ export default function ClaudeSessionScreen() {
           setActivityDetail(undefined);
         } else if (data.event.type === 'message') {
           // Status message from CLI
-          console.log('[Session] Status message:', data.event.message);
+          console.log('[Session] Status message received');
         }
       }
     });
@@ -628,7 +584,7 @@ export default function ClaudeSessionScreen() {
     // Listen for task progress
     const unsubTaskProgress = wsService.on('task_progress', (data: TaskProgressEvent) => {
       if (data.sessionKey !== sessionKey && data.terminalSessionId !== sessionKey) return;
-      console.log('[Session] task_progress:', data.type, data.task?.subject || data.tasks?.length);
+      console.log('[Session] task_progress:', data.type, (data.tasks?.length || 1) + ' task(s)');
 
       if (data.type === 'list' && data.tasks) {
         setTasks(data.tasks);
@@ -650,31 +606,6 @@ export default function ClaudeSessionScreen() {
       setActivityDetail(detail);
     });
 
-    // Listen for limit reached events (server-side enforcement)
-    const unsubLimitReached = wsService.on('limit_reached', (data) => {
-      console.log('[Session] limit_reached:', data.limitType, data.currentUsage, data.limit);
-      if (data.limitType === 'messages_daily') {
-        // Sync local state with server's authoritative count
-        useUsageStore.setState({
-          messagesUsedToday: data.currentUsage || 0,
-          messageLimitResetAt: data.resetAt || useUsageStore.getState().messageLimitResetAt,
-        });
-        // Show paywall modal and inline limit reached UI, stop all loading states
-        setShowPaywall(true);
-        setIsLimitReached(true);
-        setLimitResetAt(data.resetAt || null);
-        setLimitCurrentUsage(data.currentUsage || 0);
-        setLimitMax(data.limit || 20);
-        setIsSending(false);
-        setIsWaitingForResponse(false);
-        setIsThinking(false);
-        setThinkingContent(null);
-        setActivityState('idle');
-        setActivityDetail(undefined);
-        sendingRef.current = false;
-      }
-    });
-
     return () => {
       unsubClaudeMessage();
       unsubThinking();
@@ -687,7 +618,6 @@ export default function ClaudeSessionScreen() {
       unsubTokenUsage();
       unsubTaskProgress();
       unsubToolActivity();
-      unsubLimitReached();
     };
   }, [sessionKey, deviceId]);
 
@@ -860,7 +790,7 @@ export default function ClaudeSessionScreen() {
     const transcriptPath = transcriptPathRef.current;
     if (transcriptPath && transcriptPath.length > 0) {
       // Legacy transcript watching mode - subscribe and fetch from file
-      console.log('[Session] Subscribing to transcript:', sessionKey, transcriptPath);
+      console.log('[Session] Subscribing to transcript:', sessionKey);
       wsService.emit('transcript_subscribe', {
         deviceId,
         sessionKey,
@@ -1136,7 +1066,7 @@ export default function ClaudeSessionScreen() {
     if (autoPromptSentRef.current) return;
     autoPromptSentRef.current = true;
 
-    console.log('[Session] Auto-prompt: sending message with directory', autoDirectory);
+    console.log('[Session] Auto-prompt: sending message');
     setAutoPromptSent(true);
 
     // Mark as taken over so the session lifecycle hooks work
@@ -1237,9 +1167,6 @@ export default function ClaudeSessionScreen() {
     const message = inputText.trim();
     if (!message) return;
 
-    // If limit is already reached, don't allow sending (server enforces this too)
-    if (isLimitReached) return;
-
     // Clear input immediately to prevent capturing the same message twice
     setInputText('');
 
@@ -1301,7 +1228,7 @@ export default function ClaudeSessionScreen() {
     }, 50);
 
     // Send message via user_message event (routes to session-scoped CLI)
-    console.log('[Session] Sending user message:', message.substring(0, 50));
+    console.log('[Session] Sending user message (' + message.length + ' chars)');
     wsService.sendUserMessage(deviceId, message, {
       sessionKey: sessionKey,
       permissionMode: sessionUnrestricted ? 'bypassPermissions' : undefined,
@@ -1326,6 +1253,7 @@ export default function ClaudeSessionScreen() {
       });
     } else {
       wsService.emit('rpc_response', {
+        deviceId,
         requestId,
         result: { approved: decision === 'allow', remember: false },
       });
@@ -1614,15 +1542,6 @@ export default function ClaudeSessionScreen() {
         visible={showTaskListModal}
         tasks={tasks}
         onClose={() => setShowTaskListModal(false)}
-      />
-      {/* Limit Paywall Modal */}
-      <LimitPaywallModal
-        visible={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        limitType="messages_daily"
-        resetAt={limitResetAt || undefined}
-        currentUsage={limitCurrentUsage}
-        limit={limitMax}
       />
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.dark[900] }}>
         <KeyboardAvoidingView
@@ -1915,72 +1834,8 @@ export default function ClaudeSessionScreen() {
                   <AnimatedConnectDots />
                 </View>
               </View>
-            ) : isLimitReached ? (
-              /* State 3: Limit Reached */
-              <View style={{
-                backgroundColor: colors.dark[800],
-                borderWidth: 1,
-                borderColor: colors.dark[600],
-                borderRadius: 20,
-                marginHorizontal: 16,
-                marginVertical: 12,
-                padding: 16,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2,
-                shadowRadius: 12,
-                elevation: 6,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                  <Text style={{ color: theme.textSecondary, fontSize: 13, fontFamily: 'monospace' }}>
-                    Daily limit reached ({limitCurrentUsage}/{limitMax} messages)
-                  </Text>
-                </View>
-                <Animated.View style={{ transform: [{ scale: upgradeScale }] }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      Animated.sequence([
-                        Animated.spring(upgradeScale, { toValue: 0.97, tension: 200, friction: 10, useNativeDriver: true }),
-                        Animated.spring(upgradeScale, { toValue: 1, tension: 200, friction: 10, useNativeDriver: true }),
-                      ]).start();
-                      router.push('/settings/subscription');
-                    }}
-                    activeOpacity={0.85}
-                    style={{
-                      borderRadius: 14,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <LinearGradient
-                      colors={[colors.primary[500], colors.primary[700]]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{
-                        paddingVertical: 14,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Zap size={18} color="white" />
-                      <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 8, letterSpacing: 0.3 }}>
-                        Upgrade to Pro
-                      </Text>
-                      {countdownText && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                          <Clock size={12} color="rgba(255,255,255,0.9)" />
-                          <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginLeft: 4, fontFamily: 'monospace', fontWeight: '600' }}>
-                            {countdownText}
-                          </Text>
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </Animated.View>
-              </View>
             ) : (
-              /* State 4: Message Input — Premium */
+              /* State 3: Message Input */
               <Animated.View style={{
                 backgroundColor: colors.dark[800],
                 borderWidth: 1,

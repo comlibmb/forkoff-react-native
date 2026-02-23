@@ -1,12 +1,28 @@
 /**
  * TDD Tests for E2EE Manager
  * Integration service that orchestrates key management, encryption, and sessions.
+ * Tests use the full signed key exchange flow (Ed25519 identity signatures + TOFU).
  */
 import { E2EEManager } from '@/services/crypto/e2eeManager';
 import { generateKeyPair } from '@/services/crypto/keyGeneration';
 import { EncryptedPayload, EncryptedMessage } from '@/services/crypto/types';
 
 const SecureStore = require('expo-secure-store');
+
+/**
+ * Helper: perform a full signed key exchange between two initialized managers.
+ * manager1 initiates → manager2 handles init → manager1 handles ack.
+ */
+async function performKeyExchange(
+  manager1: E2EEManager,
+  device1Id: string,
+  manager2: E2EEManager,
+  device2Id: string,
+): Promise<void> {
+  const init = manager1.createKeyExchangeInit(device2Id);
+  const ack = await manager2.handleKeyExchangeInit(init);
+  await manager1.handleKeyExchangeAck(ack);
+}
 
 describe('E2EE Manager', () => {
   let manager: E2EEManager;
@@ -16,7 +32,7 @@ describe('E2EE Manager', () => {
     SecureStore.getItemAsync.mockReset();
     SecureStore.setItemAsync.mockReset();
     SecureStore.deleteItemAsync.mockReset();
-    manager = new E2EEManager();
+    manager = new E2EEManager('mobile-device');
   });
 
   describe('initialization', () => {
@@ -57,6 +73,23 @@ describe('E2EE Manager', () => {
       expect(publicKey).toBeDefined();
       expect(publicKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
     });
+
+    it('should generate signing key pair on initialization', async () => {
+      SecureStore.getItemAsync.mockResolvedValue(null);
+      SecureStore.setItemAsync.mockResolvedValue(undefined);
+
+      await manager.initialize();
+
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'e2ee_signing_public',
+        expect.any(String)
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'e2ee_signing_secret',
+        expect.any(String)
+      );
+      expect(manager.getSigningPublicKey()).toBeDefined();
+    });
   });
 
   describe('key exchange', () => {
@@ -66,40 +99,50 @@ describe('E2EE Manager', () => {
       await manager.initialize();
     });
 
-    it('should create key exchange init with ephemeral key', () => {
+    it('should create key exchange init with ephemeral key and signature', () => {
       const init = manager.createKeyExchangeInit('device-123');
-      expect(init.senderDeviceId).toBeDefined();
+      expect(init.senderDeviceId).toBe('mobile-device');
       expect(init.ephemeralPublicKey).toBeDefined();
       expect(init.ephemeralPublicKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
+      // Must include identity signature for MITM protection
+      expect(init.identityPublicKey).toBeDefined();
+      expect(init.signature).toBeDefined();
     });
 
-    it('should establish session from received key exchange init', () => {
-      // Simulate remote device sending us a key exchange init
-      const remoteKeyPair = generateKeyPair();
+    it('should establish session via full signed key exchange', async () => {
+      const remote = new E2EEManager('remote-device');
+      SecureStore.getItemAsync.mockResolvedValue(null);
+      SecureStore.setItemAsync.mockResolvedValue(undefined);
+      await remote.initialize();
+
+      await performKeyExchange(manager, 'mobile-device', remote, 'remote-device');
+
+      expect(manager.isSessionEstablished('remote-device')).toBe(true);
+      expect(remote.isSessionEstablished('mobile-device')).toBe(true);
+    });
+
+    it('should reject unsigned key exchange init', async () => {
       const init = {
-        senderDeviceId: 'remote-device',
-        ephemeralPublicKey: remoteKeyPair.publicKey,
+        senderDeviceId: 'attacker-device',
+        ephemeralPublicKey: generateKeyPair().publicKey,
+        // No identityPublicKey or signature — should be rejected
       };
 
-      const ack = manager.handleKeyExchangeInit(init);
-      expect(ack.recipientDeviceId).toBeDefined();
-      expect(ack.ephemeralPublicKey).toBeDefined();
-      expect(manager.isSessionEstablished('remote-device')).toBe(true);
+      await expect(manager.handleKeyExchangeInit(init)).rejects.toThrow(/UNSIGNED/);
     });
 
-    it('should establish session from received key exchange ack', () => {
-      // First create an init (which stores our ephemeral private key)
+    it('should reject key exchange ack with invalid signature', async () => {
       const init = manager.createKeyExchangeInit('remote-device');
 
-      // Simulate remote device acking with their ephemeral public key
-      const remoteKeyPair = generateKeyPair();
-      const ack = {
-        recipientDeviceId: 'remote-device',
-        ephemeralPublicKey: remoteKeyPair.publicKey,
+      const fakeAck = {
+        senderDeviceId: 'remote-device',
+        recipientDeviceId: 'mobile-device',
+        ephemeralPublicKey: generateKeyPair().publicKey,
+        identityPublicKey: generateKeyPair().publicKey, // Wrong key type, will fail verification
+        signature: 'aW52YWxpZHNpZ25hdHVyZQ==', // Invalid signature
       };
 
-      manager.handleKeyExchangeAck(ack);
-      expect(manager.isSessionEstablished('remote-device')).toBe(true);
+      await expect(manager.handleKeyExchangeAck(fakeAck)).rejects.toThrow();
     });
   });
 
@@ -111,21 +154,13 @@ describe('E2EE Manager', () => {
       SecureStore.getItemAsync.mockResolvedValue(null);
       SecureStore.setItemAsync.mockResolvedValue(undefined);
 
-      manager1 = new E2EEManager();
-      manager2 = new E2EEManager();
+      manager1 = new E2EEManager('device-1');
+      manager2 = new E2EEManager('device-2');
       await manager1.initialize();
       await manager2.initialize();
 
-      // Perform key exchange between manager1 and manager2
-      const init = manager1.createKeyExchangeInit('device-2');
-      const ack = manager2.handleKeyExchangeInit({
-        senderDeviceId: 'device-1',
-        ephemeralPublicKey: init.ephemeralPublicKey,
-      });
-      manager1.handleKeyExchangeAck({
-        recipientDeviceId: 'device-2',
-        ephemeralPublicKey: ack.ephemeralPublicKey,
-      });
+      // Full signed key exchange
+      await performKeyExchange(manager1, 'device-1', manager2, 'device-2');
     });
 
     it('should encrypt a message for a device', () => {
@@ -158,7 +193,7 @@ describe('E2EE Manager', () => {
     });
 
     it('should throw when encrypting without established session', () => {
-      const freshManager = new E2EEManager();
+      const freshManager = new E2EEManager('fresh-device');
       expect(() =>
         freshManager.encryptMessage('test', 'unknown-device', 'session-1')
       ).toThrow();
@@ -173,21 +208,13 @@ describe('E2EE Manager', () => {
       SecureStore.getItemAsync.mockResolvedValue(null);
       SecureStore.setItemAsync.mockResolvedValue(undefined);
 
-      manager1 = new E2EEManager();
-      manager2 = new E2EEManager();
+      manager1 = new E2EEManager('device-1');
+      manager2 = new E2EEManager('device-2');
       await manager1.initialize();
       await manager2.initialize();
 
-      // Key exchange
-      const init = manager1.createKeyExchangeInit('device-2');
-      const ack = manager2.handleKeyExchangeInit({
-        senderDeviceId: 'device-1',
-        ephemeralPublicKey: init.ephemeralPublicKey,
-      });
-      manager1.handleKeyExchangeAck({
-        recipientDeviceId: 'device-2',
-        ephemeralPublicKey: ack.ephemeralPublicKey,
-      });
+      // Full signed key exchange
+      await performKeyExchange(manager1, 'device-1', manager2, 'device-2');
     });
 
     it('should reject messages with duplicate counter', () => {
@@ -217,29 +244,29 @@ describe('E2EE Manager', () => {
       expect(manager.isSessionEstablished('unknown')).toBe(false);
     });
 
-    it('should clear session for a device', () => {
-      const remoteKeyPair = generateKeyPair();
-      manager.handleKeyExchangeInit({
-        senderDeviceId: 'device-x',
-        ephemeralPublicKey: remoteKeyPair.publicKey,
-      });
+    it('should clear session for a device', async () => {
+      const remote = new E2EEManager('device-x');
+      SecureStore.getItemAsync.mockResolvedValue(null);
+      SecureStore.setItemAsync.mockResolvedValue(undefined);
+      await remote.initialize();
+
+      await performKeyExchange(remote, 'device-x', manager, 'mobile-device');
       expect(manager.isSessionEstablished('device-x')).toBe(true);
 
       manager.clearSession('device-x');
       expect(manager.isSessionEstablished('device-x')).toBe(false);
     });
 
-    it('should clear all sessions', () => {
-      const kp1 = generateKeyPair();
-      const kp2 = generateKeyPair();
-      manager.handleKeyExchangeInit({
-        senderDeviceId: 'device-a',
-        ephemeralPublicKey: kp1.publicKey,
-      });
-      manager.handleKeyExchangeInit({
-        senderDeviceId: 'device-b',
-        ephemeralPublicKey: kp2.publicKey,
-      });
+    it('should clear all sessions', async () => {
+      const remoteA = new E2EEManager('device-a');
+      const remoteB = new E2EEManager('device-b');
+      SecureStore.getItemAsync.mockResolvedValue(null);
+      SecureStore.setItemAsync.mockResolvedValue(undefined);
+      await remoteA.initialize();
+      await remoteB.initialize();
+
+      await performKeyExchange(remoteA, 'device-a', manager, 'mobile-device');
+      await performKeyExchange(remoteB, 'device-b', manager, 'mobile-device');
 
       manager.clearAllSessions();
       expect(manager.isSessionEstablished('device-a')).toBe(false);

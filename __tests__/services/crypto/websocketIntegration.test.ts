@@ -1,6 +1,7 @@
 /**
  * TDD Tests for WebSocket E2EE Integration
  * Tests the bridge between E2EEManager, WebSocket service, and E2EE store.
+ * Updated for signed key exchange (Ed25519 identity signatures + TOFU).
  */
 
 // Store handlers that are registered with socket.on
@@ -44,10 +45,11 @@ jest.mock('socket.io-client', () => ({
   Socket: class MockSocket {},
 }));
 
-// Mock auth service
-jest.mock('@/services/auth.service', () => ({
-  authService: {
-    getAccessToken: jest.fn().mockResolvedValue('mock-token'),
+// Mock pairing service
+jest.mock('@/services/pairing.service', () => ({
+  pairingService: {
+    getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
+    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -80,6 +82,20 @@ import { generateKeyPair } from '@/services/crypto/keyGeneration';
 import { computeSharedKey } from '@/services/crypto/keyExchange';
 import { encrypt } from '@/services/crypto/encryption';
 
+/**
+ * Helper: perform a full signed key exchange between two initialized managers.
+ */
+async function performKeyExchange(
+  initiator: E2EEManager,
+  responder: E2EEManager,
+): Promise<void> {
+  const init = initiator.createKeyExchangeInit(
+    (responder as any).deviceId || 'responder',
+  );
+  const ack = await responder.handleKeyExchangeInit(init);
+  await initiator.handleKeyExchangeAck(ack);
+}
+
 describe('WebSocket E2EE Integration', () => {
   let e2eeManager: E2EEManager;
 
@@ -88,7 +104,7 @@ describe('WebSocket E2EE Integration', () => {
     mockSocket.emit.mockClear();
     useE2EEStore.getState().reset();
 
-    e2eeManager = new E2EEManager();
+    e2eeManager = new E2EEManager('mobile-device-1');
     await e2eeManager.initialize();
 
     // Disconnect + clear handlers + reconnect to get fresh socket event handlers
@@ -133,6 +149,8 @@ describe('WebSocket E2EE Integration', () => {
       const initData = {
         senderDeviceId: 'cli-device-1',
         ephemeralPublicKey: generateKeyPair().publicKey,
+        identityPublicKey: generateKeyPair().publicKey,
+        signature: 'mock-signature',
       };
 
       mockSocket.simulateEvent('encrypted_key_exchange_init', initData);
@@ -144,8 +162,11 @@ describe('WebSocket E2EE Integration', () => {
       wsService.on('encrypted_key_exchange_ack', callback);
 
       const ackData = {
+        senderDeviceId: 'cli-device-1',
         recipientDeviceId: 'mobile-device-1',
         ephemeralPublicKey: generateKeyPair().publicKey,
+        identityPublicKey: generateKeyPair().publicKey,
+        signature: 'mock-signature',
       };
 
       mockSocket.simulateEvent('encrypted_key_exchange_ack', ackData);
@@ -172,30 +193,18 @@ describe('WebSocket E2EE Integration', () => {
 
   describe('Sending E2EE events via WebSocket', () => {
     it('should emit encrypted_key_exchange_init via wsService.emit', () => {
-      const initData = {
-        senderDeviceId: 'mobile-device-1',
-        ephemeralPublicKey: generateKeyPair().publicKey,
-      };
+      const init = e2eeManager.createKeyExchangeInit('cli-device-1');
 
-      wsService.emit('encrypted_key_exchange_init', initData);
+      wsService.emit('encrypted_key_exchange_init', init);
 
       expect(mockSocket.emit).toHaveBeenCalledWith(
         'encrypted_key_exchange_init',
-        initData
-      );
-    });
-
-    it('should emit encrypted_key_exchange_ack via wsService.emit', () => {
-      const ackData = {
-        recipientDeviceId: 'cli-device-1',
-        ephemeralPublicKey: generateKeyPair().publicKey,
-      };
-
-      wsService.emit('encrypted_key_exchange_ack', ackData);
-
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'encrypted_key_exchange_ack',
-        ackData
+        expect.objectContaining({
+          senderDeviceId: 'mobile-device-1',
+          ephemeralPublicKey: init.ephemeralPublicKey,
+          identityPublicKey: expect.any(String),
+          signature: expect.any(String),
+        })
       );
     });
 
@@ -218,78 +227,62 @@ describe('WebSocket E2EE Integration', () => {
     });
   });
 
-  describe('E2EE Manager + WebSocket full key exchange flow', () => {
-    it('should complete key exchange: mobile initiates, CLI responds', () => {
-      // 1. Mobile creates key exchange init
+  describe('E2EE Manager + WebSocket full signed key exchange flow', () => {
+    it('should complete key exchange between two managers with signatures', async () => {
+      // Create a CLI-side manager
+      const cliManager = new E2EEManager('cli-device-1');
+      await cliManager.initialize();
+
+      // Mobile creates init with signature
       const init = e2eeManager.createKeyExchangeInit('cli-device-1');
       expect(init.ephemeralPublicKey).toBeDefined();
+      expect(init.identityPublicKey).toBeDefined();
+      expect(init.signature).toBeDefined();
 
-      // 2. Mobile would send init via WebSocket
-      wsService.emit('encrypted_key_exchange_init', {
-        senderDeviceId: 'mobile-device-1',
-        ephemeralPublicKey: init.ephemeralPublicKey,
-      });
+      // Mobile would send init via WebSocket
+      wsService.emit('encrypted_key_exchange_init', init);
 
       expect(mockSocket.emit).toHaveBeenCalledWith(
         'encrypted_key_exchange_init',
         expect.objectContaining({
           senderDeviceId: 'mobile-device-1',
-          ephemeralPublicKey: init.ephemeralPublicKey,
+          identityPublicKey: expect.any(String),
+          signature: expect.any(String),
         })
       );
 
-      // 3. Simulate CLI responding with ack (different key pair)
-      const cliKeyPair = generateKeyPair();
-      const ackFromCli = {
-        recipientDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliKeyPair.publicKey,
-      };
+      // CLI handles init, returns signed ack
+      const ack = await cliManager.handleKeyExchangeInit(init);
+      expect(ack.identityPublicKey).toBeDefined();
+      expect(ack.signature).toBeDefined();
 
-      // 4. Mobile handles the ack
-      e2eeManager.handleKeyExchangeAck(ackFromCli);
+      // Mobile handles ack, completing the exchange
+      await e2eeManager.handleKeyExchangeAck(ack);
 
-      // 5. Session should now be established
+      // Both sides should have established sessions
       expect(e2eeManager.isSessionEstablished('cli-device-1')).toBe(true);
+      expect(cliManager.isSessionEstablished('mobile-device-1')).toBe(true);
     });
 
-    it('should complete key exchange: CLI initiates, mobile responds', () => {
-      const cliKeyPair = generateKeyPair();
-
-      // 1. CLI sends key exchange init via WebSocket
-      const initFromCli = {
-        senderDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliKeyPair.publicKey,
+    it('should reject unsigned key exchange init', async () => {
+      const unsignedInit = {
+        senderDeviceId: 'attacker',
+        ephemeralPublicKey: generateKeyPair().publicKey,
+        // No identityPublicKey or signature
       };
 
-      // 2. Mobile handles the init and creates ack
-      const ack = e2eeManager.handleKeyExchangeInit(initFromCli);
-      expect(ack.recipientDeviceId).toBe('cli-device-1');
-      expect(ack.ephemeralPublicKey).toBeDefined();
-
-      // 3. Mobile would send ack via WebSocket
-      wsService.emit('encrypted_key_exchange_ack', ack);
-
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'encrypted_key_exchange_ack',
-        expect.objectContaining({
-          recipientDeviceId: 'cli-device-1',
-        })
-      );
-
-      // 4. Session should be established on mobile side
-      expect(e2eeManager.isSessionEstablished('cli-device-1')).toBe(true);
+      await expect(e2eeManager.handleKeyExchangeInit(unsignedInit)).rejects.toThrow(/UNSIGNED/);
     });
   });
 
   describe('Encrypted message sending over WebSocket', () => {
-    beforeEach(() => {
-      // Establish a session manually using key exchange
-      const cliKeyPair = generateKeyPair();
-      const initFromCli = {
-        senderDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliKeyPair.publicKey,
-      };
-      e2eeManager.handleKeyExchangeInit(initFromCli);
+    let cliManager: E2EEManager;
+
+    beforeEach(async () => {
+      // Establish a session using full signed key exchange
+      cliManager = new E2EEManager('cli-device-1');
+      await cliManager.initialize();
+      await performKeyExchange(e2eeManager, cliManager);
     });
 
     it('should encrypt a message and emit via WebSocket', () => {
@@ -325,58 +318,41 @@ describe('WebSocket E2EE Integration', () => {
   });
 
   describe('Encrypted message receiving over WebSocket', () => {
-    let sharedKey: Uint8Array;
+    let cliManager: E2EEManager;
 
-    beforeEach(() => {
-      // Set up a matching session from both sides
-      // Mobile initiates
-      const init = e2eeManager.createKeyExchangeInit('cli-device-1');
-
-      // CLI side computes shared key using mobile's ephemeral public key
-      const cliEphemeral = generateKeyPair();
-      sharedKey = computeSharedKey(cliEphemeral.privateKey, init.ephemeralPublicKey);
-
-      // Mobile completes exchange
-      e2eeManager.handleKeyExchangeAck({
-        recipientDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliEphemeral.publicKey,
-      });
+    beforeEach(async () => {
+      // Set up a matching session using full signed key exchange
+      cliManager = new E2EEManager('cli-device-1');
+      await cliManager.initialize();
+      await performKeyExchange(e2eeManager, cliManager);
     });
 
     it('should decrypt an incoming encrypted message', () => {
-      // CLI encrypts a message using the shared key
-      const payload = encrypt('Hello from CLI!', sharedKey);
-      const encryptedMsg = {
-        senderDeviceId: 'cli-device-1',
-        recipientDeviceId: 'mobile-device-1',
-        sessionId: 'session-abc',
-        payload,
-        messageCounter: 1,
-        timestamp: new Date().toISOString(),
-      };
+      // CLI encrypts a message
+      const encrypted = cliManager.encryptMessage(
+        'Hello from CLI!',
+        'mobile-device-1',
+        'session-abc'
+      );
 
       // Mobile decrypts
-      const plaintext = e2eeManager.decryptMessage(encryptedMsg, 'cli-device-1');
+      const plaintext = e2eeManager.decryptMessage(encrypted, 'cli-device-1');
       expect(plaintext).toBe('Hello from CLI!');
     });
 
     it('should reject replayed messages', () => {
-      const payload = encrypt('test', sharedKey);
-      const msg = {
-        senderDeviceId: 'cli-device-1',
-        recipientDeviceId: 'mobile-device-1',
-        sessionId: 'session-abc',
-        payload,
-        messageCounter: 1,
-        timestamp: new Date().toISOString(),
-      };
+      const encrypted = cliManager.encryptMessage(
+        'test',
+        'mobile-device-1',
+        'session-abc'
+      );
 
       // First receive succeeds
-      e2eeManager.decryptMessage(msg, 'cli-device-1');
+      e2eeManager.decryptMessage(encrypted, 'cli-device-1');
 
       // Replay should fail
       expect(() => {
-        e2eeManager.decryptMessage(msg, 'cli-device-1');
+        e2eeManager.decryptMessage(encrypted, 'cli-device-1');
       }).toThrow('Replay attack detected');
     });
 
@@ -384,19 +360,16 @@ describe('WebSocket E2EE Integration', () => {
       const callback = jest.fn();
       wsService.on('encrypted_message', callback);
 
-      const payload = encrypt('test message', sharedKey);
-      const encryptedMsg = {
-        senderDeviceId: 'cli-device-1',
-        recipientDeviceId: 'mobile-device-1',
-        sessionId: 'session-abc',
-        payload,
-        messageCounter: 1,
-        timestamp: new Date().toISOString(),
-      };
+      // CLI encrypts
+      const encrypted = cliManager.encryptMessage(
+        'test message',
+        'mobile-device-1',
+        'session-abc'
+      );
 
-      mockSocket.simulateEvent('encrypted_message', encryptedMsg);
+      mockSocket.simulateEvent('encrypted_message', encrypted);
 
-      expect(callback).toHaveBeenCalledWith(encryptedMsg);
+      expect(callback).toHaveBeenCalledWith(encrypted);
 
       // Decrypt the received message
       const plaintext = e2eeManager.decryptMessage(
@@ -408,19 +381,17 @@ describe('WebSocket E2EE Integration', () => {
   });
 
   describe('E2EE Store integration', () => {
-    it('should update store session status during key exchange', () => {
+    it('should update store session status during key exchange', async () => {
       const store = useE2EEStore.getState();
+      const cliManager = new E2EEManager('cli-device-1');
+      await cliManager.initialize();
 
       // Set initiating status
       store.setSessionStatus('cli-device-1', 'initiating');
       expect(useE2EEStore.getState().encryptedSessions['cli-device-1']).toBe('initiating');
 
-      // Complete key exchange
-      const cliKeyPair = generateKeyPair();
-      e2eeManager.handleKeyExchangeInit({
-        senderDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliKeyPair.publicKey,
-      });
+      // Complete signed key exchange
+      await performKeyExchange(e2eeManager, cliManager);
 
       // Update store to established
       store.setSessionStatus('cli-device-1', 'established');
@@ -434,7 +405,7 @@ describe('WebSocket E2EE Integration', () => {
       expect(useE2EEStore.getState().isSessionEncrypted('cli-device-1')).toBe(false);
     });
 
-    it('should clear sessions when disconnected', () => {
+    it('should clear sessions when disconnected', async () => {
       const store = useE2EEStore.getState();
       store.setSessionStatus('cli-device-1', 'established');
       store.setSessionStatus('cli-device-2', 'established');
@@ -457,62 +428,65 @@ describe('WebSocket E2EE Integration', () => {
     });
   });
 
-  describe('E2EE fallback behavior', () => {
-    it('should allow plaintext when E2EE is disabled', () => {
+  describe('E2EE enforcement behavior', () => {
+    it('should REFUSE plaintext for sensitive events when E2EE is disabled', () => {
       const store = useE2EEStore.getState();
       store.setE2EEEnabled(false);
 
-      // When E2EE is disabled, sendUserMessage should work normally (plaintext)
+      mockSocket.emit.mockClear();
+
+      // user_message is in ENFORCED_SENSITIVE_EVENTS — emit() routes through emitSensitive()
+      // Without E2EE, it should be DROPPED, not sent in plaintext
       wsService.emit('user_message', {
         deviceId: 'device-1',
         message: 'plaintext message',
       });
 
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'user_message',
-        expect.objectContaining({ message: 'plaintext message' })
+      const userMsgCalls = mockSocket.emit.mock.calls.filter(
+        (call) => call[0] === 'user_message',
       );
+      expect(userMsgCalls.length).toBe(0);
     });
 
-    it('should allow plaintext when session not established', () => {
+    it('should REFUSE plaintext for sensitive events when session not established', () => {
       const store = useE2EEStore.getState();
       store.setE2EEEnabled(true);
 
-      // No session established, so encryption would fail
       expect(e2eeManager.isSessionEstablished('unknown-device')).toBe(false);
 
-      // Fallback to plaintext should still be possible
+      mockSocket.emit.mockClear();
+
+      // Without an established session, sensitive events should be DROPPED/QUEUED
       wsService.emit('user_message', {
         deviceId: 'unknown-device',
         message: 'fallback message',
       });
 
+      const userMsgCalls = mockSocket.emit.mock.calls.filter(
+        (call) => call[0] === 'user_message',
+      );
+      expect(userMsgCalls.length).toBe(0);
+    });
+
+    it('should allow plaintext for non-sensitive events', () => {
+      mockSocket.emit.mockClear();
+
+      // Non-sensitive events (subscribe_device, etc.) can still be sent in plaintext
+      wsService.emit('subscribe_device', { deviceId: 'device-1' });
+
       expect(mockSocket.emit).toHaveBeenCalledWith(
-        'user_message',
-        expect.objectContaining({ message: 'fallback message' })
+        'subscribe_device',
+        expect.objectContaining({ deviceId: 'device-1' })
       );
     });
   });
 
   describe('End-to-end encrypted message round trip', () => {
-    it('should encrypt, send, receive, and decrypt a message correctly', () => {
-      // Setup: Mobile and CLI do key exchange
-      const mobileInit = e2eeManager.createKeyExchangeInit('cli-device-1');
-
-      // CLI generates its ephemeral key pair
-      const cliEphemeral = generateKeyPair();
-
-      // CLI computes shared key (using its private + mobile's public)
-      const cliSharedKey = computeSharedKey(
-        cliEphemeral.privateKey,
-        mobileInit.ephemeralPublicKey
-      );
-
-      // Mobile completes exchange (using CLI's public key)
-      e2eeManager.handleKeyExchangeAck({
-        recipientDeviceId: 'cli-device-1',
-        ephemeralPublicKey: cliEphemeral.publicKey,
-      });
+    it('should encrypt, send, receive, and decrypt a message correctly', async () => {
+      // Setup: Mobile and CLI do full signed key exchange
+      const cliManager = new E2EEManager('cli-device-1');
+      await cliManager.initialize();
+      await performKeyExchange(e2eeManager, cliManager);
 
       // 1. Mobile encrypts a message
       const encrypted = e2eeManager.encryptMessage(
@@ -541,9 +515,8 @@ describe('WebSocket E2EE Integration', () => {
       )?.[1] as { payload: { ciphertext: string; nonce: string } };
       expect(emittedPayload.payload.ciphertext).not.toBe('Hello CLI, this is encrypted!');
 
-      // 5. CLI side decrypts (simulated - using shared key directly)
-      const { decrypt: decryptFn } = require('@/services/crypto/encryption');
-      const decrypted = decryptFn(emittedPayload.payload, cliSharedKey);
+      // 5. CLI side decrypts using its E2EE manager
+      const decrypted = cliManager.decryptMessage(encrypted, 'mobile-device-1');
       expect(decrypted).toBe('Hello CLI, this is encrypted!');
     });
   });

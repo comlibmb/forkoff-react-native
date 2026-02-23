@@ -4,7 +4,6 @@ import { deviceService } from '@/services/device.service';
 import { wsService } from '@/services/websocket.service';
 import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
-import { useUsageStore } from './usage.store';
 
 interface DeviceState {
   devices: Device[];
@@ -17,9 +16,9 @@ interface DeviceState {
   getDevice: (id: string) => Device | undefined;
   selectDevice: (id: string | null) => void;
   pairDevice: (pairingCode: string) => Promise<Device>;
+  addDeviceFromPairing: (device: Device) => Promise<void>;
   renameDevice: (id: string, name: string) => Promise<void>;
   removeDevice: (id: string) => Promise<void>;
-  refreshDeviceStatus: (id: string) => Promise<void>;
   updateDeviceStatus: (deviceId: string, status: DeviceStatus, lastSeenAt?: string, cliVersion?: string) => void;
   updateToolStatus: (deviceId: string, toolType: string, status: 'active' | 'inactive' | 'error') => void;
   clearError: () => void;
@@ -36,6 +35,7 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     try {
       if (showLoading) set({ isLoading: true, error: null });
 
+      // Load from local AsyncStorage
       const devices = await deviceService.getDevices();
 
       set({
@@ -60,59 +60,65 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
   pairDevice: async (pairingCode) => {
     try {
-      const {
-        canPairDevice,
-        canRepairDevice,
-        incrementRepairs,
-        pairedDeviceCount,
-        setPairedDeviceCount,
-      } = useUsageStore.getState();
-
-      // Check if this is a re-pair (device was previously paired)
-      // We determine this by checking if we already have devices paired
-      const isRepair = pairedDeviceCount > 0;
-
-      // Check appropriate limit
-      if (isRepair) {
-        if (!canRepairDevice()) {
-          const error = new Error('REPAIR_LIMIT_REACHED');
-          set({ error: error.message });
-          throw error;
-        }
-      } else {
-        if (!canPairDevice()) {
-          const error = new Error('DEVICE_LIMIT_REACHED');
-          set({ error: error.message });
-          throw error;
-        }
-      }
-
       set({ isLoading: true, error: null });
 
-      const device = await deviceService.pairDevice(pairingCode);
+      // Pairing now happens via WebSocket events:
+      // 1. Mobile emits pair_device { pairingCode }
+      // 2. Relay forwards to CLI that registered that code
+      // 3. CLI responds with pair_device_ack { deviceId, deviceName, platform }
+      // 4. Mobile receives ack and stores device
 
-      // Increment repair count if this was a re-pair
-      if (isRepair) {
-        incrementRepairs();
-      }
+      return new Promise<Device>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          unsubAck();
+          unsubReject();
+          set({ isLoading: false, error: 'Pairing timed out. Make sure the CLI is running.' });
+          reject(new Error('Pairing timed out'));
+        }, 30000); // 30 second timeout
 
-      // Update paired device count
-      setPairedDeviceCount(pairedDeviceCount + 1);
+        const unsubAck = wsService.on('pair_device_ack', (data) => {
+          clearTimeout(timeout);
+          unsubAck();
+          unsubReject();
 
-      // Track device paired event
-      analyticsService.track('device_paired', {
-        deviceId: device.id,
-        deviceName: device.name,
-        platform: device.platform,
-        isRepair,
+          const device: Device = {
+            id: data.deviceId,
+            name: data.deviceName,
+            type: 'desktop',
+            status: 'online',
+            platform: (data.platform || 'linux') as Device['platform'],
+            lastSeen: new Date().toISOString(),
+            connectedTools: [],
+          };
+
+          // Save to AsyncStorage
+          deviceService.saveDevice(device).then(() => {
+            analyticsService.track('device_paired', {
+              deviceId: device.id,
+              deviceName: device.name,
+              platform: device.platform,
+            });
+
+            set((state) => ({
+              devices: [...state.devices.filter((d) => d.id !== device.id), device],
+              isLoading: false,
+            }));
+
+            resolve(device);
+          }).catch(reject);
+        });
+
+        const unsubReject = wsService.on('pair_device_reject', (data) => {
+          clearTimeout(timeout);
+          unsubAck();
+          unsubReject();
+          set({ isLoading: false, error: data.reason || 'Pairing rejected' });
+          reject(new Error(data.reason || 'Pairing rejected'));
+        });
+
+        // Send pairing request via WebSocket
+        wsService.pairDevice(pairingCode);
       });
-
-      set((state) => ({
-        devices: [...state.devices, device],
-        isLoading: false,
-      }));
-
-      return device;
     } catch (error) {
       sentryService.captureException(error, { context: 'pair_device' });
       set({
@@ -121,6 +127,13 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  addDeviceFromPairing: async (device: Device) => {
+    await deviceService.saveDevice(device);
+    set((state) => ({
+      devices: [...state.devices.filter((d) => d.id !== device.id), device],
+    }));
   },
 
   renameDevice: async (id, name) => {
@@ -150,6 +163,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
 
       await deviceService.removeDevice(id);
 
+      // Notify relay
+      wsService.unpairDevice(id);
+
       analyticsService.track('device_removed', {
         deviceId: id,
         deviceName: device?.name,
@@ -171,18 +187,6 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     }
   },
 
-  refreshDeviceStatus: async (id) => {
-    try {
-      const device = await deviceService.refreshDeviceStatus(id);
-
-      set((state) => ({
-        devices: state.devices.map((d) => (d.id === id ? device : d)),
-      }));
-    } catch (error) {
-      console.error('Failed to refresh device status:', error);
-    }
-  },
-
   updateDeviceStatus: (deviceId, status, lastSeenAt?: string, cliVersion?: string) => {
     const timestamp = lastSeenAt || new Date().toISOString();
     set((state) => ({
@@ -192,6 +196,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
           : d
       ),
     }));
+
+    // Persist status update to AsyncStorage (fire and forget)
+    deviceService.updateDeviceStatus(deviceId, status, lastSeenAt, cliVersion).catch(() => {});
   },
 
   updateToolStatus: (deviceId: string, toolType: string, status: 'active' | 'inactive' | 'error') => {
@@ -199,7 +206,6 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       devices: state.devices.map((d) => {
         if (d.id !== deviceId) return d;
 
-        // Normalize tool type for comparison
         const normalizedToolType = toolType.toLowerCase().replace('-', '_');
 
         const updatedTools = (d.connectedTools || []).map((tool) => {
@@ -223,7 +229,6 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       get().updateDeviceStatus(deviceId, status, lastSeenAt, cliVersion);
     });
 
-    // Subscribe to tool status updates
     const unsubscribeToolStatus = wsService.on('tool_status_update', ({ deviceId, toolType, status }) => {
       get().updateToolStatus(deviceId, toolType, status);
     });

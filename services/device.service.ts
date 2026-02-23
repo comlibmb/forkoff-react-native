@@ -1,96 +1,91 @@
-import { apiClient } from './api.client';
-import { Device, PaginatedResponse } from '@/types';
-import { mockDevices } from '@/mocks/devices';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Device } from '@/types';
+import { sentryService } from './sentry.service';
 
-const USE_MOCKS = process.env.EXPO_PUBLIC_USE_MOCKS === 'true';
+const ASYNC_DEVICES_KEY = '@forkoff/devices';
 
+/**
+ * Device service — local AsyncStorage-backed CRUD.
+ * No server calls. Device data comes from pairing events and WS status updates.
+ */
 class DeviceService {
   async getDevices(): Promise<Device[]> {
-    if (USE_MOCKS) {
-      return mockDevices;
-    }
+    try {
+      const raw = await AsyncStorage.getItem(ASYNC_DEVICES_KEY);
+      if (!raw) return [];
 
-    return apiClient.get<Device[]>('/devices');
+      const devices = JSON.parse(raw);
+      if (!Array.isArray(devices)) return [];
+
+      // Validate structure to prevent corrupted data
+      return devices.filter(
+        (d: any) => typeof d.id === 'string' && typeof d.name === 'string'
+      );
+    } catch (error) {
+      sentryService.captureException(error as Error, { context: 'get_devices' });
+      return [];
+    }
   }
 
-  async getDevice(id: string): Promise<Device> {
-    if (USE_MOCKS) {
-      const device = mockDevices.find((d) => d.id === id);
-      if (!device) {
-        throw new Error('Device not found');
-      }
-      return device;
-    }
-
-    return apiClient.get<Device>(`/devices/${id}`);
+  async getDevice(id: string): Promise<Device | null> {
+    const devices = await this.getDevices();
+    return devices.find((d) => d.id === id) || null;
   }
 
-  async pairDevice(pairingCode: string): Promise<Device> {
-    if (USE_MOCKS) {
-      // Simulate pairing delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      return {
-        id: `device-${Date.now()}`,
-        name: 'New Device',
-        type: 'desktop',
-        status: 'online',
-        platform: 'windows',
-        lastSeen: new Date().toISOString(),
-        connectedTools: [],
-        userId: 'user-1',
-      };
+  async saveDevice(device: Device): Promise<Device> {
+    const devices = await this.getDevices();
+    const existing = devices.findIndex((d) => d.id === device.id);
+
+    if (existing >= 0) {
+      devices[existing] = { ...devices[existing], ...device };
+    } else {
+      devices.push(device);
     }
 
-    return apiClient.post<Device>('/devices/pair', { pairingCode });
+    await AsyncStorage.setItem(ASYNC_DEVICES_KEY, JSON.stringify(devices));
+    return existing >= 0 ? devices[existing] : device;
   }
 
   async renameDevice(id: string, name: string): Promise<Device> {
-    if (USE_MOCKS) {
-      const device = mockDevices.find((d) => d.id === id);
-      if (!device) {
-        throw new Error('Device not found');
-      }
-      return { ...device, name };
-    }
+    const devices = await this.getDevices();
+    const device = devices.find((d) => d.id === id);
+    if (!device) throw new Error('Device not found');
 
-    return apiClient.patch<Device>(`/devices/${id}`, { name });
+    device.name = name;
+    await AsyncStorage.setItem(ASYNC_DEVICES_KEY, JSON.stringify(devices));
+    return device;
   }
 
   async removeDevice(id: string): Promise<void> {
-    if (USE_MOCKS) {
-      return;
-    }
-
-    await apiClient.delete(`/devices/${id}`);
+    const devices = await this.getDevices();
+    const filtered = devices.filter((d) => d.id !== id);
+    await AsyncStorage.setItem(ASYNC_DEVICES_KEY, JSON.stringify(filtered));
   }
 
-  async refreshDeviceStatus(id: string): Promise<Device> {
-    if (USE_MOCKS) {
-      const device = mockDevices.find((d) => d.id === id);
-      if (!device) {
-        throw new Error('Device not found');
-      }
-      return device;
+  async updateDeviceStatus(
+    id: string,
+    status: Device['status'],
+    lastSeenAt?: string,
+    cliVersion?: string
+  ): Promise<void> {
+    const devices = await this.getDevices();
+    const device = devices.find((d) => d.id === id);
+    if (!device) return;
+
+    device.status = status;
+    if (lastSeenAt) {
+      device.lastSeen = lastSeenAt;
+      device.lastSeenAt = lastSeenAt;
+    }
+    if (cliVersion) {
+      device.cliVersion = cliVersion;
     }
 
-    return apiClient.post<Device>(`/devices/${id}/refresh`);
+    await AsyncStorage.setItem(ASYNC_DEVICES_KEY, JSON.stringify(devices));
   }
 
-  async getDeviceActivity(id: string, page = 1, pageSize = 20): Promise<PaginatedResponse<unknown>> {
-    if (USE_MOCKS) {
-      return {
-        data: [],
-        total: 0,
-        page,
-        pageSize,
-        hasMore: false,
-      };
-    }
-
-    return apiClient.get<PaginatedResponse<unknown>>(
-      `/devices/${id}/activity`,
-      { params: { page, pageSize } }
-    );
+  async clearAll(): Promise<void> {
+    await AsyncStorage.removeItem(ASYNC_DEVICES_KEY);
   }
 }
 

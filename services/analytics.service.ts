@@ -24,7 +24,7 @@ class AnalyticsService {
 
     this.userId = userId;
     this.client.identify(userId, properties);
-    console.log('[Analytics] User identified:', userId, properties);
+    console.log('[Analytics] User identified');
   }
 
   identifyWithCountry(
@@ -50,7 +50,7 @@ class AnalyticsService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.client.identify(userId, identifyProperties as any);
-    console.log('[Analytics] User identified with country:', userId, properties.country);
+    console.log('[Analytics] User identified with country');
   }
 
   track(
@@ -60,7 +60,7 @@ class AnalyticsService {
     if (!this.client) return;
 
     this.client.capture(event, properties);
-    console.log('[Analytics] Event tracked:', event, properties);
+    console.log('[Analytics] Event tracked:', event);
   }
 
   screen(

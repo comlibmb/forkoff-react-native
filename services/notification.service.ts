@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { apiClient } from './api.client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sentryService } from './sentry.service';
 
 // Configure notification handling
@@ -14,6 +14,8 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+const ASYNC_NOTIFICATION_SETTINGS_KEY = '@forkoff/notification_settings';
 
 export interface NotificationSettings {
   pushEnabled: boolean;
@@ -82,8 +84,11 @@ class NotificationService {
 
       this.expoPushToken = tokenData.data;
 
-      // Register token with backend
-      await this.registerTokenWithBackend(this.expoPushToken);
+      // Register push token via WebSocket relay (lazy import to avoid circular dep)
+      const { wsService } = await import('./websocket.service');
+      if (wsService.isConnected) {
+        wsService.registerPushToken(this.expoPushToken, Platform.OS);
+      }
 
       return this.expoPushToken;
     } catch (error) {
@@ -94,37 +99,27 @@ class NotificationService {
     }
   }
 
-  private async registerTokenWithBackend(token: string): Promise<void> {
-    try {
-      await apiClient.post('/notifications/register', {
-        token,
-        platform: Platform.OS,
-        deviceId: Device.modelId,
-      });
-    } catch (error) {
-      console.error('Failed to register push token:', error);
-      sentryService.captureException(error as Error, { context: 'registerTokenWithBackend' });
-    }
-  }
-
   async getSettings(): Promise<NotificationSettings> {
     try {
-      return await apiClient.get<NotificationSettings>('/notifications/settings');
+      const raw = await AsyncStorage.getItem(ASYNC_NOTIFICATION_SETTINGS_KEY);
+      if (raw) return JSON.parse(raw);
     } catch (error) {
       sentryService.captureMessage('notification_settings_fetch_failed', 'warning', { error: String(error) });
-      // Return default settings
-      return {
-        pushEnabled: true,
-        approvalRequests: true,
-        deviceStatus: true,
-        chatMessages: true,
-        systemUpdates: true,
-      };
     }
+    // Default settings
+    return {
+      pushEnabled: true,
+      approvalRequests: true,
+      deviceStatus: true,
+      chatMessages: true,
+      systemUpdates: true,
+    };
   }
 
   async updateSettings(settings: Partial<NotificationSettings>): Promise<void> {
-    await apiClient.patch('/notifications/settings', settings);
+    const current = await this.getSettings();
+    const updated = { ...current, ...settings };
+    await AsyncStorage.setItem(ASYNC_NOTIFICATION_SETTINGS_KEY, JSON.stringify(updated));
   }
 
   async scheduleNotification(
