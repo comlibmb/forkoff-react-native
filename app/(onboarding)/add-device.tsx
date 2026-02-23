@@ -6,6 +6,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, QrCode, Keyboard, CheckCircle, ArrowRight } from 'lucide-react-native';
 import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
+import { pairingService } from '@/services/pairing.service';
+import { wsService } from '@/services/websocket.service';
+
+async function connectAndWait(timeoutMs = 10000): Promise<void> {
+  wsService.disconnect();
+  await wsService.connect();
+  if (wsService.isConnected) return;
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsub();
+      reject(new Error('Connection timed out. Check that CLI is running and you are on the same network.'));
+    }, timeoutMs);
+    const unsub = wsService.on('connected', () => {
+      clearTimeout(timeout);
+      unsub();
+      resolve();
+    });
+  });
+}
 
 type AddMethod = 'qr' | 'code';
 
@@ -14,6 +33,7 @@ export default function AddDeviceScreen() {
   const { pairDevice, isLoading, devices } = useDeviceStore();
   const [method, setMethod] = useState<AddMethod>('qr');
   const [pairingCode, setPairingCode] = useState('');
+  const [relayAddress, setRelayAddress] = useState('');
   const [isPaired, setIsPaired] = useState(false);
   const deviceCountOnMount = useRef(devices.length);
 
@@ -30,11 +50,24 @@ export default function AddDeviceScreen() {
       return;
     }
 
+    const addr = relayAddress.trim();
+    if (!addr) {
+      alert.warning('Relay Address Required', 'Enter the relay address shown in your terminal (e.g., 192.168.1.5:3000).');
+      return;
+    }
+
     try {
+      let relayUrl = addr;
+      if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
+        relayUrl = `ws://${relayUrl}`;
+      }
+      await pairingService.setRelayUrl(relayUrl);
+      await connectAndWait();
+
       await pairDevice(pairingCode);
       setIsPaired(true);
     } catch (error) {
-      alert.error('Error', 'Failed to pair device. Please try again.');
+      alert.error('Pairing Failed', 'Could not connect to CLI. Check the relay address and pairing code.');
     }
   };
 
@@ -270,6 +303,33 @@ export default function AddDeviceScreen() {
               />
             </View>
 
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                Relay Address
+              </Text>
+              <TextInput
+                placeholder="e.g., 192.168.1.5:3000"
+                placeholderTextColor={theme.textTertiary}
+                value={relayAddress}
+                onChangeText={setRelayAddress}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  backgroundColor: theme.backgroundSecondary,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  color: theme.text,
+                  fontSize: 16,
+                  fontFamily: 'monospace',
+                  textAlign: 'center',
+                }}
+              />
+            </View>
+
             <View style={{ marginBottom: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
               <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
                 First, install ForkOff CLI:{'\n'}
@@ -280,7 +340,7 @@ export default function AddDeviceScreen() {
                 <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
                   forkoff pair
                 </Text>
-                {'\n'}and enter the code shown
+                {'\n'}Enter the code and relay address shown
               </Text>
             </View>
 

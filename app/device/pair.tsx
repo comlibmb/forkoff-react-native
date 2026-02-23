@@ -8,6 +8,30 @@ import { X, CheckCircle, Flashlight, FlashlightOff, Keyboard, QrCode, ArrowLeft 
 import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
 import { pairingService } from '@/services/pairing.service';
+import { wsService } from '@/services/websocket.service';
+
+/** Connect to relay and wait for the socket to actually be connected */
+async function connectAndWait(timeoutMs = 10000): Promise<void> {
+  wsService.disconnect();
+  await wsService.connect();
+
+  // If already connected, return immediately
+  if (wsService.isConnected) return;
+
+  // Otherwise wait for the 'connected' event
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsub();
+      reject(new Error('Connection timed out. Check that CLI is running and you are on the same network.'));
+    }, timeoutMs);
+
+    const unsub = wsService.on('connected', () => {
+      clearTimeout(timeout);
+      unsub();
+      resolve();
+    });
+  });
+}
 
 type PairMethod = 'qr' | 'code';
 
@@ -21,6 +45,7 @@ export default function PairDeviceScreen() {
   const [isPaired, setIsPaired] = useState(false);
   const [pairedDeviceName, setPairedDeviceName] = useState('');
   const [flashOn, setFlashOn] = useState(false);
+  const [relayAddress, setRelayAddress] = useState('');
 
   const isProcessingRef = useRef(false);
 
@@ -61,10 +86,11 @@ export default function PairDeviceScreen() {
         throw new Error('Invalid pairing code format');
       }
 
-      // If relay URL is embedded in QR, set it before pairing
+      // Set relay URL and connect to CLI's embedded server before pairing
       if (relayUrl) {
         await pairingService.setRelayUrl(relayUrl);
       }
+      await connectAndWait();
 
       const device = await pairDevice(pairingCode);
       setPairedDeviceName(device.name);
@@ -84,12 +110,27 @@ export default function PairDeviceScreen() {
       return;
     }
 
+    const addr = relayAddress.trim();
+    if (!addr) {
+      alert.warning('Relay Address Required', 'Enter the relay address shown in your terminal (e.g., 192.168.1.5:3000).');
+      return;
+    }
+
     try {
+      // Build relay URL from address (add ws:// if not present)
+      let relayUrl = addr;
+      if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
+        relayUrl = `ws://${relayUrl}`;
+      }
+
+      await pairingService.setRelayUrl(relayUrl);
+      await connectAndWait();
+
       const device = await pairDevice(manualCode.toUpperCase());
       setPairedDeviceName(device.name);
       setIsPaired(true);
     } catch (error) {
-      alert.error('Pairing Failed', 'Invalid pairing code or device not found. Please try again.');
+      alert.error('Pairing Failed', 'Could not connect to CLI. Check the relay address and pairing code.');
     }
   };
 
@@ -359,6 +400,30 @@ export default function PairDeviceScreen() {
                 paddingHorizontal: 24,
                 borderRadius: 12,
                 letterSpacing: 4,
+                marginBottom: 16,
+              }}
+            />
+
+            <Text style={{ color: theme.textSecondary, fontSize: 14, marginBottom: 8 }}>Relay Address</Text>
+            <TextInput
+              value={relayAddress}
+              onChangeText={setRelayAddress}
+              placeholder="e.g., 192.168.1.5:3000"
+              placeholderTextColor={theme.textTertiary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={{
+                backgroundColor: theme.backgroundSecondary,
+                borderWidth: 1,
+                borderColor: theme.border,
+                color: theme.text,
+                fontSize: 16,
+                fontFamily: 'monospace',
+                textAlign: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
                 marginBottom: 24,
               }}
             />
@@ -390,7 +455,7 @@ export default function PairDeviceScreen() {
             <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
               On your computer, run:{'\n'}
               <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>forkoff pair</Text>
-              {'\n'}and enter the code shown below the QR code
+              {'\n'}Enter the code and relay address shown in your terminal
             </Text>
           </View>
         </View>

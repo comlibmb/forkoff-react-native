@@ -81,58 +81,8 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     // Subscribe to device room
     wsService.subscribeToDevice(deviceId);
 
-    // NOTE: Don't emit claude_sessions_request here - it causes excessive requests
-    // Sessions are fetched via API on load and refreshed every 45 seconds in projects.tsx
-
-    // Listen for Claude session updates - batch updates for performance
-    const unsubSessionUpdate = wsService.on('claude_session_update', (data) => {
-      if (data.deviceId !== deviceId) return;
-
-      // Use batched updates to prevent multiple re-renders
-      unstable_batchedUpdates(() => {
-        set((state) => {
-          const newSessions = new Map(state.sessions);
-          const deviceSessions = newSessions.get(deviceId) || [];
-
-          // Find and update existing session or add new one
-          const existingIndex = deviceSessions.findIndex(
-            (s) => s.sessionKey === data.sessionKey
-          );
-
-          if (existingIndex >= 0) {
-            deviceSessions[existingIndex] = {
-              ...deviceSessions[existingIndex],
-              directory: data.directory || deviceSessions[existingIndex].directory,
-              name: data.name || deviceSessions[existingIndex].name,
-              state: data.state ?? deviceSessions[existingIndex].state,
-              lastUsedAt: data.lastUsedAt || deviceSessions[existingIndex].lastUsedAt,
-              transcriptPath: data.transcriptPath ?? deviceSessions[existingIndex].transcriptPath,
-            };
-          } else {
-            deviceSessions.push(data);
-          }
-
-          // Sort by lastUsedAt descending (most recent first)
-          deviceSessions.sort((a, b) =>
-            new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime()
-          );
-
-          newSessions.set(deviceId, [...deviceSessions]);
-
-          // Also update tool status if this session is active
-          const newToolStatus = new Map(state.activeToolStatus);
-          if (data.state === 'active') {
-            newToolStatus.set(deviceId, 'active');
-          } else {
-            // Check if any other session is active
-            const hasActiveSession = deviceSessions.some(s => s.state === 'active');
-            newToolStatus.set(deviceId, hasActiveSession ? 'active' : 'inactive');
-          }
-
-          return { sessions: newSessions, activeToolStatus: newToolStatus };
-        });
-      });
-    });
+    // Session updates (individual + batch) are handled by module-level global listeners
+    // so they work even before this component mounts.
 
     // Listen for tool status updates
     const unsubToolStatus = wsService.on('tool_status_update', (data) => {
@@ -168,7 +118,6 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     });
 
     return () => {
-      unsubSessionUpdate();
       unsubToolStatus();
       unsubDirList();
       unsubTabComplete();
@@ -343,5 +292,71 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+// Global listeners — always active regardless of which screen is mounted.
+// This ensures batch/individual session updates from CLI are captured even before
+// the Projects screen mounts and calls subscribeToUpdates.
+function processSessionUpdate(
+  state: ClaudeState,
+  deviceId: string,
+  session: any,
+): Partial<ClaudeState> {
+  const newSessions = new Map(state.sessions);
+  const deviceSessions = [...(newSessions.get(deviceId) || [])];
+  const newToolStatus = new Map(state.activeToolStatus);
+
+  const existingIndex = deviceSessions.findIndex(
+    (s) => s.sessionKey === session.sessionKey
+  );
+
+  if (existingIndex >= 0) {
+    deviceSessions[existingIndex] = {
+      ...deviceSessions[existingIndex],
+      directory: session.directory || deviceSessions[existingIndex].directory,
+      name: session.name || deviceSessions[existingIndex].name,
+      state: session.state ?? deviceSessions[existingIndex].state,
+      lastUsedAt: session.lastUsedAt || deviceSessions[existingIndex].lastUsedAt,
+      transcriptPath: session.transcriptPath ?? deviceSessions[existingIndex].transcriptPath,
+    };
+  } else {
+    deviceSessions.push(session);
+  }
+
+  deviceSessions.sort((a, b) =>
+    new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime()
+  );
+
+  newSessions.set(deviceId, deviceSessions);
+
+  const hasActiveSession = deviceSessions.some(s => s.state === 'active');
+  newToolStatus.set(deviceId, hasActiveSession ? 'active' : 'inactive');
+
+  return { sessions: newSessions, activeToolStatus: newToolStatus };
+}
+
+wsService.on('claude_session_update', (data) => {
+  if (!data.deviceId) return;
+  unstable_batchedUpdates(() => {
+    useClaudeStore.setState((state) => processSessionUpdate(state, data.deviceId, data));
+  });
+});
+
+wsService.on('claude_session_batch_update', (data) => {
+  const sessions = data.sessions;
+  if (!Array.isArray(sessions) || sessions.length === 0) return;
+  unstable_batchedUpdates(() => {
+    useClaudeStore.setState((state) => {
+      let result: Partial<ClaudeState> = {};
+      let merged = state;
+      for (const session of sessions) {
+        if (!session.deviceId) continue;
+        const update = processSessionUpdate(merged, session.deviceId, session);
+        merged = { ...merged, ...update } as ClaudeState;
+        result = { ...result, ...update };
+      }
+      return result;
+    });
+  });
+});
 
 export default useClaudeStore;

@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAnalyticsStore } from '@/stores/analytics.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
+import { useDeviceStore } from '@/stores/device.store';
 import { UsageSummaryCard } from '@/components/analytics/UsageSummaryCard';
 import { WaveAreaChart } from '@/components/analytics/WaveAreaChart';
 import { PeriodSelector } from '@/components/analytics/PeriodSelector';
@@ -29,9 +30,11 @@ export default function AnalyticsScreen() {
   } = useAnalyticsStore();
 
   const { unlockedAchievements, fetchUnlockedAchievements } = useAchievementsStore();
+  const { devices } = useDeviceStore();
 
   // Skeleton crossfade state
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
 
@@ -43,19 +46,15 @@ export default function AnalyticsScreen() {
   }, [addRealtimeUsage]);
 
   useEffect(() => {
-    fetchUsageStats();
-    fetchStreakInfo();
-    fetchUnlockedAchievements();
-
-    // Get daily data for the past 30 days
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
-
-    fetchDailyUsage(
-      startDate.toISOString().split('T')[0],
-      endDate.toISOString().split('T')[0],
-    );
+    // Wait for all initial fetches to complete before dismissing skeleton
+    Promise.all([
+      fetchUsageStats(),
+      fetchStreakInfo(),
+      fetchUnlockedAchievements(),
+      fetchDailyUsage(),
+    ]).finally(() => {
+      setInitialFetchDone(true);
+    });
 
     // Subscribe to realtime token usage updates
     wsService.on('token_usage', handleTokenUsage);
@@ -65,10 +64,9 @@ export default function AnalyticsScreen() {
     };
   }, [handleTokenUsage]);
 
-  // Crossfade: skeleton out, content in
-  const hasData = usageStats !== null || dailyUsage.length > 0;
+  // Crossfade: skeleton out, content in — triggers once all initial fetches complete
   useEffect(() => {
-    if (!isLoading && isInitialLoad && hasData) {
+    if (initialFetchDone && isInitialLoad) {
       Animated.parallel([
         Animated.timing(skeletonOpacity, {
           toValue: 0,
@@ -86,12 +84,19 @@ export default function AnalyticsScreen() {
         setIsInitialLoad(false);
       });
     }
-  }, [isLoading, isInitialLoad, hasData, skeletonOpacity, contentOpacity]);
+  }, [initialFetchDone, isInitialLoad, skeletonOpacity, contentOpacity]);
 
   const handleRefresh = () => {
     fetchUsageStats();
     fetchStreakInfo();
     fetchUnlockedAchievements(true);
+
+    // Request fresh stats from all connected CLI devices
+    for (const device of devices) {
+      if (device.status === 'online') {
+        wsService.requestUsageStats(device.id);
+      }
+    }
   };
 
   // Format large numbers

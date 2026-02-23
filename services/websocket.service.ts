@@ -325,6 +325,7 @@ interface EventCallbacks {
   code_change: EventCallback<CodeChange>[];
   tool_status_update: EventCallback<ToolStatusUpdateEvent>[];
   claude_session_update: EventCallback<ClaudeSessionUpdateEvent>[];
+  claude_session_batch_update: EventCallback<{ sessions: ClaudeSessionUpdateEvent[] }>[];
   directory_list_response: EventCallback<DirectoryListResponseEvent>[];
   read_file_response: EventCallback<ReadFileResponseEvent>[];
   tab_complete_response: EventCallback<TabCompleteResponseEvent>[];
@@ -348,6 +349,10 @@ interface EventCallbacks {
   token_usage: EventCallback<TokenUsageEvent>[];
   task_progress: EventCallback<TaskProgressEvent>[];
   achievement_unlocked: EventCallback<AchievementUnlockedEvent>[];
+  // Usage analytics sync events
+  usage_stats_sync: EventCallback<any>[];
+  daily_usage_sync: EventCallback<any>[];
+  streak_info_sync: EventCallback<any>[];
   // Pairing events
   pair_device_ack: EventCallback<PairDeviceAckEvent>[];
   pair_device_reject: EventCallback<PairDeviceRejectEvent>[];
@@ -411,8 +416,9 @@ const ENFORCED_INBOUND_EVENTS = new Set([
   'permission_prompt', 'transcript_history', 'transcript_update',
   'thinking_content', 'task_progress', 'tool_activity',
   'claude_approval_request', 'approval_request', 'rpc_response',
-  'claude_session_update', 'terminal_cwd', 'token_usage',
+  'claude_session_update', 'claude_session_batch_update', 'terminal_cwd', 'token_usage',
   'pending_permissions_sync', 'claude_session_event',
+  'usage_stats_sync', 'daily_usage_sync', 'streak_info_sync',
 ]);
 
 const SENSITIVE_QUEUE_TTL_MS = 30_000; // 30 seconds max wait
@@ -440,6 +446,9 @@ const ALLOWED_ENCRYPTED_EVENTS = new Set([
   'token_usage',
   'pending_permissions_sync',
   'claude_session_event',
+  'usage_stats_sync',
+  'daily_usage_sync',
+  'streak_info_sync',
 ]);
 
 class WebSocketService {
@@ -473,6 +482,7 @@ class WebSocketService {
     code_change: [],
     tool_status_update: [],
     claude_session_update: [],
+    claude_session_batch_update: [],
     directory_list_response: [],
     read_file_response: [],
     tab_complete_response: [],
@@ -496,6 +506,9 @@ class WebSocketService {
     token_usage: [],
     task_progress: [],
     achievement_unlocked: [],
+    usage_stats_sync: [],
+    daily_usage_sync: [],
+    streak_info_sync: [],
     pair_device_ack: [],
     pair_device_reject: [],
     encrypted_key_exchange_init: [],
@@ -769,6 +782,22 @@ class WebSocketService {
       this.emitInternal('achievement_unlocked', data);
     });
 
+    // Usage analytics sync events
+    this.socket.on('usage_stats_sync', (data) => {
+      console.log('[WS] GOT usage_stats_sync');
+      this.emitInternal('usage_stats_sync', data);
+    });
+
+    this.socket.on('daily_usage_sync', (data) => {
+      console.log('[WS] GOT daily_usage_sync');
+      this.emitInternal('daily_usage_sync', data);
+    });
+
+    this.socket.on('streak_info_sync', (data) => {
+      console.log('[WS] GOT streak_info_sync');
+      this.emitInternal('streak_info_sync', data);
+    });
+
     // Pairing events (from relay)
     this.socket.on('pair_device_ack', (data) => {
       console.log('[WS] GOT pair_device_ack:', data?.deviceId);
@@ -783,24 +812,23 @@ class WebSocketService {
     // E2EE events — handle key exchange (async for TOFU verification) and decrypt incoming messages
     this.socket.on('encrypted_key_exchange_init', (data: KeyExchangeInit) => {
       console.log('[WS] GOT encrypted_key_exchange_init:', data?.senderDeviceId);
-      // If we receive an init, the other side is initiating — respond
-      if (this.e2eeManager) {
-        this.e2eeManager.handleKeyExchangeInit(data).then((ack) => {
-          this.socket?.emit('encrypted_key_exchange_ack', {
-            ...ack,
-            senderDeviceId: this.mobileDeviceId,
-            recipientDeviceId: data.senderDeviceId,
-          });
-          useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'established');
-          useE2EEStore.getState().setE2EEEnabled(true);
-          this._anyE2EESessionEstablished = true;
-          console.log(`[E2EE] Session established with ${data.senderDeviceId}`);
-          this.flushSensitiveQueue();
-        }).catch((err) => {
-          console.error('[E2EE] Key exchange init handler failed:', (err as Error).message);
-          useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'failed');
-        });
-      }
+      // Lazily create/recreate e2eeManager with the correct mobileDeviceId
+      const handleInit = async () => {
+        await this.ensureE2EEManager();
+        const ack = await this.e2eeManager!.handleKeyExchangeInit(data);
+        // Don't override senderDeviceId — e2eeManager signed with its deviceId,
+        // the ack must use the same ID or signature verification will fail
+        this.socket?.emit('encrypted_key_exchange_ack', ack);
+        useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'established');
+        useE2EEStore.getState().setE2EEEnabled(true);
+        this._anyE2EESessionEstablished = true;
+        console.log(`[E2EE] Session established with ${data.senderDeviceId}`);
+        this.flushSensitiveQueue();
+      };
+      handleInit().catch((err) => {
+        console.error('[E2EE] Key exchange init handler failed:', (err as Error).message);
+        useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'failed');
+      });
       this.emitInternal('encrypted_key_exchange_init', data as any);
     });
 
@@ -835,13 +863,13 @@ class WebSocketService {
             this.emitInternal(parsed._event as keyof EventCallbacks, parsed._data, true);
             return;
           } else if (parsed._event) {
-            console.warn(`[E2EE] Blocked unknown encrypted event: ${parsed._event}`);
+            console.warn(`[E2EE] Decrypted but unregistered event: ${parsed._event}`);
             return;
           }
         } catch (err) {
           // SECURITY: Do NOT fall through to plaintext handling on decryption failure.
           // Silently dropping is safer than emitting potentially corrupted data.
-          console.error('[E2EE] Failed to decrypt message — dropped (no fallback)');
+          console.error('[E2EE] Failed to decrypt message — dropped (no fallback):', (err as Error).message);
           return;
         }
       }
@@ -860,6 +888,7 @@ class WebSocketService {
       return;
     }
     const callbacks = this.callbacks[event];
+    if (!callbacks) return;
     callbacks.forEach((callback) => {
       try {
         (callback as (data: unknown) => void)(data);
@@ -897,7 +926,6 @@ class WebSocketService {
       try {
         const plaintext = JSON.stringify({ _event: event, _data: data });
         const encrypted = this.e2eeManager.encryptMessage(plaintext, targetDeviceId, 'default');
-        encrypted.senderDeviceId = this.mobileDeviceId;
         this.socket?.emit('encrypted_message', encrypted);
         return;
       } catch (err) {
@@ -1005,45 +1033,30 @@ class WebSocketService {
     }
   }
 
-  // Subscribe to specific device updates + initiate E2EE key exchange
+  // Subscribe to specific device updates + prepare E2EE manager
   subscribeToDevice(deviceId: string): void {
     this.subscribedDevices.add(deviceId);
     this.socket?.emit('subscribe_device', { deviceId });
 
-    // Initiate E2EE key exchange with this device
-    this.initE2EEAndExchange(deviceId).catch((err) =>
-      console.log(`[E2EE] Key exchange skipped for ${deviceId}: ${err.message}`)
+    // Ensure E2EE manager is ready (CLI initiates the key exchange on mobile_connected)
+    this.ensureE2EEManager().catch((err) =>
+      console.log(`[E2EE] Manager init skipped for ${deviceId}: ${err.message}`)
     );
   }
 
   /**
-   * Initialize E2EE manager (if not already) and start key exchange with a device.
+   * Ensure E2EE manager exists and is initialized with the correct device ID.
+   * Recreates the manager if the mobileDeviceId has changed since creation.
    */
-  private async initE2EEAndExchange(deviceId: string): Promise<void> {
-    // Initialize E2EE manager once
-    if (!this.e2eeManager) {
+  private async ensureE2EEManager(): Promise<void> {
+    if (!this.e2eeManager || this.e2eeManager.getDeviceId() !== this.mobileDeviceId) {
+      if (this.e2eeManager) {
+        console.log(`[E2EE] Recreating manager: old deviceId=${this.e2eeManager.getDeviceId().substring(0, 20)}... new=${this.mobileDeviceId.substring(0, 20)}...`);
+      }
       this.e2eeManager = new E2EEManager(this.mobileDeviceId);
       this.e2eeInitPromise = this.e2eeManager.initialize();
     }
     await this.e2eeInitPromise;
-
-    // Skip if session already established
-    if (this.e2eeManager.isSessionEstablished(deviceId)) {
-      console.log(`[E2EE] Session already active with ${deviceId}`);
-      return;
-    }
-
-    // Initiate key exchange (includes identity signature for MITM protection)
-    useE2EEStore.getState().setSessionStatus(deviceId, 'initiating');
-    const init = this.e2eeManager.createKeyExchangeInit(deviceId);
-    this.socket?.emit('encrypted_key_exchange_init', {
-      senderDeviceId: this.mobileDeviceId,
-      recipientDeviceId: deviceId,
-      ephemeralPublicKey: init.ephemeralPublicKey,
-      identityPublicKey: init.identityPublicKey,
-      signature: init.signature,
-    });
-    console.log(`[E2EE] Key exchange initiated with ${deviceId}`);
   }
 
   unsubscribeFromDevice(deviceId: string): void {
@@ -1157,6 +1170,12 @@ class WebSocketService {
       deviceId,
       sessionKey
     }, deviceId);
+  }
+
+  // Request usage stats refresh from CLI device
+  requestUsageStats(deviceId: string): void {
+    console.log(`[WS] Requesting usage stats from device ${deviceId}`);
+    this.emitSensitive('usage_stats_request', { deviceId }, deviceId);
   }
 
   // Create/initialize terminal session on device (sensitive — contains working directory)

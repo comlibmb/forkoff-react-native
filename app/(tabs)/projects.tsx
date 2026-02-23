@@ -360,6 +360,41 @@ const NoSessionsState = memo(
   ),
 );
 
+const PulsingIcon = memo(({ color }: { color: string }) => {
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
+  return (
+    <Animated.View style={{ opacity: pulseAnim, marginBottom: 16 }}>
+      <Folder size={48} color={color} />
+    </Animated.View>
+  );
+});
+
+const LoadingSessionsState = memo(
+  ({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) => (
+    <View style={styles.emptyStateContainer}>
+      <PulsingIcon color={theme.primary} />
+      <Text style={[styles.emptyStateTitle, { color: theme.textTertiary }]}>
+        Loading projects...
+      </Text>
+      <Text style={[styles.emptyStateSubtitle, { color: theme.border }]}>
+        Fetching sessions from your device
+      </Text>
+    </View>
+  ),
+);
+
 const NoPinnedState = memo(
   ({
     theme,
@@ -634,6 +669,7 @@ export default function ProjectsScreen() {
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(true);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [scanDeviceCount, setScanDeviceCount] = useState(0);
   const [scanProjectCount, setScanProjectCount] = useState(0);
@@ -722,13 +758,41 @@ export default function ProjectsScreen() {
       await new Promise((r) => setTimeout(r, 500));
       setScanStep(3);
 
-      // Done scanning
+      // Done scanning — if no sessions arrived yet, show loading state
+      // (sessions arrive asynchronously via encrypted batch update)
+      if (projectCount === 0 && foundDevices.length > 0) {
+        setIsLoadingSessions(true);
+      }
+
       await new Promise((r) => setTimeout(r, 600));
       setIsScanning(false);
     };
 
     scan();
   }, [fetchDevices, fetchSessions]);
+
+  // Clear loading state when sessions arrive or after timeout
+  useEffect(() => {
+    if (!isLoadingSessions) return;
+
+    // Check if sessions have arrived
+    const claudeState = useClaudeStore.getState();
+    let hasAny = false;
+    for (const device of devices) {
+      if ((claudeState.sessions.get(device.id) || []).length > 0) {
+        hasAny = true;
+        break;
+      }
+    }
+    if (hasAny) {
+      setIsLoadingSessions(false);
+      return;
+    }
+
+    // Timeout after 15 seconds — sessions may genuinely be empty
+    const timeout = setTimeout(() => setIsLoadingSessions(false), 15000);
+    return () => clearTimeout(timeout);
+  }, [isLoadingSessions, sessions, devices]);
 
   // Subscribe to updates and set up polling - use device IDs as dependency
   const deviceIds = useMemo(
@@ -963,6 +1027,9 @@ export default function ProjectsScreen() {
     }
     if (devices.length === 0) {
       return <NoDevicesState theme={theme} />;
+    }
+    if (deviceProjects.length === 0 && isLoadingSessions) {
+      return <LoadingSessionsState theme={theme} />;
     }
     if (deviceProjects.length === 0) {
       return <NoSessionsState theme={theme} />;
