@@ -18,7 +18,9 @@ import {
   Trophy,
   Compass,
   Server,
+  Trash2,
 } from 'lucide-react-native';
+import Constants from 'expo-constants';
 import { useIdentityStore } from '@/stores/identity.store';
 import { useDeviceStore } from '@/stores/device.store';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -135,6 +137,19 @@ export default function SettingsScreen() {
     if (confirmed) {
       wsService.disconnect();
       await unpairAll();
+      router.replace('/(onboarding)');
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    const confirmed = await alert.confirm(
+      'Delete All Data',
+      'This will permanently delete all app data including your device identity, paired devices, encryption keys, analytics, and achievements. This cannot be undone.',
+      { confirmText: 'Delete Everything', destructive: true }
+    );
+    if (confirmed) {
+      wsService.disconnect();
+      await useIdentityStore.getState().deleteAllData();
       router.replace('/(onboarding)');
     }
   };
@@ -325,12 +340,22 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {/* Unpair All */}
-        <SettingsSection title="" theme={theme}>
+        {/* Danger Zone */}
+        <SettingsSection title="Danger Zone" theme={theme}>
           <SettingsItem
             icon={LogOut}
             title="Unpair All Devices"
+            subtitle="Disconnect all paired devices"
             onPress={handleUnpairAll}
+            danger
+            theme={theme}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Trash2}
+            title="Delete All Data"
+            subtitle="Remove all data and reset app"
+            onPress={handleDeleteAllData}
             danger
             theme={theme}
           />
@@ -338,7 +363,7 @@ export default function SettingsScreen() {
 
         {/* Version */}
         <Text style={[styles.version, { color: theme.textTertiary }]}>
-          ForkOff v1.0.0 (Open Source)
+          ForkOff v{Constants.expoConfig?.version ?? '1.0.0'} (Open Source)
         </Text>
       </ScrollView>
     </SafeAreaView>

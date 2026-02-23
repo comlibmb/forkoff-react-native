@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { pairingService, PairedDevice } from '@/services/pairing.service';
 import { sentryService } from '@/services/sentry.service';
 import { analyticsService } from '@/services/analytics.service';
@@ -20,6 +22,7 @@ interface IdentityState {
   removePairedDevice: (deviceId: string) => Promise<void>;
   refreshPairedDevices: () => Promise<void>;
   unpairAll: () => Promise<void>;
+  deleteAllData: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -151,6 +154,63 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to unpair devices',
+      });
+      throw error;
+    }
+  },
+
+  deleteAllData: async () => {
+    try {
+      set({ isLoading: true });
+
+      analyticsService.track('delete_all_data');
+
+      // 1. Clear E2EE keys for all paired devices
+      try {
+        const { keyStorage } = await import('@/services/crypto/keyStorage');
+        const { useE2EEStore } = await import('@/stores/e2ee.store');
+        const deviceIds = get().pairedDevices.map((d) => d.id);
+        await keyStorage.clearAllKeys(deviceIds);
+        useE2EEStore.getState().reset();
+      } catch {
+        // Best-effort
+      }
+
+      // 2. Clear all AsyncStorage (paired devices, analytics, achievements, projects, settings)
+      await AsyncStorage.clear();
+
+      // 3. Clear all SecureStore keys (device ID, device secret, E2EE identity/signing keys)
+      const secureKeys = [
+        'forkoff_mobile_device_id',
+        'forkoff_mobile_device_secret',
+        'e2ee_identity_public',
+        'e2ee_identity_private',
+        'e2ee_signing_public',
+        'e2ee_signing_secret',
+      ];
+      for (const key of secureKeys) {
+        try {
+          await SecureStore.deleteItemAsync(key);
+        } catch {
+          // Key may not exist
+        }
+      }
+
+      // 4. Reset analytics identity
+      analyticsService.reset();
+
+      set({
+        mobileDeviceId: null,
+        pairedDevices: [],
+        isPaired: false,
+        isReady: false,
+        isLoading: false,
+      });
+    } catch (error) {
+      sentryService.captureException(error as Error, { context: 'delete_all_data' });
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to delete data',
       });
       throw error;
     }

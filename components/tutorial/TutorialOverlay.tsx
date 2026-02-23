@@ -58,13 +58,7 @@ const STEPS: TutorialStep[] = [
   {
     id: 'settings',
     title: 'Settings & More',
-    description: 'Configure preferences, manage your subscription, and refer friends for free PRO months.',
-    tabIndex: 3,
-  },
-  {
-    id: 'referrals',
-    title: 'Refer & Earn',
-    description: 'Invite friends from Settings and earn free PRO months for every signup. Find it under Subscription > Refer Friends.',
+    description: 'Configure preferences, permission rules, and manage your paired devices.',
     tabIndex: 3,
   },
   {
@@ -75,7 +69,7 @@ const STEPS: TutorialStep[] = [
   },
 ];
 
-const TAB_ROUTES = [null, '/(tabs)/projects', '/(tabs)/devices', '/(tabs)/analytics', '/(tabs)/settings', null, null] as const;
+const TAB_ROUTES = [null, '/(tabs)/projects', '/(tabs)/devices', '/(tabs)/analytics', '/(tabs)/settings', null] as const;
 
 function getSpotlightCenter(tabIndex: number) {
   const tabWidth = SCREEN_WIDTH / TAB_COUNT;
