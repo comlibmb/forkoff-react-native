@@ -518,17 +518,18 @@ class WebSocketService {
       const mobileDeviceId = await pairingService.getMobileDeviceId();
       this.mobileDeviceId = mobileDeviceId;
 
-      // Load custom relay URL if configured
+      // Load custom relay URL if configured (self-hosting)
       const customRelayUrl = await pairingService.getRelayUrl();
       if (customRelayUrl) {
-        WS_URL = getSecureWsUrl.call(null) === getSecureWsUrl() ? customRelayUrl : WS_URL;
-        // Re-validate custom URL security
-        if (!IS_DEV_BUILD && customRelayUrl.startsWith('ws://') &&
-            !customRelayUrl.includes('localhost') && !customRelayUrl.includes('127.0.0.1')) {
+        // SECURITY: Enforce wss:// for non-local custom URLs in production
+        const isLocal = /^wss?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.)/.test(customRelayUrl);
+        if (!IS_DEV_BUILD && !isLocal && customRelayUrl.startsWith('ws://')) {
           WS_URL = customRelayUrl.replace('ws://', 'wss://');
         } else {
           WS_URL = customRelayUrl;
         }
+      } else {
+        WS_URL = getSecureWsUrl();
       }
 
       this.socket = io(WS_URL, {

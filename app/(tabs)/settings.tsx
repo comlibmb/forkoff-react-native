@@ -17,6 +17,7 @@ import {
   BarChart3,
   Trophy,
   Compass,
+  Server,
 } from 'lucide-react-native';
 import { useIdentityStore } from '@/stores/identity.store';
 import { useDeviceStore } from '@/stores/device.store';
@@ -267,6 +268,14 @@ export default function SettingsScreen() {
             title="Permission Rules"
             subtitle="Configure tool approval rules"
             onPress={() => router.push('/settings/permissions')}
+            theme={theme}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <SettingsItem
+            icon={Server}
+            title="Relay Server"
+            subtitle="Configure self-hosted relay"
+            onPress={() => router.push('/settings/relay')}
             theme={theme}
           />
           <View style={[styles.divider, { backgroundColor: theme.divider }]} />
