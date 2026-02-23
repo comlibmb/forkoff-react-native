@@ -48,13 +48,10 @@ export class E2EEManager {
 
   /** Initialize the manager: load or generate identity keys (DH + signing) */
   async initialize(): Promise<void> {
-    console.log(`[E2EE-DIAG] initialize() called, deviceId=${this.deviceId.substring(0, 20)}...`);
-
     // Load or generate X25519 DH key pair
     const stored = await keyStorage.getIdentityKeyPair();
     if (stored && this.isDHKeyValid(stored)) {
       this.identityKeyPair = stored;
-      console.log(`[E2EE-DIAG] Loaded existing DH keypair, pub=${stored.publicKey.substring(0, 12)}...`);
     } else {
       if (stored) {
         console.warn('[E2EE] Stored DH keypair failed validation, regenerating');
@@ -62,20 +59,16 @@ export class E2EEManager {
       }
       this.identityKeyPair = generateKeyPair();
       await keyStorage.storeIdentityKeyPair(this.identityKeyPair);
-      console.log(`[E2EE-DIAG] Generated NEW DH keypair, pub=${this.identityKeyPair.publicKey.substring(0, 12)}...`);
     }
 
     // Load or generate Ed25519 signing key pair
     const storedSigning = await keyStorage.getSigningKeyPair();
     if (storedSigning && this.isSigningKeyValid(storedSigning)) {
       this.signingKeyPair = storedSigning;
-      console.log(`[E2EE-DIAG] Loaded existing signing keypair, pub=${storedSigning.publicKey.substring(0, 12)}...`);
     } else {
       if (storedSigning) {
-        console.warn(`[E2EE-DIAG] Stored signing keypair FAILED validation (pub=${storedSigning.publicKey.substring(0, 12)}...), regenerating`);
+        console.warn('[E2EE] Stored signing keypair failed validation, regenerating');
         await keyStorage.deleteSigningKeyPair();
-      } else {
-        console.log('[E2EE-DIAG] No stored signing keypair found, generating new');
       }
       const signKP = nacl.sign.keyPair();
       this.signingKeyPair = {
@@ -83,10 +76,7 @@ export class E2EEManager {
         secretKey: encodeBase64(signKP.secretKey),
       };
       await keyStorage.storeSigningKeyPair(this.signingKeyPair);
-      console.log(`[E2EE-DIAG] Generated NEW signing keypair, pub=${this.signingKeyPair.publicKey.substring(0, 12)}...`);
     }
-
-    console.log('[E2EE-DIAG] initialize() complete');
   }
 
   /** Validate a DH keypair by checking the public key derives from the private key */
@@ -133,21 +123,13 @@ export class E2EEManager {
    */
   private signPayload(prefix: string, ephemeralPublicKey: string, recipientDeviceId?: string): string | undefined {
     if (!this.signingKeyPair) {
-      console.warn('[E2EE-DIAG] signPayload called but signingKeyPair is NULL');
       return undefined;
     }
     const parts = [prefix, this.deviceId, ephemeralPublicKey];
     if (recipientDeviceId) parts.push(recipientDeviceId);
-    const msgString = parts.join(':');
-    console.log(`[E2EE-DIAG] signPayload: msg="${msgString.substring(0, 80)}..." signingPub=${this.signingKeyPair.publicKey.substring(0, 12)}...`);
-    const message = decodeUTF8(msgString);
+    const message = decodeUTF8(parts.join(':'));
     const secretKey = decodeBase64(this.signingKeyPair.secretKey);
     const signature = nacl.sign.detached(message, secretKey);
-
-    // Self-verify to confirm the signature is valid before sending
-    const pubKeyBytes = decodeBase64(this.signingKeyPair.publicKey);
-    const selfVerify = nacl.sign.detached.verify(message, signature, pubKeyBytes);
-    console.log(`[E2EE-DIAG] signPayload self-verify: ${selfVerify}`);
 
     return encodeBase64(signature);
   }
@@ -199,7 +181,6 @@ export class E2EEManager {
     // TOFU: trust this key if it's new
     if (!trusted) {
       await keyStorage.storeTrustedPeerKey(peerId, identityPublicKey);
-      console.log(`[E2EE] TOFU: Trusted new identity key for ${peerId}`);
     }
   }
 
@@ -271,7 +252,6 @@ export class E2EEManager {
       identityPublicKey: this.signingKeyPair?.publicKey,
       signature,
     };
-    console.log(`[E2EE-DIAG] handleKeyExchangeInit returning ack: sender=${ack.senderDeviceId.substring(0, 20)}... recipient=${ack.recipientDeviceId.substring(0, 20)}... ephPub=${ack.ephemeralPublicKey.substring(0, 12)}... idPub=${ack.identityPublicKey?.substring(0, 12)}... sig=${ack.signature?.substring(0, 12)}...`);
     return ack;
   }
 
