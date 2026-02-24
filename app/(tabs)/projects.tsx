@@ -34,6 +34,7 @@ import {
   GripVertical,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { wsService } from "@/services/websocket.service";
 import { useClaudeStore } from "@/stores/claude.store";
 import { useDeviceStore } from "@/stores/device.store";
 import { useProjectPreferencesStore } from "@/stores/project-preferences.store";
@@ -737,6 +738,12 @@ export default function ProjectsScreen() {
       // Step 2: Scanning projects per device
       await new Promise((r) => setTimeout(r, 400));
       setScanStep(2);
+
+      // Subscribe to device rooms BEFORE requesting sessions,
+      // otherwise the CLI's response arrives in a room we haven't joined yet
+      for (const d of foundDevices) {
+        wsService.subscribeToDevice(d.id);
+      }
 
       const sessionPromises = foundDevices.map((d) => fetchSessions(d.id));
       await Promise.allSettled(sessionPromises);
