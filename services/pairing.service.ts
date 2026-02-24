@@ -7,6 +7,7 @@ import { sentryService } from './sentry.service';
 // Only non-sensitive metadata (device names, platforms) in AsyncStorage
 const SECURE_DEVICE_ID_KEY = 'forkoff_mobile_device_id';
 const SECURE_DEVICE_SECRET_KEY = 'forkoff_mobile_device_secret';
+const SECURE_RELAY_TOKEN_KEY = 'forkoff_mobile_relay_token';
 const ASYNC_PAIRED_DEVICES_KEY = '@forkoff/paired_devices';
 const ASYNC_RELAY_URL_KEY = '@forkoff/relay_url';
 
@@ -187,6 +188,29 @@ class PairingService {
   }
 
   /**
+   * SECURITY: Get stored relay token (issued during cloud pairing).
+   * Stored in SecureStore (hardware-backed keychain).
+   */
+  async getRelayToken(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(SECURE_RELAY_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * SECURITY: Store relay token from cloud pairing.
+   */
+  async setRelayToken(token: string | null): Promise<void> {
+    if (token === null) {
+      await SecureStore.deleteItemAsync(SECURE_RELAY_TOKEN_KEY);
+      return;
+    }
+    await SecureStore.setItemAsync(SECURE_RELAY_TOKEN_KEY, token);
+  }
+
+  /**
    * Get custom relay URL (for self-hosting).
    */
   async getRelayUrl(): Promise<string | null> {
@@ -227,8 +251,9 @@ class PairingService {
   async clearAll(): Promise<void> {
     await AsyncStorage.removeItem(ASYNC_PAIRED_DEVICES_KEY);
     // Note: We do NOT clear the device ID — it's the persistent identity
-    // We DO clear the secret so re-pairing generates fresh credentials
+    // We DO clear the secret and relay token so re-pairing generates fresh credentials
     await SecureStore.deleteItemAsync(SECURE_DEVICE_SECRET_KEY);
+    await SecureStore.deleteItemAsync(SECURE_RELAY_TOKEN_KEY);
   }
 }
 
