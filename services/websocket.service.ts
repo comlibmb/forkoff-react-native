@@ -851,6 +851,10 @@ class WebSocketService {
         useE2EEStore.getState().setE2EEEnabled(true);
         this._anyE2EESessionEstablished = true;
         this.flushSensitiveQueue();
+        // Re-request sessions now that E2EE is established and relay connection is confirmed ready
+        for (const deviceId of this.subscribedDevices) {
+          this.socket?.emit('claude_sessions_request', { deviceId });
+        }
       };
       handleInit().catch((err) => {
         console.error('[E2EE] Key exchange init failed');
@@ -869,6 +873,10 @@ class WebSocketService {
           useE2EEStore.getState().setE2EEEnabled(true);
           this._anyE2EESessionEstablished = true;
           this.flushSensitiveQueue();
+          // Re-request sessions now that E2EE is established and relay connection is confirmed ready
+          for (const deviceId of this.subscribedDevices) {
+            this.socket?.emit('claude_sessions_request', { deviceId });
+          }
         }).catch((err) => {
           console.error('[E2EE] Key exchange ack failed');
           useE2EEStore.getState().setSessionStatus(peerId, 'failed');
