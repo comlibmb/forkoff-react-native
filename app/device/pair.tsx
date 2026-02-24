@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Switch } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +46,7 @@ export default function PairDeviceScreen() {
   const [pairedDeviceName, setPairedDeviceName] = useState('');
   const [flashOn, setFlashOn] = useState(false);
   const [relayAddress, setRelayAddress] = useState('');
+  const [localMode, setLocalMode] = useState(false);
 
   const isProcessingRef = useRef(false);
 
@@ -69,7 +70,7 @@ export default function PairDeviceScreen() {
       let pairingCode = urlPath;
       let relayUrl: string | null = null;
 
-      // Check for query params (relay URL embedded by CLI)
+      // Check for query params (relay URL embedded by CLI in local mode)
       const queryIndex = urlPath.indexOf('?');
       if (queryIndex !== -1) {
         pairingCode = urlPath.substring(0, queryIndex);
@@ -86,11 +87,15 @@ export default function PairDeviceScreen() {
         throw new Error('Invalid pairing code format');
       }
 
-      // Set relay URL and connect to CLI's embedded server before pairing
       if (relayUrl) {
+        // Local mode: QR has relay URL → connect to CLI's embedded server
         await pairingService.setRelayUrl(relayUrl);
+        await connectAndWait();
+      } else {
+        // Cloud mode: no relay URL → use existing cloud connection (or connect to default)
+        await pairingService.setRelayUrl(null);
+        await connectAndWait();
       }
-      await connectAndWait();
 
       const device = await pairDevice(pairingCode);
       setPairedDeviceName(device.name);
@@ -110,27 +115,28 @@ export default function PairDeviceScreen() {
       return;
     }
 
-    const addr = relayAddress.trim();
-    if (!addr) {
-      alert.warning('Relay Address Required', 'Enter the relay address shown in your terminal (e.g., 192.168.1.5:3000).');
-      return;
-    }
-
     try {
-      // Build relay URL from address (add ws:// if not present)
-      let relayUrl = addr;
-      if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
-        relayUrl = `ws://${relayUrl}`;
+      const addr = relayAddress.trim();
+
+      if (addr) {
+        // Local mode: relay address provided → connect to CLI's embedded server
+        let relayUrl = addr;
+        if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
+          relayUrl = `ws://${relayUrl}`;
+        }
+        await pairingService.setRelayUrl(relayUrl);
+      } else {
+        // Cloud mode: no relay address → use default cloud connection
+        await pairingService.setRelayUrl(null);
       }
 
-      await pairingService.setRelayUrl(relayUrl);
       await connectAndWait();
 
       const device = await pairDevice(manualCode.toUpperCase());
       setPairedDeviceName(device.name);
       setIsPaired(true);
     } catch (error) {
-      alert.error('Pairing Failed', 'Could not connect to CLI. Check the relay address and pairing code.');
+      alert.error('Pairing Failed', 'Could not connect. Check the pairing code and try again.');
     }
   };
 
@@ -404,33 +410,48 @@ export default function PairDeviceScreen() {
               }}
             />
 
-            <Text style={{ color: theme.textSecondary, fontSize: 14, marginBottom: 8 }}>Relay Address</Text>
-            <TextInput
-              value={relayAddress}
-              onChangeText={setRelayAddress}
-              placeholder="e.g., 192.168.1.5:3000"
-              placeholderTextColor={theme.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                backgroundColor: theme.backgroundSecondary,
-                borderWidth: 1,
-                borderColor: theme.border,
-                color: theme.text,
-                fontSize: 16,
-                fontFamily: 'monospace',
-                textAlign: 'center',
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                marginBottom: 24,
-              }}
-            />
+            {/* Local Network toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Local Network Mode</Text>
+              <Switch
+                value={localMode}
+                onValueChange={setLocalMode}
+                trackColor={{ false: theme.border, true: theme.primary + '66' }}
+                thumbColor={localMode ? theme.primary : theme.textTertiary}
+              />
+            </View>
+
+            {localMode && (
+              <>
+                <Text style={{ color: theme.textSecondary, fontSize: 14, marginBottom: 8 }}>Relay Address</Text>
+                <TextInput
+                  value={relayAddress}
+                  onChangeText={setRelayAddress}
+                  placeholder="e.g., 192.168.1.5:3000"
+                  placeholderTextColor={theme.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  style={{
+                    backgroundColor: theme.backgroundSecondary,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    color: theme.text,
+                    fontSize: 16,
+                    fontFamily: 'monospace',
+                    textAlign: 'center',
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    marginBottom: 24,
+                  }}
+                />
+              </>
+            )}
 
             <TouchableOpacity
               onPress={handleManualPair}
-              disabled={manualCode.length < 8 || isLoading}
+              disabled={manualCode.length < 8 || isLoading || (localMode && !relayAddress.trim())}
               style={{
                 backgroundColor: theme.primary,
                 borderRadius: 12,
@@ -441,7 +462,7 @@ export default function PairDeviceScreen() {
                 shadowOpacity: 0.2,
                 shadowRadius: 12,
                 elevation: 5,
-                opacity: manualCode.length < 8 || isLoading ? 0.5 : 1,
+                opacity: manualCode.length < 8 || isLoading || (localMode && !relayAddress.trim()) ? 0.5 : 1,
               }}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>
@@ -455,7 +476,7 @@ export default function PairDeviceScreen() {
             <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
               On your computer, run:{'\n'}
               <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>forkoff pair</Text>
-              {'\n'}Enter the code and relay address shown in your terminal
+              {'\n'}{localMode ? 'Enter the code and relay address shown in your terminal' : 'Enter the pairing code shown in your terminal'}
             </Text>
           </View>
         </View>

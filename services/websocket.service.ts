@@ -308,6 +308,9 @@ export interface PairDeviceAckEvent {
   deviceName: string;
   platform: string;
   pairingCode: string;
+  // Cloud relay fields (present when paired via cloud relay)
+  pairId?: string;
+  mobileRelayToken?: string;
 }
 
 // Pair device rejection event
@@ -545,11 +548,15 @@ class WebSocketService {
         WS_URL = getSecureWsUrl();
       }
 
+      // Load relay token for cloud relay authentication (if available)
+      const relayToken = await pairingService.getRelayToken();
+
       this.socket = io(WS_URL, {
         auth: {
           mobileDeviceId,
           clientType: 'mobile',
           deviceName: Device.deviceName || Device.modelName || 'Mobile',
+          ...(relayToken ? { relayToken } : {}),
         },
         transports: ['websocket'],
         reconnection: true,
@@ -799,8 +806,29 @@ class WebSocketService {
     });
 
     // Pairing events (from relay)
-    this.socket.on('pair_device_ack', (data) => {
+    this.socket.on('pair_device_ack', async (data) => {
       console.log('[WS] GOT pair_device_ack:', data?.deviceId);
+
+      // Store relay token from cloud pairing (if present)
+      if (data?.mobileRelayToken) {
+        try {
+          await pairingService.setRelayToken(data.mobileRelayToken);
+          console.log('[WS] Stored cloud relay token');
+        } catch (err) {
+          console.warn('[WS] Failed to store relay token:', err);
+        }
+      }
+
+      // Clear custom relay URL for cloud-paired devices (use default cloud URL)
+      if (data?.pairId && !data?.relay) {
+        try {
+          await pairingService.setRelayUrl(null);
+          console.log('[WS] Cleared custom relay URL for cloud pairing');
+        } catch {
+          // Non-critical
+        }
+      }
+
       this.emitInternal('pair_device_ack', data);
     });
 
