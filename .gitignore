@@ -1,5 +1,8 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+# Claude Code local settings (may contain allowed command history with secrets)
+.claude/settings.local.json
+
 # dependencies
 node_modules/
 
