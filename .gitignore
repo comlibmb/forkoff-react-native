@@ -51,3 +51,4 @@ nul
 # Internal documentation (keep out of repo, except README)
 docs/*.md
 !docs/README.md
+!docs/SECURITY.md

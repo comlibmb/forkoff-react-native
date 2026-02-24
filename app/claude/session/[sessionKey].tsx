@@ -20,7 +20,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, ArrowUp, Brain, Zap, Clock, ShieldOff } from 'lucide-react-native';
-import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent } from '@/services/websocket.service';
+import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent, SessionLoadingEvent } from '@/services/websocket.service';
 import { alert } from '@/components/ui/AlertModal';
 import { useClaudeStore } from '@/stores/claude.store';
 import { useUsageStore } from '@/stores/usage.store';
@@ -643,11 +643,27 @@ export default function ClaudeSessionScreen() {
             return data.entries;
           }
         });
-        setIsLoading(false);
+        // Only end loading for our own requests (not project-hub previews)
+        // requestedBy='session' is set by this screen; project-hub has no requestedBy
+        if (data.requestedBy === 'session') {
+          setIsLoading(false);
+        }
         setIsLoadingMore(false);
         setTotalEntries(data.totalEntries);
         setHasMore(data.hasMore);
         setCurrentOffset((prev) => prev + data.entries.length);
+      }
+    });
+
+    // Listen for session loading state from CLI
+    const unsubSessionLoading = wsService.on('session_loading', (data: SessionLoadingEvent) => {
+      if (data.sessionKey !== sessionKey) return;
+      console.log('[Session] session_loading:', data.state);
+      if (data.state === 'loading') {
+        setIsLoading(true);
+      } else if (data.state === 'ready' || data.state === 'error') {
+        // Don't set isLoading false here — wait for the actual data (transcript_history/sdk_session_history)
+        // The loading state signal just confirms the CLI received our request
       }
     });
 
@@ -806,16 +822,17 @@ export default function ClaudeSessionScreen() {
           offset: 0,
           limit: INITIAL_LOAD,
           reverse: true,
+          requestedBy: 'session',
         });
       }
 
-      // Fallback: if no response in 10 seconds, stop loading
+      // Fallback: if no response in 15 seconds, stop loading
       loadingTimeout = setTimeout(() => {
         if (!initialLoadDoneRef.current) {
-          console.log('[Session] Loading timeout - stopping loader');
+          console.warn('[Session] Loading timeout (15s) — no transcript_history received, stopping loader');
           setIsLoading(false);
         }
-      }, 10000);
+      }, 15000);
     } else {
       // SDK streaming mode - join room and fetch history from database
       console.log('[Session] SDK streaming mode - joining transcript room for:', sessionKey);
@@ -834,15 +851,16 @@ export default function ClaudeSessionScreen() {
         directory: session?.directory, // Used by CLI to filter fallback sessions
         limit: INITIAL_LOAD,
         offset: 0,
+        requestedBy: 'session',
       });
 
-      // Fallback: if no response in 10 seconds, stop loading
+      // Fallback: if no response in 15 seconds, stop loading
       loadingTimeout = setTimeout(() => {
         if (!initialLoadDoneRef.current) {
-          console.log('[Session] Loading timeout - stopping loader');
+          console.warn('[Session] Loading timeout (15s) — no sdk_session_history received, stopping loader');
           setIsLoading(false);
         }
-      }, 10000);
+      }, 15000);
     }
 
     return () => {
@@ -858,6 +876,7 @@ export default function ClaudeSessionScreen() {
       unsubHistory();
       unsubSdkHistory();
       unsubUpdate();
+      unsubSessionLoading();
     };
   }, [sessionKey, deviceId]);
 
@@ -878,6 +897,7 @@ export default function ClaudeSessionScreen() {
           offset: 0,
           limit: INITIAL_LOAD,
           reverse: true,
+          requestedBy: 'session',
         });
       } else {
         wsService.emit('transcript_subscribe_sdk', { deviceId, sessionKey });
@@ -888,6 +908,7 @@ export default function ClaudeSessionScreen() {
           directory: session?.directory,
           limit: INITIAL_LOAD,
           offset: 0,
+          requestedBy: 'session',
         });
       }
     };
@@ -947,6 +968,7 @@ export default function ClaudeSessionScreen() {
           offset: 0,
           limit: INITIAL_LOAD,
           reverse: true,
+          requestedBy: 'session',
         });
       } else {
         wsService.emit('sdk_session_history', {
@@ -956,6 +978,7 @@ export default function ClaudeSessionScreen() {
           directory: session.directory,
           limit: INITIAL_LOAD,
           offset: 0,
+          requestedBy: 'session',
         });
       }
     }
@@ -1001,6 +1024,7 @@ export default function ClaudeSessionScreen() {
       offset: currentOffset,
       limit: LOAD_MORE_COUNT,
       reverse: true,
+      requestedBy: 'session',
     });
   }, [deviceId, sessionKey, session?.transcriptPath, currentOffset, hasMore, isLoadingMore]);
 

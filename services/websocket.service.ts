@@ -124,6 +124,7 @@ interface TranscriptHistoryEvent {
   totalEntries: number;
   offset: number;
   hasMore: boolean;
+  requestedBy?: string;
 }
 
 // Transcript update event
@@ -302,6 +303,13 @@ export interface AchievementUnlockedEvent {
   unlockedAt: string;
 }
 
+// Session loading state event (from CLI)
+export interface SessionLoadingEvent {
+  sessionKey: string;
+  state: 'loading' | 'ready' | 'error';
+  error?: string;
+}
+
 // Pair device acknowledgment event (from CLI via relay)
 export interface PairDeviceAckEvent {
   deviceId: string;
@@ -352,6 +360,8 @@ interface EventCallbacks {
   token_usage: EventCallback<TokenUsageEvent>[];
   task_progress: EventCallback<TaskProgressEvent>[];
   achievement_unlocked: EventCallback<AchievementUnlockedEvent>[];
+  // Session loading state
+  session_loading: EventCallback<SessionLoadingEvent>[];
   // Usage analytics sync events
   usage_stats_sync: EventCallback<any>[];
   daily_usage_sync: EventCallback<any>[];
@@ -375,39 +385,36 @@ interface QueuedMessage {
   queuedAt: number;
 }
 
-// Events that carry user data and MUST be encrypted — plaintext fallback is refused.
-// If E2EE is not established, these are queued (not sent in plaintext).
-const ENFORCED_SENSITIVE_EVENTS = new Set([
-  // User input (prompts, commands, file requests)
-  'terminal_command', 'user_message',
-  'read_file', 'directory_list',
-  'tab_complete',
-  // User decisions (approval responses, permission responses)
+// SECURITY: Mobile→CLI events that carry sensitive user data.
+// When E2EE is active, these are encrypted as `encrypted_message` (API sees only opaque blob).
+// When E2EE is NOT active (fallback), sent as plaintext so API can forward normally.
+// No queue — events always flow immediately.
+const ENFORCED_SENSITIVE_EVENTS = new Set<string>([
+  'user_message',
   'permission_response',
   'claude_approval_response',
   'approval_response',
-  'rpc_response',
-  // Session metadata (contains directory paths, session keys)
-  'terminal_create',
-  'sdk_session_history',
-  'claude_abort',
-  // Session lifecycle (contains directory paths, session identifiers)
-  'claude_start_session',
   'claude_resume_session',
-  // Transcript data (contains session keys, file paths)
+  'claude_start_session',
+  'claude_stop_session',
+  'terminal_command',
+  'terminal_create',
+  'terminal_resize',
+  'terminal_close',
+  'directory_list',
+  'read_file',
   'transcript_fetch',
   'transcript_subscribe',
-  'transcript_subscribe_sdk',
-  // Permission rules (contains tool approval configuration)
+  'transcript_unsubscribe',
   'permission_rules_sync',
+  'session_settings_update',
+  'transcript_subscribe_sdk',
+  'tab_complete',
+  'sdk_session_history',
+  'claude_abort',
+  'usage_stats_request',
 ]);
 
-interface PendingSensitiveMessage {
-  event: string;
-  data: any;
-  targetDeviceId: string;
-  queuedAt: number;
-}
 
 // SECURITY: Inbound events from CLI that MUST arrive via E2EE decryption when active.
 // Plaintext versions are silently dropped when E2EE is established, preventing injection.
@@ -420,11 +427,11 @@ const ENFORCED_INBOUND_EVENTS = new Set([
   'thinking_content', 'task_progress', 'tool_activity',
   'claude_approval_request', 'approval_request', 'rpc_response',
   'claude_session_update', 'claude_session_batch_update', 'terminal_cwd', 'token_usage',
-  'pending_permissions_sync', 'claude_session_event',
+  'pending_permissions_sync', 'claude_session_event', 'file_changed',
   'usage_stats_sync', 'daily_usage_sync', 'streak_info_sync',
+  'tool_status_update', 'session_loading',
 ]);
 
-const SENSITIVE_QUEUE_TTL_MS = 30_000; // 30 seconds max wait
 
 // SECURITY: Whitelist of events allowed to arrive via the encrypted_message channel.
 // Only events the CLI legitimately sends via E2EE are listed. This prevents a
@@ -452,6 +459,8 @@ const ALLOWED_ENCRYPTED_EVENTS = new Set([
   'usage_stats_sync',
   'daily_usage_sync',
   'streak_info_sync',
+  'tool_status_update',
+  'session_loading',
 ]);
 
 class WebSocketService {
@@ -471,11 +480,10 @@ class WebSocketService {
   private e2eeInitPromise: Promise<void> | null = null;
   // Unique mobile device ID for E2EE (generated once, used as sender in key exchange)
   private mobileDeviceId: string = `mobile-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-  // Queue for sensitive messages waiting for E2EE session establishment
-  private pendingSensitiveMessages: PendingSensitiveMessage[] = [];
-  private static readonly MAX_PENDING_SENSITIVE = 200;
   // SECURITY: Track if any E2EE session has been established (for inbound enforcement)
   private _anyE2EESessionEstablished = false;
+  // Tracks devices with key exchange in progress (async guard against duplicate inits)
+  private _pendingKeyExchangeInits = new Set<string>();
   private callbacks: EventCallbacks = {
     device_status: [],
     terminal_output: [],
@@ -509,6 +517,7 @@ class WebSocketService {
     token_usage: [],
     task_progress: [],
     achievement_unlocked: [],
+    session_loading: [],
     usage_stats_sync: [],
     daily_usage_sync: [],
     streak_info_sync: [],
@@ -805,6 +814,12 @@ class WebSocketService {
       this.emitInternal('streak_info_sync', data);
     });
 
+    // Session loading state (from CLI via E2EE)
+    this.socket.on('session_loading', (data) => {
+      console.log('[WS] GOT session_loading:', data?.sessionKey, data?.state);
+      this.emitInternal('session_loading', data);
+    });
+
     // Pairing events (from relay)
     this.socket.on('pair_device_ack', async (data) => {
       console.log('[WS] GOT pair_device_ack:', data?.deviceId);
@@ -840,24 +855,48 @@ class WebSocketService {
     // E2EE events — handle key exchange (async for TOFU verification) and decrypt incoming messages
     this.socket.on('encrypted_key_exchange_init', (data: KeyExchangeInit) => {
       // Handle incoming key exchange init
+      console.log(`[E2EE] Received key_exchange_init from ${data.senderDeviceId}, myId=${this.mobileDeviceId}`);
+      // Guard: ignore our own init echoed back by the relay
+      if (data.senderDeviceId === this.mobileDeviceId) {
+        console.log('[E2EE] Ignoring own key exchange init echo');
+        return;
+      }
+      // Guard: ignore duplicate init if we already have a session or are processing one
+      // (relay may re-forward the init when mobile joins the device room)
+      if (this.e2eeManager?.isSessionEstablished(data.senderDeviceId) ||
+          this._pendingKeyExchangeInits.has(data.senderDeviceId)) {
+        console.log(`[E2EE] Already have session or pending exchange with ${data.senderDeviceId}, ignoring duplicate init`);
+        return;
+      }
+      // Set synchronous lock BEFORE any async work
+      this._pendingKeyExchangeInits.add(data.senderDeviceId);
       // Lazily create/recreate e2eeManager with the correct mobileDeviceId
       const handleInit = async () => {
         await this.ensureE2EEManager();
         const ack = await this.e2eeManager!.handleKeyExchangeInit(data);
+        console.log(`[E2EE] Handled init — session stored for sender ${data.senderDeviceId}, ack.senderDeviceId=${ack.senderDeviceId}`);
         // Don't override senderDeviceId — e2eeManager signed with its deviceId,
         // the ack must use the same ID or signature verification will fail
         this.socket?.emit('encrypted_key_exchange_ack', ack);
         useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'established');
         useE2EEStore.getState().setE2EEEnabled(true);
         this._anyE2EESessionEstablished = true;
-        this.flushSensitiveQueue();
-        // Re-request sessions now that E2EE is established and relay connection is confirmed ready
-        for (const deviceId of this.subscribedDevices) {
-          this.socket?.emit('claude_sessions_request', { deviceId });
+        // Re-request sessions using the peer's device ID from the key exchange
+        // (subscribedDevices may be empty if E2EE establishes before pairing completes)
+        const peerDeviceId = data.senderDeviceId;
+        console.log(`[E2EE] Established (init) with peer ${peerDeviceId} — subscribed: [${[...this.subscribedDevices].join(', ')}]`);
+        // Ensure we're subscribed to this peer's room
+        if (!this.subscribedDevices.has(peerDeviceId)) {
+          console.log(`[E2EE] Auto-subscribing to peer device ${peerDeviceId}`);
+          this.subscribedDevices.add(peerDeviceId);
+          this.socket?.emit('subscribe_device', { deviceId: peerDeviceId });
         }
+        console.log(`[E2EE] Requesting sessions for peer ${peerDeviceId}`);
+        this.socket?.emit('claude_sessions_request', { deviceId: peerDeviceId });
       };
       handleInit().catch((err) => {
         console.error('[E2EE] Key exchange init failed');
+        this._pendingKeyExchangeInits.delete(data.senderDeviceId);
         useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'failed');
       });
       this.emitInternal('encrypted_key_exchange_init', data as any);
@@ -866,17 +905,27 @@ class WebSocketService {
     this.socket.on('encrypted_key_exchange_ack', (data: KeyExchangeAck) => {
       // Handle incoming key exchange ack
       const peerId = data.senderDeviceId;
+      console.log(`[E2EE] Received key_exchange_ack from ${peerId}, myId=${this.mobileDeviceId}`);
+      // Guard: ignore our own ack echoed back by the relay
+      if (peerId === this.mobileDeviceId) {
+        console.log('[E2EE] Ignoring own key exchange ack echo');
+        return;
+      }
       // Complete our pending key exchange (async for TOFU verification)
       if (this.e2eeManager) {
         this.e2eeManager.handleKeyExchangeAck(data).then(() => {
           useE2EEStore.getState().setSessionStatus(peerId, 'established');
           useE2EEStore.getState().setE2EEEnabled(true);
           this._anyE2EESessionEstablished = true;
-          this.flushSensitiveQueue();
-          // Re-request sessions now that E2EE is established and relay connection is confirmed ready
-          for (const deviceId of this.subscribedDevices) {
-            this.socket?.emit('claude_sessions_request', { deviceId });
+          // Re-request sessions using the peer's device ID from the key exchange
+          console.log(`[E2EE] Established (ack) with peer ${peerId} — subscribed: [${[...this.subscribedDevices].join(', ')}]`);
+          if (!this.subscribedDevices.has(peerId)) {
+            console.log(`[E2EE] Auto-subscribing to peer device ${peerId}`);
+            this.subscribedDevices.add(peerId);
+            this.socket?.emit('subscribe_device', { deviceId: peerId });
           }
+          console.log(`[E2EE] Requesting sessions for peer ${peerId}`);
+          this.socket?.emit('claude_sessions_request', { deviceId: peerId });
         }).catch((err) => {
           console.error('[E2EE] Key exchange ack failed');
           useE2EEStore.getState().setSessionStatus(peerId, 'failed');
@@ -893,7 +942,10 @@ class WebSocketService {
           plaintext = this.e2eeManager.decryptMessage(data, data.senderDeviceId);
         } catch (err) {
           // SECURITY: Do NOT fall through to plaintext handling on decryption failure.
-          console.error('[E2EE] Decryption failed — message dropped');
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const sender = data.senderDeviceId || 'unknown';
+          const hasSession = this.e2eeManager?.isSessionEstablished(sender) ?? false;
+          console.error(`[E2EE] Decryption failed — sender=${sender}, hasSession=${hasSession}, counter=${data.messageCounter}, error: ${errMsg}`);
           return;
         }
 
@@ -925,6 +977,7 @@ class WebSocketService {
           return;
         }
 
+        console.log(`[E2EE] Decrypted event: ${eventName} from ${data.senderDeviceId} (counter=${data.messageCounter})`);
         this.emitInternal(eventName as keyof EventCallbacks, payload._data, true);
         return;
       }
@@ -960,78 +1013,13 @@ class WebSocketService {
     console.log(`[WS] emit(${event})`);
     console.log(`[WS] socket connected:`, this.socket?.connected);
 
-    // SECURITY: Enforce E2EE for sensitive events — never send in plaintext
+    // Route sensitive events through E2EE encryption when available
     if (ENFORCED_SENSITIVE_EVENTS.has(event)) {
-      const deviceId = (data as any)?.deviceId;
-      this.emitSensitive(event, data, deviceId);
+      this.emitSensitive(event, data);
       return;
     }
 
     this.socket?.emit(event, data);
-  }
-
-  /**
-   * Emit a sensitive event: encrypt if E2EE session is active with target device.
-   * For events in ENFORCED_SENSITIVE_EVENTS, plaintext fallback is REFUSED — messages
-   * are queued until E2EE session establishes, or dropped after timeout.
-   */
-  private emitSensitive(event: string, data: any, targetDeviceId?: string): void {
-    // If E2EE session exists, encrypt and send
-    if (this.e2eeManager && targetDeviceId && this.e2eeManager.isSessionEstablished(targetDeviceId)) {
-      try {
-        const plaintext = JSON.stringify({ _event: event, _data: data });
-        const encrypted = this.e2eeManager.encryptMessage(plaintext, targetDeviceId, 'default');
-        this.socket?.emit('encrypted_message', encrypted);
-        return;
-      } catch (err) {
-        console.error('[E2EE] Encryption failed, message NOT sent (refusing plaintext fallback)');
-        return;
-      }
-    }
-
-    // For enforced sensitive events: NEVER send plaintext
-    if (ENFORCED_SENSITIVE_EVENTS.has(event)) {
-      if (this.e2eeManager && targetDeviceId) {
-        // E2EE initialized but no session yet — queue for when session establishes
-        if (this.pendingSensitiveMessages.length >= WebSocketService.MAX_PENDING_SENSITIVE) {
-          const dropped = this.pendingSensitiveMessages.shift();
-          if (dropped) {
-            console.warn(`[E2EE] Sensitive queue full, dropped oldest`);
-          }
-        }
-        this.pendingSensitiveMessages.push({ event, data, targetDeviceId, queuedAt: Date.now() });
-        return;
-      }
-      // No target or no E2EE manager — drop silently (no user data leaks)
-      console.error('[E2EE] Dropped sensitive event — E2EE not available, refusing plaintext');
-      return;
-    }
-
-    // Non-sensitive events: plaintext is acceptable
-    this.socket?.emit(event, data);
-  }
-
-  /**
-   * Flush queued sensitive messages now that E2EE session is established.
-   */
-  private flushSensitiveQueue(): void {
-    if (this.pendingSensitiveMessages.length === 0) return;
-
-    const now = Date.now();
-    let sent = 0;
-    let dropped = 0;
-
-    for (const msg of this.pendingSensitiveMessages) {
-      if (now - msg.queuedAt > SENSITIVE_QUEUE_TTL_MS) {
-        dropped++;
-        continue;
-      }
-      this.emitSensitive(msg.event, msg.data, msg.targetDeviceId);
-      sent++;
-    }
-
-    this.pendingSensitiveMessages = [];
-    // Flushed sensitive queue
   }
 
   // Public emit method with acknowledgment callback for getting server response
@@ -1039,12 +1027,6 @@ class WebSocketService {
     return new Promise((resolve, reject) => {
       // SECURITY: Don't log potentially sensitive data
       console.log(`[WS] emitWithAck(${event})`);
-
-      // SECURITY: Block sensitive events from being sent in plaintext via ack channel
-      if (ENFORCED_SENSITIVE_EVENTS.has(event)) {
-        reject(new Error(`Sensitive event '${event}' cannot be sent via emitWithAck (no E2EE support)`));
-        return;
-      }
 
       if (!this.socket?.connected) {
         reject(new Error('WebSocket not connected'));
@@ -1143,6 +1125,42 @@ class WebSocketService {
     console.log(`[WS] Queued ${event} (queue size: ${this.pendingMessages.length})`);
   }
 
+  /**
+   * Send a sensitive event: encrypt via E2EE if session exists, otherwise plaintext fallback.
+   * No queue — events always flow immediately (encrypt or plaintext).
+   * When E2EE is active, the API relay sees only an opaque encrypted blob.
+   */
+  private emitSensitive(event: string, data: unknown): void {
+    if (this.e2eeManager) {
+      const peerId = this.e2eeManager.getEstablishedPeerId();
+      if (peerId) {
+        try {
+          const plaintext = JSON.stringify({ _event: event, _data: data });
+          const encrypted = this.e2eeManager.encryptMessage(plaintext, peerId, 'mobile-session');
+          console.log(`[E2EE] Encrypting outbound: ${event}`);
+          this.socket?.emit('encrypted_message', encrypted);
+          return;
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (errMsg.includes('re-key required')) {
+            // Session expired — clear E2EE state and fall back to plaintext.
+            // CLI will initiate a new key exchange on next mobile_connected event.
+            console.warn(`[E2EE] Session expired with ${peerId} — clearing E2EE state, falling back to plaintext`);
+            this.e2eeManager.clearSession(peerId);
+            this._anyE2EESessionEstablished = false;
+            useE2EEStore.getState().setSessionStatus(peerId, 'failed');
+            useE2EEStore.getState().setE2EEEnabled(false);
+          } else {
+            console.error(`[E2EE] Encryption failed for ${event}, sending plaintext`);
+          }
+        }
+      }
+    }
+    // E2EE not active — send plaintext (API processes normally — fallback mode)
+    console.log(`[WS] emitSensitive(${event}) — plaintext`);
+    this.socket?.emit(event, data);
+  }
+
   // Flush queued messages after reconnect, dropping stale ones
   private flushQueue(): void {
     const now = Date.now();
@@ -1177,18 +1195,14 @@ class WebSocketService {
     this.socket?.emit('terminal_unsubscribe', { terminalSessionId: terminalId });
   }
 
-  // Send terminal command (sensitive — encrypted if E2EE active)
+  // Send terminal command (sensitive — contains commands)
   sendTerminalCommand(terminalId: string, command: string, deviceId?: string): void {
     // SECURITY: Never log command content
     console.log(`[WS] Sending terminal_command to device ${deviceId}, length: ${command.length}`);
-    this.emitSensitive('terminal_command', {
-      terminalSessionId: terminalId,
-      command,
-      deviceId
-    }, deviceId);
+    this.emitSensitive('terminal_command', { terminalSessionId: terminalId, command, deviceId });
   }
 
-  // Send user message (sensitive — encrypted if E2EE active)
+  // Send user message (sensitive — contains user prompts)
   sendUserMessage(
     deviceId: string,
     message: string,
@@ -1202,7 +1216,7 @@ class WebSocketService {
   ): void {
     // SECURITY: Never log message content
     console.log(`[WS] Sending user_message to device ${deviceId}, length: ${message.length}`);
-    const payload = {
+    this.emitSensitive('user_message', {
       deviceId,
       message,
       sessionKey: options?.sessionKey,
@@ -1212,43 +1226,33 @@ class WebSocketService {
         permissionMode: options.permissionMode,
         model: options.model,
       } : undefined
-    };
-
-    // Always route through emitSensitive — enforced event, never plaintext
-    this.emitSensitive('user_message', payload, deviceId);
+    });
   }
 
-  // Abort current Claude operation (sensitive — contains session key)
+  // Abort current Claude operation (sensitive — contains session identifiers)
   abortClaude(deviceId: string, sessionKey?: string): void {
     console.log(`[WS] Sending claude_abort to device ${deviceId}`);
-    this.emitSensitive('claude_abort', {
-      deviceId,
-      sessionKey
-    }, deviceId);
+    this.emitSensitive('claude_abort', { deviceId, sessionKey });
   }
 
-  // Request usage stats refresh from CLI device
+  // Request usage stats refresh from CLI device (sensitive — contains device context)
   requestUsageStats(deviceId: string): void {
     console.log(`[WS] Requesting usage stats from device ${deviceId}`);
-    this.emitSensitive('usage_stats_request', { deviceId }, deviceId);
+    this.emitSensitive('usage_stats_request', { deviceId });
   }
 
-  // Create/initialize terminal session on device (sensitive — contains working directory)
+  // Create/initialize terminal session on device (sensitive — contains directory paths)
   createTerminalSession(terminalId: string, deviceId: string, cwd: string = '~'): void {
     console.log(`[WS] Creating terminal session on device ${deviceId}`);
-    this.emitSensitive('terminal_create', {
-      terminalSessionId: terminalId,
-      deviceId,
-      cwd
-    }, deviceId);
+    this.emitSensitive('terminal_create', { terminalSessionId: terminalId, deviceId, cwd });
   }
 
-  // Respond to approval request (sensitive — user's approval decision)
+  // Respond to approval request (sensitive — contains approval decisions)
   respondToApproval(requestId: string, approved: boolean, deviceId?: string): void {
-    this.emitSensitive('approval_response', { requestId, approved }, deviceId);
+    this.emitSensitive('approval_response', { requestId, approved, deviceId });
   }
 
-  // Respond to interactive permission prompt (sensitive — encrypted if E2EE active)
+  // Respond to interactive permission prompt (sensitive — contains approval decisions)
   respondToPermissionPrompt(
     promptId: string,
     decision: 'allow' | 'deny',
@@ -1259,19 +1263,16 @@ class WebSocketService {
     }
   ): void {
     console.log(`[WS] Sending permission_response: ${promptId}`);
-    const payload = {
+    this.emitSensitive('permission_response', {
       promptId,
       decision,
       reason: options?.reason,
       deviceId: options?.deviceId,
       sessionKey: options?.sessionKey,
-    };
-
-    // Always route through emitSensitive — enforced event, never plaintext
-    this.emitSensitive('permission_response', payload, options?.deviceId);
+    });
   }
 
-  // Respond to Claude approval request (sensitive — user's yes/no/plan decision)
+  // Respond to Claude approval request (sensitive — contains approval decisions)
   respondToClaudeApproval(
     approvalId: string,
     response: string,
@@ -1286,10 +1287,10 @@ class WebSocketService {
       response,
       deviceId: options?.deviceId,
       sessionKey: options?.sessionKey,
-    }, options?.deviceId);
+    });
   }
 
-  // Request session history from CLI via server (sensitive — contains session key)
+  // Request session history from CLI (sensitive — contains session identifiers)
   requestSessionHistory(
     deviceId: string,
     sessionKey: string,
@@ -1301,17 +1302,13 @@ class WebSocketService {
       sessionKey,
       limit: options?.limit ?? 400,
       offset: options?.offset ?? 0,
-    }, deviceId);
+    });
   }
 
-  // Read a file from device (sensitive — encrypted if E2EE active)
+  // Read a file from device (sensitive — contains file paths)
   readFile(deviceId: string, filePath: string, requestId: string): void {
     console.log(`[WS] Requesting read_file for device ${deviceId}`);
-    this.emitSensitive('read_file', {
-      deviceId,
-      filePath,
-      requestId,
-    }, deviceId);
+    this.emitSensitive('read_file', { deviceId, filePath, requestId });
   }
 
   // Pair a device via relay (mobile sends code, relay matches with CLI)

@@ -992,11 +992,15 @@ export default function ProjectsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchDevices();
-    for (const device of devices) {
+    const currentDevices = useDeviceStore.getState().devices;
+    for (const device of currentDevices) {
+      wsService.subscribeToDevice(device.id);
+    }
+    for (const device of currentDevices) {
       await fetchSessions(device.id);
     }
     setRefreshing(false);
-  }, [fetchDevices, fetchSessions, devices]);
+  }, [fetchDevices, fetchSessions]);
 
   const totalProjects = useMemo(
     () => deviceProjects.reduce((sum, d) => sum + d.projects.length, 0),
@@ -1021,6 +1025,22 @@ export default function ProjectsScreen() {
     setManageModalVisible(true);
   }, []);
 
+  // Wrap non-scrollable empty states with pull-to-refresh
+  const wrapWithRefresh = (content: React.ReactNode) => (
+    <ScrollView
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.primary}
+        />
+      }
+    >
+      {content}
+    </ScrollView>
+  );
+
   // Render content based on state
   const renderContent = () => {
     if (isScanning) {
@@ -1033,16 +1053,16 @@ export default function ProjectsScreen() {
       );
     }
     if (devices.length === 0) {
-      return <NoDevicesState theme={theme} />;
+      return wrapWithRefresh(<NoDevicesState theme={theme} />);
     }
     if (deviceProjects.length === 0 && isLoadingSessions) {
-      return <LoadingSessionsState theme={theme} />;
+      return wrapWithRefresh(<LoadingSessionsState theme={theme} />);
     }
     if (deviceProjects.length === 0) {
-      return <NoSessionsState theme={theme} />;
+      return wrapWithRefresh(<NoSessionsState theme={theme} />);
     }
     if (filteredDeviceProjects.length === 0) {
-      return <NoPinnedState theme={theme} onManage={openManageModal} />;
+      return wrapWithRefresh(<NoPinnedState theme={theme} onManage={openManageModal} />);
     }
     return (
       <FlatList

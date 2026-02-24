@@ -117,6 +117,11 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
               isLoading: false,
             }));
 
+            // Subscribe to device room immediately so CLI sees mobile
+            // and can initiate E2EE key exchange + send sessions
+            console.log(`[DeviceStore] Subscribing to device ${device.id} after pairing`);
+            wsService.subscribeToDevice(device.id);
+
             resolve(device);
           }).catch(reject);
         });

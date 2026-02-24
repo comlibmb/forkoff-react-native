@@ -15,7 +15,7 @@ import { encodeBase64, decodeBase64, decodeUTF8 } from 'tweetnacl-util';
 import { generateKeyPair } from './keyGeneration';
 import { keyStorage } from './keyStorage';
 import { encrypt, decrypt } from './encryption';
-import { computeSharedKey } from './keyExchange';
+import { computeSharedKey, deriveSessionKeys } from './keyExchange';
 import {
   E2EEKeyPair,
   SigningKeyPair,
@@ -25,9 +25,11 @@ import {
 } from './types';
 
 interface ActiveSession {
-  sharedKey: Uint8Array;
+  sendKey: Uint8Array;
+  receiveKey: Uint8Array;
   outgoingCounter: number;
   lastReceivedCounter: number;
+  createdAt: number;
 }
 
 export class E2EEManager {
@@ -35,6 +37,10 @@ export class E2EEManager {
   private identityKeyPair: E2EEKeyPair | null = null;
   private signingKeyPair: SigningKeyPair | null = null;
   private sessions: Map<string, ActiveSession> = new Map();
+  // Session expiry limits — re-key required after either threshold
+  private static readonly SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  private static readonly SESSION_MAX_MESSAGES = 10_000;
+
   // Temporary storage for ephemeral keys during key exchange
   private static readonly MAX_PENDING_EXCHANGES = 20;
   private static readonly PENDING_EXCHANGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -116,6 +122,26 @@ export class E2EEManager {
   /** Get the device ID this manager was initialized with */
   getDeviceId(): string {
     return this.deviceId;
+  }
+
+  /**
+   * Check if a session has expired (age or message count).
+   * Returns true if the session should be torn down and re-keyed.
+   */
+  isSessionExpired(deviceId: string): boolean {
+    const session = this.sessions.get(deviceId);
+    if (!session) return false;
+
+    if (Date.now() - session.createdAt > E2EEManager.SESSION_MAX_AGE_MS) {
+      return true;
+    }
+    if (session.outgoingCounter >= E2EEManager.SESSION_MAX_MESSAGES) {
+      return true;
+    }
+    if (session.lastReceivedCounter >= E2EEManager.SESSION_MAX_MESSAGES) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -234,12 +260,22 @@ export class E2EEManager {
     );
 
     const ephemeral = generateKeyPair();
-    const sharedKey = computeSharedKey(ephemeral.privateKey, init.ephemeralPublicKey);
+    const rawSharedKey = computeSharedKey(ephemeral.privateKey, init.ephemeralPublicKey);
+
+    // Derive directional send/receive keys via HKDF
+    const { sendKey, receiveKey } = deriveSessionKeys(rawSharedKey, this.deviceId, init.senderDeviceId);
+
+    // Log key fingerprint for debugging key mismatch
+    const sendKeyFP = encodeBase64(sendKey).substring(0, 12);
+    const recvKeyFP = encodeBase64(receiveKey).substring(0, 12);
+    console.log(`[E2EE] Init: sendKey=${sendKeyFP}, recvKey=${recvKeyFP}, peer=${init.senderDeviceId}, myEphPub=${ephemeral.publicKey.substring(0, 12)}, peerEphPub=${init.ephemeralPublicKey.substring(0, 12)}`);
 
     this.sessions.set(init.senderDeviceId, {
-      sharedKey,
+      sendKey,
+      receiveKey,
       outgoingCounter: 0,
       lastReceivedCounter: -1,
+      createdAt: Date.now(),
     });
 
     // Sign our ack
@@ -278,12 +314,22 @@ export class E2EEManager {
       ack.recipientDeviceId,
     );
 
-    const sharedKey = computeSharedKey(pending.privateKey, ack.ephemeralPublicKey);
+    const rawSharedKey = computeSharedKey(pending.privateKey, ack.ephemeralPublicKey);
+
+    // Derive directional send/receive keys via HKDF
+    const { sendKey, receiveKey } = deriveSessionKeys(rawSharedKey, this.deviceId, peerId);
+
+    // Log key fingerprint for debugging key mismatch
+    const sendKeyFP = encodeBase64(sendKey).substring(0, 12);
+    const recvKeyFP = encodeBase64(receiveKey).substring(0, 12);
+    console.log(`[E2EE] Ack: sendKey=${sendKeyFP}, recvKey=${recvKeyFP}, peer=${peerId}, myEphPub=${pending.publicKey.substring(0, 12)}, peerEphPub=${ack.ephemeralPublicKey.substring(0, 12)}`);
 
     this.sessions.set(peerId, {
-      sharedKey,
+      sendKey,
+      receiveKey,
       outgoingCounter: 0,
       lastReceivedCounter: -1,
+      createdAt: Date.now(),
     });
 
     this.pendingExchanges.delete(peerId);
@@ -292,6 +338,12 @@ export class E2EEManager {
   /** Check if an encrypted session is established with a device */
   isSessionEstablished(deviceId: string): boolean {
     return this.sessions.has(deviceId);
+  }
+
+  /** Get any established peer device ID (for resolving target when caller's ID differs) */
+  getEstablishedPeerId(): string | null {
+    const first = this.sessions.keys().next();
+    return first.done ? null : first.value;
   }
 
   /** Encrypt a message for a specific device */
@@ -305,7 +357,13 @@ export class E2EEManager {
       throw new Error(`E2EE: No session established with device ${recipientDeviceId}`);
     }
 
-    const payload = encrypt(plaintext, session.sharedKey);
+    // Check session expiry BEFORE encrypting — force re-key
+    if (this.isSessionExpired(recipientDeviceId)) {
+      this.sessions.delete(recipientDeviceId);
+      throw new Error(`E2EE: Session expired with device ${recipientDeviceId} — re-key required`);
+    }
+
+    const payload = encrypt(plaintext, session.sendKey);
     session.outgoingCounter++;
 
     return {
@@ -325,6 +383,12 @@ export class E2EEManager {
       throw new Error(`E2EE: No session established with device ${senderDeviceId}`);
     }
 
+    // Log decryption key fingerprint on first attempt
+    if (session.lastReceivedCounter === -1) {
+      const keyFP = encodeBase64(session.receiveKey).substring(0, 12);
+      console.log(`[E2EE] Decrypting first message with receiveKey fingerprint=${keyFP}, sender=${senderDeviceId}`);
+    }
+
     // SECURITY: Validate counter is a positive finite integer within safe bounds
     if (
       typeof message.messageCounter !== 'number' ||
@@ -341,8 +405,14 @@ export class E2EEManager {
       throw new Error('E2EE: Replay attack detected - message counter too low');
     }
 
-    const plaintext = decrypt(message.payload, session.sharedKey);
+    const plaintext = decrypt(message.payload, session.receiveKey);
     session.lastReceivedCounter = message.messageCounter;
+
+    // Check expiry AFTER decrypting — valid messages still get through, but warn caller
+    if (this.isSessionExpired(senderDeviceId)) {
+      console.warn(`[E2EE] Session with ${senderDeviceId} has expired after decryption — re-key required`);
+    }
+
     return plaintext;
   }
 

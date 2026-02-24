@@ -65,6 +65,7 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
 
       // Sessions are populated via WebSocket events (claude_session_update)
       // Request sessions list from CLI via WebSocket
+      console.log(`[ClaudeStore] fetchSessions(${deviceId}) — socket connected: ${wsService.isConnected}, E2EE active: ${wsService.isE2EEActive(deviceId)}`);
       wsService.emit('claude_sessions_request', { deviceId });
 
       analyticsService.track('claude_sessions_fetched', { deviceId });
@@ -336,14 +337,21 @@ function processSessionUpdate(
 
 wsService.on('claude_session_update', (data) => {
   if (!data.deviceId) return;
+  console.log(`[ClaudeStore] session_update: ${data.sessionKey} (${data.state}) for device ${data.deviceId}`);
   unstable_batchedUpdates(() => {
-    useClaudeStore.setState((state) => processSessionUpdate(state, data.deviceId, data));
+    useClaudeStore.setState((state) => {
+      const result = processSessionUpdate(state, data.deviceId, data);
+      const total = (result.sessions as Map<string, any>)?.get(data.deviceId)?.length ?? 0;
+      console.log(`[ClaudeStore] Total sessions for ${data.deviceId}: ${total}`);
+      return result;
+    });
   });
 });
 
 wsService.on('claude_session_batch_update', (data) => {
   const sessions = data.sessions;
   if (!Array.isArray(sessions) || sessions.length === 0) return;
+  console.log(`[ClaudeStore] batch_update: ${sessions.length} sessions received`);
   unstable_batchedUpdates(() => {
     useClaudeStore.setState((state) => {
       let result: Partial<ClaudeState> = {};
@@ -353,6 +361,13 @@ wsService.on('claude_session_batch_update', (data) => {
         const update = processSessionUpdate(merged, session.deviceId, session);
         merged = { ...merged, ...update } as ClaudeState;
         result = { ...result, ...update };
+      }
+      // Log totals per device
+      const resultSessions = result.sessions as Map<string, any> | undefined;
+      if (resultSessions) {
+        for (const [deviceId, deviceSessions] of resultSessions) {
+          console.log(`[ClaudeStore] After batch — device ${deviceId}: ${deviceSessions.length} sessions`);
+        }
       }
       return result;
     });
