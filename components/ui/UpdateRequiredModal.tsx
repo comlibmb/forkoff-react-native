@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import { ArrowUpCircle, ExternalLink } from 'lucide-react-native';
+import { ArrowUpCircle } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useVersionStore } from '@/stores/version.store';
 
@@ -124,7 +124,6 @@ export function UpdateRequiredModal({ visible }: UpdateRequiredModalProps) {
               activeOpacity={0.8}
             >
               <Text style={styles.updateButtonText}>Update Now</Text>
-              <ExternalLink size={18} color="#fff" />
             </TouchableOpacity>
           </View>
 

@@ -249,27 +249,14 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   },
 
   refreshDeviceStatus: () => {
-    const isConnected = wsService.isConnected;
-    const devices = get().devices;
-    if (devices.length === 0) return;
-
-    // In the embedded relay model, the CLI is the server we connect to.
-    // If our socket is connected, the paired device is online; otherwise offline.
-    const status: DeviceStatus = isConnected ? 'online' : 'offline';
-    const now = new Date().toISOString();
-
-    set((state) => ({
-      devices: state.devices.map((d) => ({
-        ...d,
-        status,
-        lastSeen: isConnected ? now : d.lastSeen,
-      })),
-    }));
-
-    // Persist to AsyncStorage
-    for (const d of devices) {
-      deviceService.updateDeviceStatus(d.id, status, isConnected ? now : undefined).catch(() => {});
-    }
+    // Device status is determined by the API relay, not by the mobile's own connection.
+    // The API sends device_status events when CLIs connect/disconnect.
+    // On subscribe_device, the API also sends the current status.
+    // So we just re-subscribe to trigger status updates from the server.
+    if (!wsService.isConnected) return;
+    get().devices.forEach((device) => {
+      wsService.subscribeToDevice(device.id);
+    });
   },
 
   clearError: () => set({ error: null }),
@@ -298,14 +285,13 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   },
 }));
 
-// Auto-update device status on WebSocket connect/disconnect
+// On connect: re-subscribe to device rooms (triggers API to send current status)
 wsService.on('connected', () => {
   useDeviceStore.getState().refreshDeviceStatus();
 });
 
+// On disconnect: mark all devices offline (can't know real status when disconnected)
 wsService.on('disconnected', () => {
-  // Mark all devices offline when socket drops
-  const now = new Date().toISOString();
   useDeviceStore.setState((state) => ({
     devices: state.devices.map((d) => ({ ...d, status: 'offline' as DeviceStatus })),
   }));
