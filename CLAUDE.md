@@ -40,7 +40,6 @@ Zustand stores in `stores/*.store.ts`, created with `create<State>((set, get) =>
 - `approval.store` — Pending code approval requests
 - `project-hub.store` — Per-project cache (CLAUDE.md content, last activity, tasks)
 - `theme.store` — Dark/light mode preference
-- `usage.store` — Token/message usage tracking
 - `permission-rules.store` — User-configurable tool approval rules (persisted via AsyncStorage)
 - `session-settings.store` — Per-session settings (unrestricted mode toggle, warning state)
 
@@ -107,16 +106,12 @@ Navigated to from the Projects tab with `deviceId`, `directory`, `deviceName` pa
 
 ## App Store Submission Notes
 
-### Subscription / IAP
-- Currently uses **Stripe web checkout** for Pro subscriptions. Apple requires In-App Purchase for digital goods on iOS (guideline 3.1.1).
-- `subscription.service.ts` has placeholder `productId` fields and commented-out RevenueCat init — ready for IAP implementation.
-- Before iOS submission: implement Apple IAP (via RevenueCat or `react-native-iap`), or remove all purchase CTAs from the iOS build.
-
 ### Environment Variables (`.env`)
-- `EXPO_PUBLIC_GOOGLE_CLIENT_ID` — unused in app code (Google OAuth goes through Supabase server-side), but update if you plan direct Google OAuth.
-- `EXPO_PUBLIC_POSTHOG_API_KEY` — PostHog analytics key (moved from hardcoded to env).
-- `EXPO_PUBLIC_IOS_APP_STORE_ID` — Set after creating app in App Store Connect (used in UpdateRequiredModal).
-- `EXPO_PUBLIC_STRIPE_PRO_PRICE_ID` — Stripe price ID for checkout.
+See `.env.example` for all required variables. Key ones:
+- `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_WS_URL` — Backend API and WebSocket endpoints
+- `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` — Supabase project credentials
+- `EXPO_PUBLIC_POSTHOG_API_KEY` — PostHog analytics (optional)
+- `EXPO_PUBLIC_SENTRY_DSN` — Sentry error tracking (optional)
 
 ### Legal Pages
 All outbound legal URLs point to `https://forkoff.app/legal/*`:

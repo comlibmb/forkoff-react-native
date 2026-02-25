@@ -1,7 +1,14 @@
 {
   "name": "forkoff",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Control AI coding sessions (Claude Code) on your laptop from your phone",
   "license": "MIT",
+  "author": "ForkOff <support@forkoff.app>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Forkoff-app/forkoff-react-native.git"
+  },
+  "homepage": "https://forkoff.app",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

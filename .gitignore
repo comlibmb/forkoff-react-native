@@ -46,12 +46,7 @@ yarn-error.*
 
 # Claude local settings
 .claude/
-CLAUDE.md
 
 # Misc
 nul
-
-# Internal documentation (keep out of repo, except README)
-docs/*.md
-!docs/README.md
-!docs/SECURITY.md
+*.stackdump
