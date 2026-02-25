@@ -1024,10 +1024,12 @@ export default function ClaudeSessionScreen() {
     });
 
     return () => {
+      // Tell CLI we're releasing this session so it can clean up hooks
+      wsService.emit('session_release', { deviceId, sessionKey });
       unsubDisconnected();
       unsubAlive();
     };
-  }, [hasTakenOver, sessionKey, isSessionReady]);
+  }, [hasTakenOver, sessionKey, isSessionReady, deviceId]);
 
   const loadMore = useCallback(() => {
     if (isLoadingMore || !hasMore || !session?.transcriptPath || session.transcriptPath.length === 0) return;
