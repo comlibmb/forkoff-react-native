@@ -21,11 +21,9 @@ Thanks for your interest in contributing! Here's how to get started.
 See `CLAUDE.md` for a full architecture overview, including routing, state management, services, and key patterns.
 
 Detailed docs are in `docs/`:
-- `docs/PERMISSION-MODEL.md` — Permission system architecture
-- `docs/WEBSOCKET-EVENTS.md` — All WebSocket events and payloads
 - `docs/TOOL-RENDERING.md` — How tool results are rendered
-- `docs/E2EE-DESIGN.md` — End-to-end encryption design
-- `docs/SECURITY.md` — Security whitepaper
+- `docs/SECURITY.md` — E2EE security whitepaper
+- `docs/E2EE-DESIGN.md` — Original E2EE design doc (historical)
 
 ## Submitting Changes
 

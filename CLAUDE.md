@@ -23,7 +23,6 @@ Tests: jest-expo preset, matches `**/__tests__/**/*.test.{ts,tsx}` and `**/*.tes
 ### Routing
 Expo Router (file-based, like Next.js). Routes live in `app/`:
 - `app/(tabs)/` — Bottom tab screens: Projects, Devices, Analytics, Settings
-- `app/(auth)/` — Login, register, forgot-password, OTP verification
 - `app/(onboarding)/` — First-run setup flow
 - `app/claude/session/[sessionKey].tsx` — Core session view (streaming messages, approvals, thinking)
 - `app/settings/permissions.tsx` — Tool permission rules configuration (which tools auto-approve vs require approval)
@@ -33,23 +32,36 @@ Typed routes enabled (`typedRoutes: true` in app.json experiments).
 
 ### State Management
 Zustand stores in `stores/*.store.ts`, created with `create<State>((set, get) => ({...}))`. Key stores:
-- `auth.store` — Supabase auth, user profile, OTP flow
+- `identity.store` — User identity, Supabase auth state
 - `device.store` — Paired devices, status tracking
 - `claude.store` — Claude sessions per device, session lifecycle
 - `connection.store` — WebSocket connection state
 - `approval.store` — Pending code approval requests
 - `project-hub.store` — Per-project cache (CLAUDE.md content, last activity, tasks)
+- `project.store` — Project list and metadata
 - `theme.store` — Dark/light mode preference
 - `permission-rules.store` — User-configurable tool approval rules (persisted via AsyncStorage)
 - `session-settings.store` — Per-session settings (unrestricted mode toggle, warning state)
+- `analytics.store` — Token usage tracking, multi-device aggregation
+- `achievements.store` — Gamification badges and unlock state
+- `e2ee.store` — End-to-end encryption session state
+- `terminal.store` — Terminal session state
+- `version.store` — App version and update checks
+- `tutorial.store` — First-run tutorial progress
 
 ### Services
 Singleton instances in `services/*.service.ts`:
-- `websocket.service` — Socket.io client, event routing, all real-time communication
-- `api.client` — Axios HTTP client with Supabase JWT injection
-- `auth.service` — Supabase auth wrapper
+- `websocket.service` — Socket.io client, event routing, E2EE, all real-time communication
+- `appConfig.service` — Supabase client setup, app configuration
+- `pairing.service` — Device pairing flow and QR code handling
 - `notification.service` — Expo push notifications
+- `analytics.service` — PostHog analytics wrapper
 - `sentry.service` — Error tracking
+- `device.service` — Device management helpers
+- `network.service` — Network connectivity detection
+- `project.service` — Project data fetching
+- `version.service` — App version checking
+- `services/crypto/` — E2EE implementation (key generation, encryption, key storage, TOFU)
 
 ### WebSocket Events (Adding New Events)
 The mobile app is one of three components in the event flow: **CLI ↔ Backend ↔ Mobile**.
@@ -108,7 +120,7 @@ Navigated to from the Projects tab with `deviceId`, `directory`, `deviceName` pa
 
 ### Environment Variables (`.env`)
 See `.env.example` for all required variables. Key ones:
-- `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_WS_URL` — Backend API and WebSocket endpoints
+- `EXPO_PUBLIC_WS_URL` — WebSocket endpoint for relay server
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` — Supabase project credentials
 - `EXPO_PUBLIC_POSTHOG_API_KEY` — PostHog analytics (optional)
 - `EXPO_PUBLIC_SENTRY_DSN` — Sentry error tracking (optional)
@@ -123,9 +135,7 @@ All outbound legal URLs point to `https://forkoff.app/legal/*`:
 Expo SDK auto-generates the app-level `PrivacyInfo.xcprivacy` during iOS builds. Individual Expo packages (expo-device, expo-constants, async-storage, etc.) include their own privacy manifests in `node_modules`.
 
 ## Reference Documentation
-Always check `docs/` for detailed documentation:
-- `docs/PERMISSION-MODEL.md` — Permission modes, interactive approval flow, configurable rules, hook system
-- `docs/WEBSOCKET-EVENTS.md` — All WebSocket events, payloads, routing
-- `docs/BUG-FIXES.md` — Known bugs found and how they were fixed
-- `docs/INTERACTIVE-APPROVALS-PLAN.md` — Original design doc for the hook-based approval system (implemented)
+Check `docs/` for detailed documentation:
 - `docs/TOOL-RENDERING.md` — Tool rendering architecture, component mapping, adding new tool renderers
+- `docs/SECURITY.md` — E2EE security whitepaper (threat model, cryptographic primitives, key management)
+- `docs/E2EE-DESIGN.md` — Original E2EE design doc (historical — implementation uses NaCl instead of AES-GCM)

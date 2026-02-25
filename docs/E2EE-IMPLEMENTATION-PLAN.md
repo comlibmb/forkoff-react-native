@@ -1,7 +1,9 @@
 # E2EE Implementation Plan (TDD)
 
+> **Historical document.** E2EE has been fully implemented using NaCl (XSalsa20-Poly1305 + X25519) instead of the AES-256-GCM approach described here. See `docs/SECURITY.md` for the current implementation details.
+
 **Approach:** Test-Driven Development - write tests first, then implement until tests pass.
-**Scope:** Basic E2EE (MVP) - X25519 key exchange + AES-256-GCM encryption. No forward secrecy yet.
+**Scope:** ~~Basic E2EE (MVP) - X25519 key exchange + AES-256-GCM encryption.~~ Implemented with NaCl.
 
 ---
 

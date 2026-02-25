@@ -96,6 +96,8 @@ npm install
 Create a `.env` file:
 
 ```bash
+# Required
+EXPO_PUBLIC_WS_URL=wss://api.forkoff.app          # or ws://YOUR_IP:3000 for local dev
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
@@ -127,7 +129,7 @@ app/
 │   ├── analytics.tsx      # Usage analytics
 │   └── settings.tsx       # Settings
 ├── claude/
-│   └── session/[key].tsx  # Live session view (streaming, approvals)
+│   └── session/[sessionKey].tsx  # Live session view (streaming, approvals)
 ├── device/
 │   ├── [id].tsx           # Device detail
 │   └── pair.tsx           # QR pairing

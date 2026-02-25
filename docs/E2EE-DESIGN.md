@@ -1,8 +1,9 @@
 # End-to-End Encryption Design for ForkOff
 
-**Status:** Design Phase - Not Implemented
+> **Historical document.** E2EE has been fully implemented using NaCl (XSalsa20-Poly1305 + X25519) instead of the AES-256-GCM approach described here. See `docs/SECURITY.md` for the current implementation details.
+
+**Status:** ~~Design Phase~~ Implemented (Feb 2026)
 **Created:** 2026-02-08
-**Estimated Implementation:** 2-3 months
 
 ---
 
