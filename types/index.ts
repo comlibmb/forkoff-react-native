@@ -4,9 +4,6 @@ export interface User {
   name: string;
 }
 
-// Subscription tier kept for interface compatibility (always 'free' in open source)
-export type SubscriptionTier = 'free';
-
 // Device Types
 export type DeviceStatus = 'online' | 'offline' | 'syncing' | 'ONLINE' | 'OFFLINE' | 'SYNCING';
 export type DeviceType = 'desktop' | 'laptop' | 'server' | 'DESKTOP' | 'LAPTOP' | 'SERVER';
@@ -326,36 +323,3 @@ export interface UnlockedAchievement {
   showcased: boolean;
 }
 
-// ==================== SUBSCRIPTION LIMITS TYPES (open source: all unlimited) ====================
-
-export type LimitType =
-  | 'messages_daily'
-  | 'sessions_monthly'
-  | 'projects_max'
-  | 'devices_max'
-  | 'repairs_monthly';
-
-export interface SubscriptionUsage {
-  messagesUsedToday: number;
-  sessionsUsedThisMonth: number;
-  repairsUsedThisMonth: number;
-  activeProjectCount: number;
-  pairedDeviceCount: number;
-}
-
-export interface LimitCheckResult {
-  allowed: boolean;
-  limitType?: LimitType;
-  currentUsage?: number;
-  limit?: number;
-  resetAt?: string;
-}
-
-export interface SubscriptionLimits {
-  messagesPerDay: number;
-  sessionsPerMonth: number;
-  maxProjects: number;
-  maxDevices: number;
-  repairsPerMonth: number;
-  historyRetentionDays: number;
-}

@@ -23,7 +23,6 @@ import { ArrowLeft, Play, ChevronRight, ChevronDown, Terminal, ChevronUp, ArrowU
 import { wsService, TranscriptEntry, DiffHunk, TaskInfo, ThinkingContentEvent, TokenUsageEvent, TaskProgressEvent, SessionLoadingEvent } from '@/services/websocket.service';
 import { alert } from '@/components/ui/AlertModal';
 import { useClaudeStore } from '@/stores/claude.store';
-import { useUsageStore } from '@/stores/usage.store';
 import { useSessionSettingsStore } from '@/stores/session-settings.store';
 import { usePermissionRulesStore } from '@/stores/permission-rules.store';
 import { analyticsService } from '@/services/analytics.service';
@@ -145,9 +144,6 @@ export default function ClaudeSessionScreen() {
   const setGlobalHasSeenWarning = useSessionSettingsStore((s) => s.setHasSeenWarning);
   const [sessionUnrestricted, setSessionUnrestricted] = useState(globalUnrestricted);
 
-  // Usage store for optimistic local increment (server is authoritative)
-  const { incrementMessages } = useUsageStore();
-
   // Activity state for status bar
   const [activityState, setActivityState] = useState<ActivityState>('idle');
   const [activityDetail, setActivityDetail] = useState<string | undefined>(undefined);
@@ -193,7 +189,7 @@ export default function ClaudeSessionScreen() {
       canShowEmptyTimerRef.current = null;
     }
     if (!isLoading && entries.length === 0) {
-      canShowEmptyTimerRef.current = setTimeout(() => setCanShowEmpty(true), 8000);
+      canShowEmptyTimerRef.current = setTimeout(() => setCanShowEmpty(true), 2000);
     } else {
       setCanShowEmpty(false);
     }
@@ -1238,9 +1234,6 @@ export default function ClaudeSessionScreen() {
     }
     if (!deviceId || isSending || !isSessionReady) return;
 
-    // Increment message count (optimistically, server will enforce)
-    incrementMessages();
-
     // Set ref guard immediately (synchronous)
     sendingRef.current = true;
     setIsSending(true);
@@ -1668,7 +1661,7 @@ export default function ClaudeSessionScreen() {
           )}
 
           {/* Terminal-style output */}
-          {isLoading || (entries.length === 0 && !canShowEmpty && !isWaitingForResponse && !autoPromptSent && !isTakingOver) ? (
+          {entries.length === 0 && (isLoading || (!canShowEmpty && !isWaitingForResponse && !autoPromptSent && !isTakingOver)) ? (
             <TerminalLoader variant="boot" directory={directoryName} />
           ) : entries.length === 0 && (isWaitingForResponse || autoPromptSent || isTakingOver) ? (
             <TerminalLoader variant="minimal" message="Waiting for Claude" />
