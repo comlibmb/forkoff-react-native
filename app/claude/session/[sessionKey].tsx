@@ -182,6 +182,26 @@ export default function ClaudeSessionScreen() {
   // Track if we've done initial load
   const initialLoadDoneRef = useRef(false);
 
+  // Grace period: keep showing boot loader after loading completes with empty entries
+  // to avoid flashing "It's quiet in here" while messages are still arriving
+  const [canShowEmpty, setCanShowEmpty] = useState(false);
+  const canShowEmptyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (canShowEmptyTimerRef.current) {
+      clearTimeout(canShowEmptyTimerRef.current);
+      canShowEmptyTimerRef.current = null;
+    }
+    if (!isLoading && entries.length === 0) {
+      canShowEmptyTimerRef.current = setTimeout(() => setCanShowEmpty(true), 8000);
+    } else {
+      setCanShowEmpty(false);
+    }
+    return () => {
+      if (canShowEmptyTimerRef.current) clearTimeout(canShowEmptyTimerRef.current);
+    };
+  }, [isLoading, entries.length]);
+
   // Track the claudeSessionId/transcriptPath that was used for the initial fetch
   // so we can re-fetch when better data becomes available
   const fetchedWithClaudeSessionIdRef = useRef<string | undefined>(undefined);
@@ -1648,7 +1668,7 @@ export default function ClaudeSessionScreen() {
           )}
 
           {/* Terminal-style output */}
-          {isLoading ? (
+          {isLoading || (entries.length === 0 && !canShowEmpty && !isWaitingForResponse && !autoPromptSent && !isTakingOver) ? (
             <TerminalLoader variant="boot" directory={directoryName} />
           ) : entries.length === 0 && (isWaitingForResponse || autoPromptSent || isTakingOver) ? (
             <TerminalLoader variant="minimal" message="Waiting for Claude" />

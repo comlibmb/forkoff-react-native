@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClaudeSession, DirectoryEntry, TabCompletionResult } from '@/types';
 import { wsService } from '@/services/websocket.service';
 import { unstable_batchedUpdates } from 'react-native';
@@ -7,6 +8,35 @@ import { analyticsService } from '@/services/analytics.service';
 import { sentryService } from '@/services/sentry.service';
 import { useUsageStore } from './usage.store';
 import { useSessionSettingsStore } from './session-settings.store';
+
+const SESSION_CACHE_KEY = 'forkoff:claude_sessions';
+
+/** Persist sessions to AsyncStorage (fire-and-forget) */
+function persistSessions(sessions: Map<string, ClaudeSession[]>): void {
+  try {
+    const obj: Record<string, ClaudeSession[]> = {};
+    for (const [deviceId, list] of sessions) {
+      obj[deviceId] = list;
+    }
+    AsyncStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(obj)).catch(() => {});
+  } catch {}
+}
+
+/** Load cached sessions from AsyncStorage */
+async function loadCachedSessions(): Promise<Map<string, ClaudeSession[]>> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw) as Record<string, ClaudeSession[]>;
+    const map = new Map<string, ClaudeSession[]>();
+    for (const [deviceId, list] of Object.entries(obj)) {
+      map.set(deviceId, list);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
 
 interface ClaudeState {
   // Session state per device
@@ -63,8 +93,22 @@ export const useClaudeStore = create<ClaudeState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Sessions are populated via WebSocket events (claude_session_update)
-      // Request sessions list from CLI via WebSocket
+      // Load cached sessions from AsyncStorage immediately (show titles while CLI syncs)
+      const cached = await loadCachedSessions();
+      if (cached.size > 0) {
+        set((state) => {
+          const merged = new Map(state.sessions);
+          for (const [devId, cachedList] of cached) {
+            const existing = merged.get(devId) || [];
+            if (existing.length === 0) {
+              merged.set(devId, cachedList);
+            }
+          }
+          return { sessions: merged };
+        });
+      }
+
+      // Request fresh sessions from CLI via WebSocket
       console.log(`[ClaudeStore] fetchSessions(${deviceId}) — socket connected: ${wsService.isConnected}, E2EE active: ${wsService.isE2EEActive(deviceId)}`);
       wsService.emit('claude_sessions_request', { deviceId });
 
@@ -343,6 +387,8 @@ wsService.on('claude_session_update', (data) => {
       const result = processSessionUpdate(state, data.deviceId, data);
       const total = (result.sessions as Map<string, any>)?.get(data.deviceId)?.length ?? 0;
       console.log(`[ClaudeStore] Total sessions for ${data.deviceId}: ${total}`);
+      // Persist to cache
+      if (result.sessions) persistSessions(result.sessions as Map<string, ClaudeSession[]>);
       return result;
     });
   });
@@ -369,6 +415,8 @@ wsService.on('claude_session_batch_update', (data) => {
           console.log(`[ClaudeStore] After batch — device ${deviceId}: ${deviceSessions.length} sessions`);
         }
       }
+      // Persist to cache
+      if (result.sessions) persistSessions(result.sessions as Map<string, ClaudeSession[]>);
       return result;
     });
   });
