@@ -537,11 +537,13 @@ class WebSocketService {
     }
 
     this.isConnecting = true;
+    console.log('[WS] connect() called');
 
     try {
       // Get device identity from SecureStore (no Supabase)
       const mobileDeviceId = await pairingService.getMobileDeviceId();
       this.mobileDeviceId = mobileDeviceId;
+      console.log(`[WS] mobileDeviceId: ${mobileDeviceId?.substring(0, 12)}...`);
 
       // Load custom relay URL if configured (self-hosting)
       const customRelayUrl = await pairingService.getRelayUrl();
@@ -560,6 +562,8 @@ class WebSocketService {
       // Load relay token for cloud relay authentication (if available)
       const relayToken = await pairingService.getRelayToken();
 
+      console.log(`[WS] Connecting to: ${WS_URL}`);
+      console.log(`[WS] relayToken: ${relayToken ? 'present' : 'none'}`);
       this.socket = io(WS_URL, {
         auth: {
           mobileDeviceId,
@@ -631,6 +635,7 @@ class WebSocketService {
     this.socket.on('connect_error', (error) => {
       this.isConnecting = false;
       this.reconnectAttempts++;
+      console.error(`[WS] connect_error #${this.reconnectAttempts}: ${error.message}`);
 
       // Capture connection errors to Sentry
       sentryService.captureException(error, {
