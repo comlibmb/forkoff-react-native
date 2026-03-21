@@ -875,13 +875,16 @@ class WebSocketService {
       this._pendingKeyExchangeInits.add(data.senderDeviceId);
       // Lazily create/recreate e2eeManager with the correct mobileDeviceId
       const handleInit = async () => {
+        console.log(`[E2EE] handleInit: calling ensureE2EEManager...`);
         await this.ensureE2EEManager();
+        console.log(`[E2EE] handleInit: e2eeManager ready, calling handleKeyExchangeInit...`);
         const ack = await this.e2eeManager!.handleKeyExchangeInit(data);
         this._pendingKeyExchangeInits.delete(data.senderDeviceId);
-        console.log(`[E2EE] Handled init — session stored for sender ${data.senderDeviceId}, ack.senderDeviceId=${ack.senderDeviceId}`);
+        console.log(`[E2EE] handleInit: init handled, sending ack (senderDeviceId=${ack.senderDeviceId})`);
         // Don't override senderDeviceId — e2eeManager signed with its deviceId,
         // the ack must use the same ID or signature verification will fail
         this.socket?.emit('encrypted_key_exchange_ack', ack);
+        console.log(`[E2EE] handleInit: ack emitted, socket connected=${this.socket?.connected}`);
         useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'established');
         useE2EEStore.getState().setE2EEEnabled(true);
         this._anyE2EESessionEstablished = true;
@@ -899,7 +902,8 @@ class WebSocketService {
         this.socket?.emit('claude_sessions_request', { deviceId: peerDeviceId });
       };
       handleInit().catch((err) => {
-        console.error('[E2EE] Key exchange init failed');
+        console.error(`[E2EE] Key exchange init failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(`[E2EE] Key exchange init stack:`, err);
         this._pendingKeyExchangeInits.delete(data.senderDeviceId);
         useE2EEStore.getState().setSessionStatus(data.senderDeviceId, 'failed');
       });
