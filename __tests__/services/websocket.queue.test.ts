@@ -52,7 +52,8 @@ jest.mock('socket.io-client', () => ({
 jest.mock('@/services/pairing.service', () => ({
   pairingService: {
     getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
-    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayToken: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -89,6 +90,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       // No E2EE manager/session — sensitive event should be dropped
       wsService.sendUserMessage('device-1', 'Secret message');
@@ -104,6 +107,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = false;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.sendUserMessage('device-1', 'Queued message');
 
@@ -115,6 +120,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.respondToPermissionPrompt('prompt-123', 'allow', {
         deviceId: 'device-1',
@@ -132,6 +139,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.respondToClaudeApproval('approval-456', 'y', {
         deviceId: 'device-1',
@@ -149,6 +158,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.requestSessionHistory('device-1', 'session-key-123');
 
@@ -163,6 +174,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.createTerminalSession('term-1', 'device-1', '/home/user/project');
 
@@ -177,6 +190,8 @@ describe('WebSocketService - Message Queue & E2EE Enforcement', () => {
       await wsService.connect();
       mockSocket.connected = true;
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       wsService.abortClaude('device-1', 'session-key-456');
 

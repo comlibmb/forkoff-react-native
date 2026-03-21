@@ -1126,9 +1126,12 @@ class WebSocketService {
   }
 
   /**
-   * Send a sensitive event: encrypt via E2EE if session exists, otherwise plaintext fallback.
+   * Send a sensitive event: encrypt via E2EE if session exists, otherwise drop or plaintext.
    * No queue — events always flow immediately (encrypt or plaintext).
    * When E2EE is active, the API relay sees only an opaque encrypted blob.
+   * When E2EE manager exists but no session is established, events are DROPPED to prevent
+   * plaintext leakage (E2EE is available but not yet negotiated).
+   * When no E2EE manager exists at all, events fall through to plaintext (E2EE not configured).
    */
   private emitSensitive(event: string, data: unknown): void {
     if (this.e2eeManager) {
@@ -1155,8 +1158,11 @@ class WebSocketService {
           }
         }
       }
+      // E2EE manager exists but no session — drop to prevent plaintext leakage
+      console.warn(`[WS] emitSensitive(${event}) — DROPPED (E2EE available but no session, refusing plaintext)`);
+      return;
     }
-    // E2EE not active — send plaintext (API processes normally — fallback mode)
+    // No E2EE manager — send plaintext (E2EE not configured)
     console.log(`[WS] emitSensitive(${event}) — plaintext`);
     this.socket?.emit(event, data);
   }

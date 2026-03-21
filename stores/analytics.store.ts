@@ -185,7 +185,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       };
 
       // Persist updated stats
-      AsyncStorage.setItem(USAGE_STATS_KEY, JSON.stringify(updatedStats)).catch(() => {});
+      AsyncStorage.setItem(USAGE_STATS_KEY, JSON.stringify(updatedStats)).catch((e) => console.warn('[Analytics] AsyncStorage persist failed:', e));
 
       return { usageStats: updatedStats };
     });
@@ -197,7 +197,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       const usageStats = aggregateStats(perDeviceStats);
 
       // Persist
-      AsyncStorage.setItem(USAGE_STATS_KEY, JSON.stringify(usageStats)).catch(() => {});
+      AsyncStorage.setItem(USAGE_STATS_KEY, JSON.stringify(usageStats)).catch((e) => console.warn('[Analytics] AsyncStorage persist failed:', e));
 
       return { perDeviceStats, usageStats };
     });
@@ -209,7 +209,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       const dailyUsage = aggregateDailyUsage(perDeviceDailyUsage);
 
       // Persist
-      AsyncStorage.setItem(DAILY_USAGE_KEY, JSON.stringify(dailyUsage)).catch(() => {});
+      AsyncStorage.setItem(DAILY_USAGE_KEY, JSON.stringify(dailyUsage)).catch((e) => console.warn('[Analytics] AsyncStorage persist failed:', e));
 
       return { perDeviceDailyUsage, dailyUsage };
     });
@@ -221,7 +221,7 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       const streakInfo = aggregateStreak(perDeviceStreak);
 
       // Persist
-      AsyncStorage.setItem(STREAK_KEY, JSON.stringify(streakInfo)).catch(() => {});
+      AsyncStorage.setItem(STREAK_KEY, JSON.stringify(streakInfo)).catch((e) => console.warn('[Analytics] AsyncStorage persist failed:', e));
 
       return { perDeviceStreak, streakInfo };
     });

@@ -48,7 +48,8 @@ jest.mock('socket.io-client', () => ({
 jest.mock('@/services/pairing.service', () => ({
   pairingService: {
     getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
-    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayToken: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -150,6 +151,9 @@ describe('WebSocketService', () => {
     beforeEach(async () => {
       mockSocket.connected = true;
       await wsService.connect();
+      // Clear internal e2eeManager so sensitive events fall through to plaintext
+      // (this test validates data formatting, not E2EE enforcement)
+      (wsService as any).e2eeManager = null;
     });
 
     it('should emit claude_approval_response event with correct data', () => {

@@ -17,6 +17,7 @@ import { useDevices } from '@/hooks/useDevices';
 import { useClaudeStore } from '@/stores/claude.store';
 import { Device, ConnectedTool } from '@/types';
 import { useTheme } from '@/theme/ThemeProvider';
+import { formatTimeAgo } from '@/components/project/SessionListItem';
 
 const deviceTypeIcons: Record<string, typeof Laptop> = {
   laptop: Laptop,
@@ -150,6 +151,7 @@ const DeviceCard = memo(({
 
           <Text style={[styles.deviceMeta, { color: theme.textSecondary }]}>
             {device.platform || 'Unknown'} {'\u2022'} {device.type?.toLowerCase() || 'device'}
+            {!isOnline && device.lastSeenAt ? ` \u2022 ${formatTimeAgo(device.lastSeenAt)}` : ''}
           </Text>
 
           {connectedTools.length > 0 && (

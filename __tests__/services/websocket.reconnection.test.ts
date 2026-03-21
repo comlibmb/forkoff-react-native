@@ -49,7 +49,8 @@ jest.mock('socket.io-client', () => ({
 jest.mock('@/services/pairing.service', () => ({
   pairingService: {
     getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
-    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayToken: jest.fn().mockResolvedValue(null),
   },
 }));
 

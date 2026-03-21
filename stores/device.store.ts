@@ -214,17 +214,18 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   },
 
   updateDeviceStatus: (deviceId, status, lastSeenAt?: string, cliVersion?: string) => {
+    const normalizedStatus = (typeof status === 'string' ? status.toLowerCase() : 'offline') as DeviceStatus;
     const timestamp = lastSeenAt || new Date().toISOString();
     set((state) => ({
       devices: state.devices.map((d) =>
         d.id === deviceId
-          ? { ...d, status, lastSeen: timestamp, lastSeenAt: timestamp, ...(cliVersion ? { cliVersion } : {}) }
+          ? { ...d, status: normalizedStatus, lastSeen: timestamp, lastSeenAt: timestamp, ...(cliVersion ? { cliVersion } : {}) }
           : d
       ),
     }));
 
     // Persist status update to AsyncStorage (fire and forget)
-    deviceService.updateDeviceStatus(deviceId, status, lastSeenAt, cliVersion).catch(() => {});
+    deviceService.updateDeviceStatus(deviceId, status, lastSeenAt, cliVersion).catch((e) => console.warn('[DeviceStore] persist status failed:', e));
   },
 
   updateToolStatus: (deviceId: string, toolType: string, status: 'active' | 'inactive' | 'error') => {

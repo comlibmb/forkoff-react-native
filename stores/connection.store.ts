@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { networkService } from '@/services/network.service';
 import { wsService } from '@/services/websocket.service';
-import { DeviceStatus } from '@/types';
 
 interface ConnectionState {
   // Phone has internet connection
@@ -10,9 +9,6 @@ interface ConnectionState {
   // WebSocket connected to backend
   isServerConnected: boolean;
 
-  // Map of device IDs to their online/offline status
-  deviceStatuses: Record<string, DeviceStatus>;
-
   // Whether this device was kicked by another device claiming the session
   wasKicked: boolean;
 
@@ -20,16 +16,12 @@ interface ConnectionState {
   initialize: () => () => void;
   setPhoneOnline: (isOnline: boolean) => void;
   setServerConnected: (isConnected: boolean) => void;
-  setDeviceStatus: (deviceId: string, status: DeviceStatus) => void;
-  clearDeviceStatuses: () => void;
-  isDeviceOnline: (deviceId: string) => boolean;
   setWasKicked: (kicked: boolean) => void;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   isPhoneOnline: true,
   isServerConnected: false,
-  deviceStatuses: {},
   wasKicked: false,
 
   initialize: () => {
@@ -47,16 +39,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       set({ isServerConnected: false });
     });
 
-    // Subscribe to device status updates
-    const unsubscribeDeviceStatus = wsService.on('device_status', (data) => {
-      set((state) => ({
-        deviceStatuses: {
-          ...state.deviceStatuses,
-          [data.deviceId]: data.status,
-        },
-      }));
-    });
-
     // Initialize network service
     networkService.initialize();
 
@@ -68,28 +50,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       unsubscribeNetwork();
       unsubscribeWsConnected();
       unsubscribeWsDisconnected();
-      unsubscribeDeviceStatus();
     };
   },
 
   setPhoneOnline: (isOnline) => set({ isPhoneOnline: isOnline }),
 
   setServerConnected: (isConnected) => set({ isServerConnected: isConnected }),
-
-  setDeviceStatus: (deviceId, status) =>
-    set((state) => ({
-      deviceStatuses: {
-        ...state.deviceStatuses,
-        [deviceId]: status,
-      },
-    })),
-
-  clearDeviceStatuses: () => set({ deviceStatuses: {} }),
-
-  isDeviceOnline: (deviceId) => {
-    const status = get().deviceStatuses[deviceId];
-    return status === 'online' || status === 'ONLINE';
-  },
 
   setWasKicked: (kicked) => set({ wasKicked: kicked }),
 }));

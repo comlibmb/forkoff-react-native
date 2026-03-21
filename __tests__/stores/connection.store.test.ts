@@ -27,7 +27,6 @@ describe('ConnectionStore - wasKicked', () => {
     useConnectionStore.setState({
       isPhoneOnline: true,
       isServerConnected: false,
-      deviceStatuses: {},
       wasKicked: false,
     });
   });
@@ -53,7 +52,6 @@ describe('ConnectionStore - wasKicked', () => {
   it('should not affect other state when setting wasKicked', () => {
     useConnectionStore.getState().setPhoneOnline(true);
     useConnectionStore.getState().setServerConnected(true);
-    useConnectionStore.getState().setDeviceStatus('device-1', 'ONLINE' as any);
 
     useConnectionStore.getState().setWasKicked(true);
 
@@ -61,6 +59,5 @@ describe('ConnectionStore - wasKicked', () => {
     expect(state.wasKicked).toBe(true);
     expect(state.isPhoneOnline).toBe(true);
     expect(state.isServerConnected).toBe(true);
-    expect(state.deviceStatuses['device-1']).toBe('ONLINE');
   });
 });

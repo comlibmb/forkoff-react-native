@@ -17,7 +17,7 @@ function persistSessions(sessions: Map<string, ClaudeSession[]>): void {
     for (const [deviceId, list] of sessions) {
       obj[deviceId] = list;
     }
-    AsyncStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(obj)).catch(() => {});
+    AsyncStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(obj)).catch((e) => console.warn('[ClaudeStore] persist sessions failed:', e));
   } catch {}
 }
 

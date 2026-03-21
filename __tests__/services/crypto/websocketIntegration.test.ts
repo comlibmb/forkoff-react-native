@@ -49,7 +49,8 @@ jest.mock('socket.io-client', () => ({
 jest.mock('@/services/pairing.service', () => ({
   pairingService: {
     getMobileDeviceId: jest.fn().mockResolvedValue('mock-mobile-device-id'),
-    getCustomRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayUrl: jest.fn().mockResolvedValue(null),
+    getRelayToken: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -174,6 +175,9 @@ describe('WebSocket E2EE Integration', () => {
     });
 
     it('should forward encrypted_message to subscribers', async () => {
+      // Clear internal e2eeManager so raw forwarding path is taken
+      (wsService as any).e2eeManager = null;
+
       const callback = jest.fn();
       wsService.on('encrypted_message', callback);
 
@@ -357,6 +361,9 @@ describe('WebSocket E2EE Integration', () => {
     });
 
     it('should handle incoming encrypted_message event from WebSocket', () => {
+      // Clear internal e2eeManager so raw forwarding path is taken
+      (wsService as any).e2eeManager = null;
+
       const callback = jest.fn();
       wsService.on('encrypted_message', callback);
 
@@ -434,6 +441,8 @@ describe('WebSocket E2EE Integration', () => {
       store.setE2EEEnabled(false);
 
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       // user_message is in ENFORCED_SENSITIVE_EVENTS — emit() routes through emitSensitive()
       // Without E2EE, it should be DROPPED, not sent in plaintext
@@ -455,6 +464,8 @@ describe('WebSocket E2EE Integration', () => {
       expect(e2eeManager.isSessionEstablished('unknown-device')).toBe(false);
 
       mockSocket.emit.mockClear();
+      // Simulate E2EE manager present but no established session
+      (wsService as any).e2eeManager = { getEstablishedPeerId: () => null, clearAllSessions: () => {} };
 
       // Without an established session, sensitive events should be DROPPED/QUEUED
       wsService.emit('user_message', {

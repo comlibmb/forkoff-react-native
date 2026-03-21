@@ -1,22 +1,13 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import { useDeviceStore } from '@/stores/device.store';
-import { useShallow } from 'zustand/react/shallow';
 
 export function useDevices() {
-  // Use shallow comparison for state slices to prevent unnecessary re-renders
-  const {
-    devices,
-    selectedDeviceId,
-    isLoading,
-    error,
-  } = useDeviceStore(
-    useShallow((state) => ({
-      devices: state.devices,
-      selectedDeviceId: state.selectedDeviceId,
-      isLoading: state.isLoading,
-      error: state.error,
-    }))
-  );
+  // Subscribe to the full devices array — status changes create new device objects
+  // via .map() in updateDeviceStatus, so reference equality on the array changes
+  const devices = useDeviceStore((state) => state.devices);
+  const selectedDeviceId = useDeviceStore((state) => state.selectedDeviceId);
+  const isLoading = useDeviceStore((state) => state.isLoading);
+  const error = useDeviceStore((state) => state.error);
 
   // Get stable action references (these don't change)
   const fetchDevices = useDeviceStore((state) => state.fetchDevices);
@@ -43,18 +34,17 @@ export function useDevices() {
     return () => clearInterval(pollInterval);
   }, [fetchDevices]);
 
-  // Subscribe to real-time updates
+  // Subscribe to real-time updates — run once on mount, clean up on unmount.
+  // The subscription callback uses get() internally so it always reads fresh state.
   useEffect(() => {
-    if (devices.length > 0) {
-      const unsubscribe = subscribeToDeviceUpdates();
-      return unsubscribe;
-    }
-  }, [devices.length, subscribeToDeviceUpdates]);
+    const unsubscribe = subscribeToDeviceUpdates();
+    return unsubscribe;
+  }, [subscribeToDeviceUpdates]);
 
   // Memoize derived values
   const selectedDevice = useMemo(() =>
-    selectedDeviceId ? getDevice(selectedDeviceId) : undefined,
-    [selectedDeviceId, getDevice]
+    selectedDeviceId ? devices.find((d) => d.id === selectedDeviceId) : undefined,
+    [selectedDeviceId, devices]
   );
 
   const onlineDevices = useMemo(() =>
@@ -132,14 +122,15 @@ export function useDevices() {
 }
 
 export function useDevice(deviceId: string) {
-  const getDevice = useDeviceStore((state) => state.getDevice);
+  // Select the specific device from the array — re-renders when any device changes
+  const device = useDeviceStore(
+    useCallback((state) => state.devices.find((d) => d.id === deviceId), [deviceId])
+  );
   const refreshDeviceStatus = useDeviceStore((state) => state.refreshDeviceStatus);
 
-  const device = useMemo(() => getDevice(deviceId), [getDevice, deviceId]);
-
   const refresh = useCallback(() => {
-    refreshDeviceStatus(deviceId);
-  }, [deviceId, refreshDeviceStatus]);
+    refreshDeviceStatus();
+  }, [refreshDeviceStatus]);
 
   return {
     device,

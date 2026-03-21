@@ -98,7 +98,7 @@ export const useAchievementsStore = create<AchievementsState>((set, get) => ({
         );
 
         // Persist to AsyncStorage
-        AsyncStorage.setItem(UNLOCKED_KEY, JSON.stringify(newUnlocked)).catch(() => {});
+        AsyncStorage.setItem(UNLOCKED_KEY, JSON.stringify(newUnlocked)).catch((e) => console.warn('[Achievements] persist failed:', e));
 
         return {
           achievements: state.achievements.map((a) =>

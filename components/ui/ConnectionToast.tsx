@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Laptop, WifiOff, Wifi } from 'lucide-react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useConnectionStore } from '@/stores/connection.store';
+import { useDeviceStore } from '@/stores/device.store';
 import { useIdentityStore } from '@/stores/identity.store';
 import { DeviceStatus } from '@/types';
 
@@ -15,45 +15,43 @@ interface ToastItem {
 }
 
 export function ConnectionToast() {
-  const { deviceStatuses } = useConnectionStore();
+  const devices = useDeviceStore((state) => state.devices);
   const isPaired = useIdentityStore((state) => state.isPaired);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const previousStatuses = useRef<Record<string, DeviceStatus>>({});
-  const deviceNames = useRef<Record<string, string>>({});
 
-  // Track status changes
+  // Track status changes from device store
   useEffect(() => {
     const changes: ToastItem[] = [];
 
-    Object.entries(deviceStatuses).forEach(([deviceId, status]) => {
-      const prevStatus = previousStatuses.current[deviceId];
+    for (const device of devices) {
+      const status = device.status;
+      const prevStatus = previousStatuses.current[device.id];
 
       // Only show toast if status changed (not on initial load)
       if (prevStatus !== undefined && prevStatus !== status) {
-        const isNowOffline =
-          status === 'offline' || status === 'OFFLINE';
-        const wasOffline =
-          prevStatus === 'offline' || prevStatus === 'OFFLINE';
+        const isNowOffline = status === 'offline';
+        const wasOffline = prevStatus === 'offline';
 
         // Only show toast for online/offline transitions
         if (isNowOffline !== wasOffline) {
           changes.push({
-            id: `${deviceId}-${Date.now()}`,
-            deviceId,
-            deviceName: deviceNames.current[deviceId] || 'Device',
+            id: `${device.id}-${Date.now()}`,
+            deviceId: device.id,
+            deviceName: device.name || 'Device',
             status,
             timestamp: Date.now(),
           });
         }
       }
 
-      previousStatuses.current[deviceId] = status;
-    });
+      previousStatuses.current[device.id] = status;
+    }
 
     if (changes.length > 0) {
       setToasts((prev) => [...prev, ...changes]);
     }
-  }, [deviceStatuses]);
+  }, [devices]);
 
   // Auto-dismiss toasts after 3 seconds
   useEffect(() => {
@@ -65,18 +63,6 @@ export function ConnectionToast() {
 
     return () => clearTimeout(timer);
   }, [toasts]);
-
-  // Method to set device name (called from device screens)
-  useEffect(() => {
-    // Expose a way to register device names globally
-    (global as any).__setDeviceName = (id: string, name: string) => {
-      deviceNames.current[id] = name;
-    };
-
-    return () => {
-      delete (global as any).__setDeviceName;
-    };
-  }, []);
 
   // Don't show connection toasts for unauthenticated users
   if (!isPaired || toasts.length === 0) {
@@ -98,7 +84,7 @@ function ToastMessage({ toast, index }: { toast: ToastItem; index: number }) {
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   const isOffline =
-    toast.status === 'offline' || toast.status === 'OFFLINE';
+    toast.status === 'offline';
 
   useEffect(() => {
     Animated.parallel([
