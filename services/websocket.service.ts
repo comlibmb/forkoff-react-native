@@ -622,6 +622,9 @@ class WebSocketService {
       // Track session disconnected
       analyticsService.track('websocket_disconnected', { reason });
 
+      // Clear pending key exchange locks so reconnect can re-initiate
+      this._pendingKeyExchangeInits.clear();
+
       this.emitInternal('disconnected');
     });
 
@@ -874,6 +877,7 @@ class WebSocketService {
       const handleInit = async () => {
         await this.ensureE2EEManager();
         const ack = await this.e2eeManager!.handleKeyExchangeInit(data);
+        this._pendingKeyExchangeInits.delete(data.senderDeviceId);
         console.log(`[E2EE] Handled init — session stored for sender ${data.senderDeviceId}, ack.senderDeviceId=${ack.senderDeviceId}`);
         // Don't override senderDeviceId — e2eeManager signed with its deviceId,
         // the ack must use the same ID or signature verification will fail
