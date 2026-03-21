@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.forkoff",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "ForkOff needs camera access to scan QR codes for device pairing.",
         "NSFaceIDUsageDescription": "ForkOff uses Face ID for secure authentication.",
@@ -40,6 +41,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       "expo-secure-store",
       "expo-web-browser",
       [
