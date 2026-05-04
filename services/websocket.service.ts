@@ -1430,13 +1430,17 @@ class WebSocketService {
   private async pollTunnelUrl(deviceId: string): Promise<void> {
     try {
       const tunnelUrl = await this.fetchCurrentTunnelUrl(deviceId);
-      console.log('[WS] Tunnel poll:', { deviceId: deviceId.substring(0, 12), tunnelUrl: tunnelUrl?.substring(0, 40), lastKnown: this.lastKnownTunnelUrl?.substring(0, 40) });
       if (!tunnelUrl) return;
 
       // If URL changed, reconnect
       if (this.lastKnownTunnelUrl && tunnelUrl !== this.lastKnownTunnelUrl) {
         console.log('[WS] Tunnel URL changed, reconnecting...');
         await this.handleTunnelUrlChange(tunnelUrl);
+      } else if (!this.socket?.connected && !this.isConnecting && this.lastKnownTunnelUrl) {
+        // URL unchanged but disconnected — try reconnecting
+        console.log('[WS] Disconnected, reconnecting to same tunnel');
+        this.disconnect();
+        this.connect();
       }
       this.lastKnownTunnelUrl = tunnelUrl;
     } catch (err: any) {
