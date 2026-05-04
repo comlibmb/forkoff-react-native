@@ -1,10 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { sentryService } from './sentry.service';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Export the client for other services to use (e.g., tunnel subscription)
+export const getSupabaseClient = (): SupabaseClient => supabase;
 
 export interface AppVersionConfig {
   minVersion: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput, Switch } from 'react-native';
 import { alert } from '@/components/ui/AlertModal';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, CameraView } from 'expo-camera';
 import { X, CheckCircle, Flashlight, FlashlightOff, Keyboard, QrCode, ArrowLeft } from 'lucide-react-native';
@@ -38,7 +38,8 @@ type PairMethod = 'qr' | 'code';
 export default function PairDeviceScreen() {
   const { theme } = useTheme();
   const { pairDevice, isLoading } = useDeviceStore();
-  const [method, setMethod] = useState<PairMethod>('qr');
+  const params = useLocalSearchParams<{ method?: string }>();
+  const [method, setMethod] = useState<PairMethod>(params.method === 'code' ? 'code' : 'qr');
   const [manualCode, setManualCode] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
@@ -126,17 +127,47 @@ export default function PairDeviceScreen() {
         }
         await pairingService.setRelayUrl(relayUrl);
       } else {
-        // Cloud mode: no relay address → use default cloud connection
-        await pairingService.setRelayUrl(null);
+        // Try to find tunnel URL from Supabase via pairing code
+        const tunnelUrl = await wsService.fetchTunnelUrlByPairingCode(manualCode.toUpperCase());
+        if (tunnelUrl) {
+          let wsUrl = tunnelUrl;
+          if (wsUrl.startsWith('https://')) {
+            wsUrl = wsUrl.replace('https://', 'wss://');
+          } else if (wsUrl.startsWith('http://')) {
+            wsUrl = wsUrl.replace('http://', 'ws://');
+          }
+          await pairingService.setRelayUrl(wsUrl);
+        } else {
+          // No tunnel found → use default cloud connection
+          await pairingService.setRelayUrl(null);
+        }
       }
 
-      await connectAndWait();
+      // Disconnect any existing connection from auto-connect to prevent conflicts
+      wsService.disconnect();
+      await wsService.connect();
+
+      if (!wsService.isConnected) {
+        // Wait up to 10s for connection
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            unsub();
+            reject(new Error('Connection timed out'));
+          }, 10000);
+          const unsub = wsService.on('connected', () => {
+            clearTimeout(timeout);
+            unsub();
+            resolve();
+          });
+        });
+      }
 
       const device = await pairDevice(manualCode.toUpperCase());
       setPairedDeviceName(device.name);
       setIsPaired(true);
-    } catch (error) {
-      alert.error('Pairing Failed', 'Could not connect. Check the pairing code and try again.');
+    } catch (error: any) {
+      const msg = error?.message || 'Could not connect. Check the pairing code and try again.';
+      alert.error('Pairing Failed', msg);
     }
   };
 

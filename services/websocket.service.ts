@@ -7,6 +7,8 @@ import { DeviceStatus, ServerStatus, ApprovalRequest, CodeChange, ClaudeSession,
 import { KeyExchangeInit, KeyExchangeAck, EncryptedMessage } from '@/services/crypto/types';
 import { E2EEManager } from '@/services/crypto/e2eeManager';
 import { useE2EEStore } from '@/stores/e2ee.store';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { getSupabaseClient } from './appConfig.service';
 
 // SECURITY: Determine if we're in development mode
 const IS_DEV_BUILD = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV === 'development';
@@ -467,7 +469,7 @@ class WebSocketService {
   private socket: Socket | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = Infinity;
+  private maxReconnectAttempts = 3;
   private reconnectDelay = 1000;
   // Track subscriptions so we can re-subscribe after reconnect
   private subscribedDevices = new Set<string>();
@@ -484,6 +486,12 @@ class WebSocketService {
   private _anyE2EESessionEstablished = false;
   // Tracks devices with key exchange in progress (async guard against duplicate inits)
   private _pendingKeyExchangeInits = new Set<string>();
+  // Tunnel URL subscription for auto-reconnect when tunnel restarts
+  private tunnelSubscription: RealtimeChannel | null = null;
+  private tunnelPollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastKnownTunnelUrl: string | null = null;
+  private connectedRelayUrl: string | null = null; // URL we're currently connected to
+  private _tunnelCheckInProgress = false;
   private callbacks: EventCallbacks = {
     device_status: [],
     terminal_output: [],
@@ -560,7 +568,16 @@ class WebSocketService {
       // Load relay token for cloud relay authentication (if available)
       const relayToken = await pairingService.getRelayToken();
 
-      this.socket = io(WS_URL, {
+      // Socket.IO client expects http:// URL (handles WebSocket upgrade internally)
+      // Convert ws:// → http:// and wss:// → https://
+      let socketUrl = WS_URL;
+      if (socketUrl.startsWith('ws://')) {
+        socketUrl = socketUrl.replace('ws://', 'http://');
+      } else if (socketUrl.startsWith('wss://')) {
+        socketUrl = socketUrl.replace('wss://', 'https://');
+      }
+
+      this.socket = io(socketUrl, {
         auth: {
           mobileDeviceId,
           clientType: 'mobile',
@@ -591,6 +608,8 @@ class WebSocketService {
       const reconnectAttempts = this.reconnectAttempts;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
+      // Track the URL we successfully connected to
+      this.connectedRelayUrl = WS_URL;
       console.log('[WS] Mobile app connected to WebSocket');
       console.log('[WS] Socket ID:', this.socket?.id);
 
@@ -625,7 +644,14 @@ class WebSocketService {
       // Clear pending key exchange locks so reconnect can re-initiate
       this._pendingKeyExchangeInits.clear();
 
+      // Clear E2EE state on disconnect to prevent stale key decryption errors on reconnect
+      this._anyE2EESessionEstablished = false;
+      this.e2eeManager?.clearAllSessions();
+
       this.emitInternal('disconnected');
+
+      // Note: pollTunnelUrl (via subscribeToTunnelUpdates) handles reconnect when URL changes
+      // _layout.tsx AppState handler handles reconnect when app comes to foreground
     });
 
     this.socket.on('connect_error', (error) => {
@@ -1371,6 +1397,161 @@ class WebSocketService {
 
   get isConnected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  /** Subscribe to tunnel URL changes via polling (more reliable than Realtime on mobile) */
+  subscribeToTunnelUpdates(deviceId: string): void {
+    this.unsubscribeTunnelUpdates();
+
+    // Initial fetch
+    this.pollTunnelUrl(deviceId);
+
+    // Poll every 10 seconds
+    this.tunnelPollTimer = setInterval(() => {
+      this.pollTunnelUrl(deviceId);
+    }, 10000);
+  }
+
+  /** Unsubscribe from tunnel URL changes */
+  unsubscribeTunnelUpdates(): void {
+    if (this.tunnelPollTimer) {
+      clearInterval(this.tunnelPollTimer);
+      this.tunnelPollTimer = null;
+    }
+    if (this.tunnelSubscription) {
+      try {
+        this.tunnelSubscription.unsubscribe();
+      } catch {}
+      this.tunnelSubscription = null;
+    }
+  }
+
+  /** Poll Supabase for current tunnel URL */
+  private async pollTunnelUrl(deviceId: string): Promise<void> {
+    try {
+      const tunnelUrl = await this.fetchCurrentTunnelUrl(deviceId);
+      console.log('[WS] Tunnel poll:', { deviceId: deviceId.substring(0, 12), tunnelUrl: tunnelUrl?.substring(0, 40), lastKnown: this.lastKnownTunnelUrl?.substring(0, 40) });
+      if (!tunnelUrl) return;
+
+      // If URL changed, reconnect
+      if (this.lastKnownTunnelUrl && tunnelUrl !== this.lastKnownTunnelUrl) {
+        console.log('[WS] Tunnel URL changed, reconnecting...');
+        await this.handleTunnelUrlChange(tunnelUrl);
+      }
+      this.lastKnownTunnelUrl = tunnelUrl;
+    } catch (err: any) {
+      console.warn('[WS] Tunnel poll error:', err.message);
+    }
+  }
+
+  /** Check tunnel URL on disconnect — if changed, reconnect to new URL */
+  private async checkTunnelUrlOnDisconnect(): Promise<void> {
+    if (this._tunnelCheckInProgress) return;
+    this._tunnelCheckInProgress = true;
+
+    try {
+      const pairedDevices = await pairingService.getPairedDevices();
+      if (pairedDevices.length === 0) return;
+
+      // Poll Supabase for up to 30s — tunnel restart takes ~10s
+      const maxAttempts = 6;
+      const attemptDelay = 5000;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, attemptDelay));
+
+        for (const device of pairedDevices) {
+          const tunnelUrl = await this.fetchCurrentTunnelUrl(device.id);
+          if (!tunnelUrl) continue;
+
+          let wsUrl = tunnelUrl;
+          if (wsUrl.startsWith('https://')) {
+            wsUrl = wsUrl.replace('https://', 'wss://');
+          } else if (wsUrl.startsWith('http://')) {
+            wsUrl = wsUrl.replace('http://', 'ws://');
+          }
+
+          const currentRelayUrl = await pairingService.getRelayUrl();
+
+          if (currentRelayUrl && wsUrl !== currentRelayUrl) {
+            // Tunnel URL changed — must reconnect to new URL
+            console.log('[WS] Tunnel URL changed, reconnecting to:', wsUrl.substring(0, 40));
+            await pairingService.setRelayUrl(wsUrl);
+            this.lastKnownTunnelUrl = wsUrl;
+            this.disconnect();
+            this.connect();
+            return;
+          }
+
+          // URL is correct — check if we need to reconnect
+          if (!this.socket?.connected && !this.isConnecting) {
+            console.log('[WS] URL correct, reconnecting');
+            this.disconnect();
+            this.connect();
+            return;
+          }
+
+          if (this.socket?.connected) {
+            // Already connected to correct URL
+            return;
+          }
+        }
+      }
+    } finally {
+      this._tunnelCheckInProgress = false;
+    }
+  }
+
+  /** Handle tunnel URL change — reconnect WebSocket to new URL */
+  private async handleTunnelUrlChange(tunnelUrl: string): Promise<void> {
+    // Convert https:// to wss:// for WebSocket
+    let wsUrl = tunnelUrl;
+    if (wsUrl.startsWith('https://')) {
+      wsUrl = wsUrl.replace('https://', 'wss://');
+    } else if (wsUrl.startsWith('http://')) {
+      wsUrl = wsUrl.replace('http://', 'ws://');
+    }
+
+    // Store the new relay URL
+    await pairingService.setRelayUrl(wsUrl);
+
+    // Reconnect with new URL
+    this.disconnect();
+    this.connect();
+  }
+
+  /** Fetch current tunnel URL from Supabase (for cold start) */
+  async fetchCurrentTunnelUrl(deviceId: string): Promise<string | null> {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('tunnel_sessions')
+        .select('tunnel_url')
+        .eq('device_id', deviceId)
+        .single();
+
+      if (error || !data?.tunnel_url) return null;
+      return data.tunnel_url;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Fetch tunnel URL by pairing code (for manual pairing without QR) */
+  async fetchTunnelUrlByPairingCode(pairingCode: string): Promise<string | null> {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('tunnel_sessions')
+        .select('tunnel_url')
+        .eq('pairing_code', pairingCode.toUpperCase())
+        .single();
+
+      if (error || !data?.tunnel_url) return null;
+      return data.tunnel_url;
+    } catch {
+      return null;
+    }
   }
 }
 

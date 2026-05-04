@@ -50,24 +50,53 @@ export default function AddDeviceScreen() {
       return;
     }
 
-    const addr = relayAddress.trim();
-    if (!addr) {
-      alert.warning('Relay Address Required', 'Enter the relay address shown in your terminal (e.g., 192.168.1.5:3000).');
-      return;
-    }
-
     try {
-      let relayUrl = addr;
-      if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
-        relayUrl = `ws://${relayUrl}`;
-      }
-      await pairingService.setRelayUrl(relayUrl);
-      await connectAndWait();
+      const addr = relayAddress.trim();
 
-      await pairDevice(pairingCode);
+      if (addr) {
+        let relayUrl = addr;
+        if (!relayUrl.startsWith('ws://') && !relayUrl.startsWith('wss://')) {
+          relayUrl = `ws://${relayUrl}`;
+        }
+        await pairingService.setRelayUrl(relayUrl);
+      } else {
+        // No relay address — try tunnel URL from Supabase via pairing code
+        const tunnelUrl = await wsService.fetchTunnelUrlByPairingCode(pairingCode.toUpperCase());
+        if (tunnelUrl) {
+          let wsUrl = tunnelUrl;
+          if (wsUrl.startsWith('https://')) {
+            wsUrl = wsUrl.replace('https://', 'wss://');
+          } else if (wsUrl.startsWith('http://')) {
+            wsUrl = wsUrl.replace('http://', 'ws://');
+          }
+          await pairingService.setRelayUrl(wsUrl);
+        } else {
+          await pairingService.setRelayUrl(null);
+        }
+      }
+
+      wsService.disconnect();
+      await wsService.connect();
+
+      if (!wsService.isConnected) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            unsub();
+            reject(new Error('Connection timed out'));
+          }, 10000);
+          const unsub = wsService.on('connected', () => {
+            clearTimeout(timeout);
+            unsub();
+            resolve();
+          });
+        });
+      }
+
+      await pairDevice(pairingCode.toUpperCase());
       setIsPaired(true);
-    } catch (error) {
-      alert.error('Pairing Failed', 'Could not connect to CLI. Check the relay address and pairing code.');
+    } catch (error: any) {
+      const msg = error?.message || String(error);
+      alert.error('Pairing Failed', msg);
     }
   };
 
@@ -275,95 +304,30 @@ export default function AddDeviceScreen() {
             </View>
           </View>
         ) : (
-          <View>
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-                Pairing Code
+          <View style={{ backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 24 }}>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
+                Enter the pairing code shown in your terminal after running{'\n'}
+                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>forkoff pair</Text>
               </Text>
-              <TextInput
-                placeholder="e.g., ABC12345"
-                placeholderTextColor={theme.textTertiary}
-                value={pairingCode}
-                onChangeText={(text) => setPairingCode(text.toUpperCase())}
-                autoCapitalize="characters"
-                maxLength={8}
+              <TouchableOpacity
+                onPress={() => router.push('/device/pair?method=code')}
                 style={{
-                  backgroundColor: theme.backgroundSecondary,
-                  borderWidth: 1,
-                  borderColor: theme.border,
+                  backgroundColor: theme.primary,
                   borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  color: theme.text,
-                  fontSize: 18,
-                  fontFamily: 'monospace',
-                  textAlign: 'center',
-                  letterSpacing: 4,
+                  padding: 16,
+                  width: '100%',
+                  alignItems: 'center',
+                  shadowColor: theme.primary,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 12,
+                  elevation: 5,
                 }}
-              />
+              >
+                <Text style={{ color: theme.textInverse, fontWeight: 'bold' }}>Enter Pairing Code</Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-                Relay Address
-              </Text>
-              <TextInput
-                placeholder="e.g., 192.168.1.5:3000"
-                placeholderTextColor={theme.textTertiary}
-                value={relayAddress}
-                onChangeText={setRelayAddress}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                style={{
-                  backgroundColor: theme.backgroundSecondary,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  color: theme.text,
-                  fontSize: 16,
-                  fontFamily: 'monospace',
-                  textAlign: 'center',
-                }}
-              />
-            </View>
-
-            <View style={{ marginBottom: 24, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 16 }}>
-              <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center' }}>
-                First, install ForkOff CLI:{'\n'}
-                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
-                  npm i -g forkoff
-                </Text>
-                {'\n\n'}Then run:{'\n'}
-                <Text style={{ color: theme.primary, fontFamily: 'monospace' }}>
-                  forkoff pair
-                </Text>
-                {'\n'}Enter the code and relay address shown
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={handlePairWithCode}
-              disabled={pairingCode.length !== 8 || isLoading}
-              style={{
-                backgroundColor: theme.primary,
-                borderRadius: 12,
-                padding: 16,
-                alignItems: 'center',
-                shadowColor: theme.primary,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.2,
-                shadowRadius: 12,
-                elevation: 5,
-                opacity: pairingCode.length !== 8 || isLoading ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ color: theme.textInverse, fontWeight: 'bold' }}>
-                {isLoading ? 'Pairing...' : 'Pair Device'}
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
 

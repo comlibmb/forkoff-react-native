@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
+import { AppState } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,6 +16,7 @@ import { useConnectionStore } from '@/stores/connection.store';
 import { useVersionStore } from '@/stores/version.store';
 import { useAchievementsStore } from '@/stores/achievements.store';
 import { wsService } from '@/services/websocket.service';
+import { pairingService } from '@/services/pairing.service';
 import { notificationService } from '@/services/notification.service';
 import { sentryService } from '@/services/sentry.service';
 import { analyticsService } from '@/services/analytics.service';
@@ -155,7 +157,7 @@ function ThemedApp({
 
 export default function RootLayout() {
   const router = useRouter();
-  const { initialize, isReady, isPaired, mobileDeviceId } = useIdentityStore();
+  const { initialize, isReady, isPaired, mobileDeviceId, pairedDevices } = useIdentityStore();
   const {
     currentApproval,
     hideApproval,
@@ -226,17 +228,84 @@ export default function RootLayout() {
 
   // Connect/disconnect WebSocket based on pairing state
   useEffect(() => {
-    if (isReady) {
-      if (isPaired) {
-        wsService.connect();
+    async function connectWithTunnelUrl() {
+      if (isReady) {
+        if (isPaired) {
+          // Cold start: fetch current tunnel URL from Supabase before connecting
+          if (pairedDevices.length > 0) {
+            for (const device of pairedDevices) {
+              const tunnelUrl = await wsService.fetchCurrentTunnelUrl(device.id);
+              if (tunnelUrl) {
+                let wsUrl = tunnelUrl;
+                if (wsUrl.startsWith('https://')) {
+                  wsUrl = wsUrl.replace('https://', 'wss://');
+                } else if (wsUrl.startsWith('http://')) {
+                  wsUrl = wsUrl.replace('http://', 'ws://');
+                }
+                await pairingService.setRelayUrl(wsUrl);
+              }
+            }
+          }
 
-        // Register for push notifications when paired
-        notificationService.registerForPushNotifications();
-      } else {
-        wsService.disconnect();
+          wsService.connect();
+
+          // Register for push notifications when paired
+          notificationService.registerForPushNotifications();
+        } else {
+          wsService.disconnect();
+          wsService.unsubscribeTunnelUpdates();
+        }
       }
     }
-  }, [isPaired, isReady]);
+    connectWithTunnelUrl();
+  }, [isPaired, isReady, pairedDevices]);
+
+  // Subscribe to tunnel URL changes when paired (for auto-reconnect on tunnel restart)
+  useEffect(() => {
+    if (isPaired && isReady && pairedDevices.length > 0) {
+      for (const device of pairedDevices) {
+        wsService.subscribeToTunnelUpdates(device.id);
+      }
+
+      return () => {
+        wsService.unsubscribeTunnelUpdates();
+      };
+    }
+  }, [isPaired, isReady, pairedDevices]);
+
+  // Reconnect on app foreground when connection was lost
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        if (isPaired && isReady && pairedDevices.length > 0) {
+          for (const device of pairedDevices) {
+            const tunnelUrl = await wsService.fetchCurrentTunnelUrl(device.id);
+            if (tunnelUrl) {
+              let wsUrl = tunnelUrl;
+              if (wsUrl.startsWith('https://')) {
+                wsUrl = wsUrl.replace('https://', 'wss://');
+              } else if (wsUrl.startsWith('http://')) {
+                wsUrl = wsUrl.replace('http://', 'ws://');
+              }
+              const currentUrl = await pairingService.getRelayUrl();
+              if (wsUrl !== currentUrl) {
+                // Tunnel URL changed — update and reconnect
+                await pairingService.setRelayUrl(wsUrl);
+                wsService.disconnect();
+                wsService.connect();
+              } else if (!wsService.isConnected) {
+                // URL same but disconnected — just reconnect
+                wsService.connect();
+              }
+            }
+          }
+        }
+      }
+      appStateRef.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, [isPaired, isReady, pairedDevices]);
 
   // Subscribe to approval events when WebSocket is connected
   useEffect(() => {
@@ -313,9 +382,10 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider>
         <PostHogProvider
-          apiKey={process.env.EXPO_PUBLIC_POSTHOG_API_KEY || ''}
+          apiKey={process.env.EXPO_PUBLIC_POSTHOG_API_KEY || 'phc_disabled'}
           options={{
             host: 'https://us.i.posthog.com',
+            disabled: !process.env.EXPO_PUBLIC_POSTHOG_API_KEY,
           }}
         >
           <PostHogBridge>
