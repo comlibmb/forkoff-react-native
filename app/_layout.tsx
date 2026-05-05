@@ -164,7 +164,7 @@ export default function RootLayout() {
     respondToApproval,
     subscribeToApprovals,
   } = useApprovalStore();
-  const { initialize: initializeConnection } = useConnectionStore();
+  const { initialize: initializeConnection, setServerConnected } = useConnectionStore();
   const { needsUpdate } = useVersionStore();
   const { recentUnlock, setRecentUnlock } = useAchievementsStore();
   const [showSplash, setShowSplash] = useState(true);
@@ -279,26 +279,45 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
         if (isPaired && isReady && pairedDevices.length > 0) {
-          for (const device of pairedDevices) {
-            const tunnelUrl = await wsService.fetchCurrentTunnelUrl(device.id);
-            if (tunnelUrl) {
-              let wsUrl = tunnelUrl;
-              if (wsUrl.startsWith('https://')) {
-                wsUrl = wsUrl.replace('https://', 'wss://');
-              } else if (wsUrl.startsWith('http://')) {
-                wsUrl = wsUrl.replace('http://', 'ws://');
-              }
-              const currentUrl = await pairingService.getRelayUrl();
-              if (wsUrl !== currentUrl) {
-                // Tunnel URL changed — update and reconnect
-                await pairingService.setRelayUrl(wsUrl);
-                wsService.disconnect();
-                wsService.connect();
-              } else if (!wsService.isConnected) {
-                // URL same but disconnected — just reconnect
-                wsService.connect();
+          // Retry reconnect up to 6 times (30 seconds total)
+          for (let attempt = 0; attempt < 6; attempt++) {
+            if (wsService.isConnected) {
+              setServerConnected(true);
+              break;
+            }
+
+            for (const device of pairedDevices) {
+              const tunnelUrl = await wsService.fetchCurrentTunnelUrl(device.id);
+              if (tunnelUrl) {
+                let wsUrl = tunnelUrl;
+                if (wsUrl.startsWith('https://')) {
+                  wsUrl = wsUrl.replace('https://', 'wss://');
+                } else if (wsUrl.startsWith('http://')) {
+                  wsUrl = wsUrl.replace('http://', 'ws://');
+                }
+                const currentUrl = await pairingService.getRelayUrl();
+                if (wsUrl !== currentUrl) {
+                  await pairingService.setRelayUrl(wsUrl);
+                }
+                if (!wsService.isConnected) {
+                  wsService.disconnect();
+                  wsService.connect();
+                  // Wait 5 seconds for connection result
+                  await new Promise<void>((resolve) => {
+                    const timeout = setTimeout(() => resolve(), 5000);
+                    const unsub = wsService.on('connected', () => {
+                      clearTimeout(timeout);
+                      unsub();
+                      resolve();
+                    });
+                  });
+                  // Force update connection state after attempt
+                  setServerConnected(wsService.isConnected);
+                }
               }
             }
+            if (wsService.isConnected) break;
+            await new Promise(r => setTimeout(r, 5000));
           }
         }
       }

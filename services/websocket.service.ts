@@ -469,8 +469,8 @@ class WebSocketService {
   private socket: Socket | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 3;
-  private reconnectDelay = 1000;
+  private maxReconnectAttempts = 10;
+  private reconnectDelay = 2000;
   // Track subscriptions so we can re-subscribe after reconnect
   private subscribedDevices = new Set<string>();
   // Critical message queue — buffers messages when disconnected, flushes on reconnect
@@ -491,7 +491,7 @@ class WebSocketService {
   private tunnelPollTimer: ReturnType<typeof setInterval> | null = null;
   private lastKnownTunnelUrl: string | null = null;
   private connectedRelayUrl: string | null = null; // URL we're currently connected to
-  private _tunnelCheckInProgress = false;
+  private _socketIoGaveUp = false; // set true when Socket.IO reconnect_failed fires
   private callbacks: EventCallbacks = {
     device_status: [],
     terminal_output: [],
@@ -588,7 +588,7 @@ class WebSocketService {
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.reconnectDelay,
-        reconnectionDelayMax: 15000,
+        reconnectionDelayMax: 30000,
         randomizationFactor: 0.5,
       });
 
@@ -608,6 +608,7 @@ class WebSocketService {
       const reconnectAttempts = this.reconnectAttempts;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
+      this._socketIoGaveUp = false;
       // Track the URL we successfully connected to
       this.connectedRelayUrl = WS_URL;
       console.log('[WS] Mobile app connected to WebSocket');
@@ -665,6 +666,12 @@ class WebSocketService {
       });
 
       this.emitInternal('error', error);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      console.log('[WS] Socket.IO gave up reconnecting — pollTunnelUrl will take over');
+      this.isConnecting = false;
+      this._socketIoGaveUp = true;
     });
 
     // Application events
@@ -1380,6 +1387,7 @@ class WebSocketService {
     }
     this.isConnecting = false;
     this.reconnectAttempts = 0;
+    this._socketIoGaveUp = false;
     this.pendingMessages = [];
     this._anyE2EESessionEstablished = false;
     this.e2eeManager?.clearAllSessions();
@@ -1430,79 +1438,28 @@ class WebSocketService {
   private async pollTunnelUrl(deviceId: string): Promise<void> {
     try {
       const tunnelUrl = await this.fetchCurrentTunnelUrl(deviceId);
-      if (!tunnelUrl) return;
+      const socketConnected = this.socket?.connected ?? false;
+      console.log(`[WS] pollTunnelUrl: devId=${deviceId.substring(0, 8)}..., url=${tunnelUrl?.substring(0, 40) ?? 'null'}, lastKnown=${this.lastKnownTunnelUrl?.substring(0, 40) ?? 'null'}, connected=${socketConnected}, gaveUp=${this._socketIoGaveUp}`);
 
-      // If URL changed, reconnect
+      if (!tunnelUrl) {
+        console.log('[WS] pollTunnelUrl: no tunnel URL found, skipping');
+        return;
+      }
+
       if (this.lastKnownTunnelUrl && tunnelUrl !== this.lastKnownTunnelUrl) {
+        // URL changed (tunnel restarted) — always reconnect immediately
         console.log('[WS] Tunnel URL changed, reconnecting...');
         await this.handleTunnelUrlChange(tunnelUrl);
-      } else if (!this.socket?.connected && !this.isConnecting && this.lastKnownTunnelUrl) {
-        // URL unchanged but disconnected — try reconnecting
-        console.log('[WS] Disconnected, reconnecting to same tunnel');
+      } else if (!socketConnected && this._socketIoGaveUp && this.lastKnownTunnelUrl) {
+        // Socket.IO gave up auto-reconnect — poll takes over as fallback
+        console.log('[WS] Socket.IO gave up, pollTunnelUrl reconnecting to same tunnel');
+        this._socketIoGaveUp = false;
         this.disconnect();
         this.connect();
       }
       this.lastKnownTunnelUrl = tunnelUrl;
     } catch (err: any) {
       console.warn('[WS] Tunnel poll error:', err.message);
-    }
-  }
-
-  /** Check tunnel URL on disconnect — if changed, reconnect to new URL */
-  private async checkTunnelUrlOnDisconnect(): Promise<void> {
-    if (this._tunnelCheckInProgress) return;
-    this._tunnelCheckInProgress = true;
-
-    try {
-      const pairedDevices = await pairingService.getPairedDevices();
-      if (pairedDevices.length === 0) return;
-
-      // Poll Supabase for up to 30s — tunnel restart takes ~10s
-      const maxAttempts = 6;
-      const attemptDelay = 5000;
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, attemptDelay));
-
-        for (const device of pairedDevices) {
-          const tunnelUrl = await this.fetchCurrentTunnelUrl(device.id);
-          if (!tunnelUrl) continue;
-
-          let wsUrl = tunnelUrl;
-          if (wsUrl.startsWith('https://')) {
-            wsUrl = wsUrl.replace('https://', 'wss://');
-          } else if (wsUrl.startsWith('http://')) {
-            wsUrl = wsUrl.replace('http://', 'ws://');
-          }
-
-          const currentRelayUrl = await pairingService.getRelayUrl();
-
-          if (currentRelayUrl && wsUrl !== currentRelayUrl) {
-            // Tunnel URL changed — must reconnect to new URL
-            console.log('[WS] Tunnel URL changed, reconnecting to:', wsUrl.substring(0, 40));
-            await pairingService.setRelayUrl(wsUrl);
-            this.lastKnownTunnelUrl = wsUrl;
-            this.disconnect();
-            this.connect();
-            return;
-          }
-
-          // URL is correct — check if we need to reconnect
-          if (!this.socket?.connected && !this.isConnecting) {
-            console.log('[WS] URL correct, reconnecting');
-            this.disconnect();
-            this.connect();
-            return;
-          }
-
-          if (this.socket?.connected) {
-            // Already connected to correct URL
-            return;
-          }
-        }
-      }
-    } finally {
-      this._tunnelCheckInProgress = false;
     }
   }
 
